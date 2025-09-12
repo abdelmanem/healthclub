@@ -17,6 +17,7 @@ class Employee(models.Model):
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     certifications = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    services = models.ManyToManyField('services.Service', related_name='employees', blank=True)
 
     history = HistoricalRecords()
 
