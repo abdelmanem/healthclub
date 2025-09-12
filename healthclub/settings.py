@@ -26,11 +26,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-z^s=v+-jp!y6x#
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-<<<<<<< HEAD
-ALLOWED_HOSTS = ['*']
-=======
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
->>>>>>> 54a3641d177f18f83221c17b75c1a23b3b9c2db2
 
 
 # Application definition
@@ -91,16 +87,6 @@ WSGI_APPLICATION = 'healthclub.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-<<<<<<< HEAD
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'healthclub',
-        'USER': 'hcuserdb',
-        'PASSWORD': 'Passwordhcuserdb',
-        'HOST': 'localhost',
-        'PORT': '5432',
-=======
 # Allow using SQLite locally if DJANGO_DB is set to sqlite (default)
 if os.environ.get("DJANGO_DB", "sqlite") == "postgres":
     DATABASES = {
@@ -119,7 +105,6 @@ else:
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
->>>>>>> 54a3641d177f18f83221c17b75c1a23b3b9c2db2
     }
 
 
