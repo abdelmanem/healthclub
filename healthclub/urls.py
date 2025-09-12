@@ -36,6 +36,16 @@ from inventory.views import (
     StockMovementViewSet, PurchaseOrderViewSet, ProductServiceLinkViewSet,
     InventoryAlertViewSet
 )
+from marketing.views import (
+    EmailCampaignViewSet, SMSCampaignViewSet, EmailTemplateViewSet,
+    SMSTemplateViewSet, CommunicationLogViewSet, GuestSegmentViewSet,
+    MarketingAutomationViewSet
+)
+from analytics.views import (
+    DashboardWidgetViewSet, ReportViewSet, ReportExecutionViewSet,
+    KPIViewSet, KPIMeasurementViewSet, AlertViewSet, DashboardViewSet,
+    DashboardWidgetPositionViewSet
+)
 
 router = DefaultRouter()
 router.register(r'guests', GuestViewSet, basename='guest')
@@ -54,6 +64,21 @@ router.register(r'stock-movements', StockMovementViewSet, basename='stock-moveme
 router.register(r'purchase-orders', PurchaseOrderViewSet, basename='purchase-order')
 router.register(r'product-service-links', ProductServiceLinkViewSet, basename='product-service-link')
 router.register(r'inventory-alerts', InventoryAlertViewSet, basename='inventory-alert')
+router.register(r'email-campaigns', EmailCampaignViewSet, basename='email-campaign')
+router.register(r'sms-campaigns', SMSCampaignViewSet, basename='sms-campaign')
+router.register(r'email-templates', EmailTemplateViewSet, basename='email-template')
+router.register(r'sms-templates', SMSTemplateViewSet, basename='sms-template')
+router.register(r'communication-logs', CommunicationLogViewSet, basename='communication-log')
+router.register(r'guest-segments', GuestSegmentViewSet, basename='guest-segment')
+router.register(r'marketing-automation', MarketingAutomationViewSet, basename='marketing-automation')
+router.register(r'dashboard-widgets', DashboardWidgetViewSet, basename='dashboard-widget')
+router.register(r'reports', ReportViewSet, basename='report')
+router.register(r'report-executions', ReportExecutionViewSet, basename='report-execution')
+router.register(r'kpis', KPIViewSet, basename='kpi')
+router.register(r'kpi-measurements', KPIMeasurementViewSet, basename='kpi-measurement')
+router.register(r'alerts', AlertViewSet, basename='alert')
+router.register(r'dashboards', DashboardViewSet, basename='dashboard')
+router.register(r'dashboard-widget-positions', DashboardWidgetPositionViewSet, basename='dashboard-widget-position')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -35,6 +35,15 @@ class Command(BaseCommand):
         # Initialize notification templates
         self.init_notification_templates()
         
+        # Initialize marketing configurations
+        self.init_marketing_configs()
+        
+        # Initialize analytics configurations
+        self.init_analytics_configs()
+        
+        # Initialize security configurations
+        self.init_security_configs()
+        
         self.stdout.write(
             self.style.SUCCESS('Successfully initialized all configurations!')
         )
@@ -243,3 +252,101 @@ class Command(BaseCommand):
             )
         
         self.stdout.write('✓ Notification templates initialized')
+
+    def init_marketing_configs(self):
+        """Initialize marketing configurations"""
+        configs = [
+            # Email Campaign Settings
+            ('email_campaign_default_status', 'draft', 'Default status for new email campaigns', 'string'),
+            ('email_campaign_max_recipients', '10000', 'Maximum recipients per email campaign', 'integer'),
+            ('email_campaign_rate_limit', '100', 'Email sending rate limit per minute', 'integer'),
+            
+            # SMS Campaign Settings
+            ('sms_campaign_default_status', 'draft', 'Default status for new SMS campaigns', 'string'),
+            ('sms_campaign_max_recipients', '1000', 'Maximum recipients per SMS campaign', 'integer'),
+            ('sms_campaign_rate_limit', '50', 'SMS sending rate limit per minute', 'integer'),
+            ('sms_character_limit', '1600', 'Maximum characters per SMS message', 'integer'),
+            
+            # Marketing Automation
+            ('marketing_automation_enabled', 'true', 'Enable marketing automation', 'boolean'),
+            ('automation_max_delay_hours', '168', 'Maximum delay for automation actions in hours', 'integer'),
+            
+            # Guest Segmentation
+            ('default_segment_min_visits', '1', 'Default minimum visits for guest segmentation', 'integer'),
+            ('default_segment_min_spend', '100.00', 'Default minimum spend for guest segmentation', 'decimal'),
+        ]
+        
+        for key, value, description, data_type in configs:
+            SystemConfiguration.set_value(key, value, description, data_type)
+        
+        self.stdout.write('✓ Marketing configurations initialized')
+
+    def init_analytics_configs(self):
+        """Initialize analytics configurations"""
+        configs = [
+            # Dashboard Settings
+            ('dashboard_default_refresh_interval', '300', 'Default dashboard refresh interval in seconds', 'integer'),
+            ('dashboard_max_widgets', '50', 'Maximum widgets per dashboard', 'integer'),
+            ('dashboard_auto_refresh_enabled', 'true', 'Enable automatic dashboard refresh', 'boolean'),
+            
+            # Report Settings
+            ('report_max_execution_time', '3600', 'Maximum report execution time in seconds', 'integer'),
+            ('report_retention_days', '90', 'Report file retention period in days', 'integer'),
+            ('report_max_file_size', '10485760', 'Maximum report file size in bytes', 'integer'),
+            
+            # KPI Settings
+            ('kpi_default_measurement_interval', '24', 'Default KPI measurement interval in hours', 'integer'),
+            ('kpi_alert_threshold_percentage', '10', 'KPI alert threshold percentage', 'decimal'),
+            ('kpi_retention_days', '365', 'KPI measurement retention period in days', 'integer'),
+            
+            # Alert Settings
+            ('alert_max_active_alerts', '100', 'Maximum active alerts', 'integer'),
+            ('alert_escalation_hours', '24', 'Alert escalation time in hours', 'integer'),
+        ]
+        
+        for key, value, description, data_type in configs:
+            SystemConfiguration.set_value(key, value, description, data_type)
+        
+        self.stdout.write('✓ Analytics configurations initialized')
+
+    def init_security_configs(self):
+        """Initialize security configurations"""
+        configs = [
+            # Two-Factor Authentication
+            ('two_factor_enabled', 'true', 'Enable two-factor authentication', 'boolean'),
+            ('two_factor_backup_codes_count', '10', 'Number of backup codes to generate', 'integer'),
+            ('two_factor_grace_period_hours', '24', '2FA grace period for new users in hours', 'integer'),
+            
+            # Password Policy
+            ('password_min_length', '8', 'Minimum password length', 'integer'),
+            ('password_require_uppercase', 'true', 'Require uppercase letters in password', 'boolean'),
+            ('password_require_lowercase', 'true', 'Require lowercase letters in password', 'boolean'),
+            ('password_require_numbers', 'true', 'Require numbers in password', 'boolean'),
+            ('password_require_special_chars', 'true', 'Require special characters in password', 'boolean'),
+            ('password_expires_days', '90', 'Password expiration in days (0 for no expiration)', 'integer'),
+            ('password_prevent_reuse_count', '5', 'Number of previous passwords to prevent reuse', 'integer'),
+            
+            # Account Lockout
+            ('max_failed_login_attempts', '5', 'Maximum failed login attempts before lockout', 'integer'),
+            ('account_lockout_duration_minutes', '30', 'Account lockout duration in minutes', 'integer'),
+            ('login_attempt_window_minutes', '15', 'Login attempt tracking window in minutes', 'integer'),
+            
+            # Session Security
+            ('session_timeout_minutes', '480', 'Session timeout in minutes', 'integer'),
+            ('session_secure_only', 'true', 'Require secure sessions (HTTPS)', 'boolean'),
+            ('session_http_only', 'true', 'Make session cookies HTTP only', 'boolean'),
+            ('session_same_site', 'Lax', 'Session cookie SameSite policy', 'string'),
+            
+            # Audit Logging
+            ('audit_log_retention_days', '365', 'Audit log retention period in days', 'integer'),
+            ('audit_log_sensitive_fields', 'password,secret_key,token', 'Comma-separated list of sensitive fields to exclude from audit logs', 'string'),
+            
+            # Security Monitoring
+            ('security_alert_email', 'security@healthclub.com', 'Email for security alerts', 'string'),
+            ('suspicious_activity_threshold', '10', 'Number of failed attempts to trigger suspicious activity alert', 'integer'),
+        ]
+        
+        for key, value, description, data_type in configs:
+            SystemConfiguration.set_value(key, value, description, data_type)
+        
+        self.stdout.write('✓ Security configurations initialized')

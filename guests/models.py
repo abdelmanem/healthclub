@@ -181,7 +181,7 @@ class GuestCommunication(models.Model):
     guest = models.ForeignKey(
         'guests.Guest',
         on_delete=models.CASCADE,
-        related_name='communications'
+        related_name='guest_communications'
     )
     communication_type = models.CharField(max_length=20, choices=COMMUNICATION_TYPES)
     subject = models.CharField(max_length=200)
