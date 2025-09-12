@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-z^s=v+-jp!y6x#v*muoeenm908s42d$x@zz5j7a$x#gpdxhzkz
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'services',
     'employees',
     'pos',
+    'assets',
 ]
 
 MIDDLEWARE = [
@@ -84,8 +85,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'healthclub',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
+        'USER': 'hcuserdb',
+        'PASSWORD': 'Passwordhcuserdb',
         'HOST': 'localhost',
         'PORT': '5432',
     }
