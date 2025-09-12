@@ -1,12 +1,14 @@
 from django.db import models
+from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
-from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 
 class Location(models.Model):
     name = models.CharField(max_length=150, unique=True)
     description = models.TextField(blank=True)
+    capacity = models.PositiveIntegerField(default=1, help_text="Maximum number of people")
+    is_active = models.BooleanField(default=True)
     history = HistoricalRecords()
 
     class Meta:
@@ -14,6 +16,30 @@ class Location(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class RecurringPattern(models.Model):
+    """Model to handle recurring appointment patterns"""
+    FREQUENCY_CHOICES = (
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly'),
+    )
+    
+    frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES)
+    interval = models.PositiveIntegerField(default=1, help_text="Every X days/weeks/months")
+    days_of_week = models.JSONField(default=list, blank=True, help_text="Days of week for weekly pattern")
+    day_of_month = models.PositiveIntegerField(null=True, blank=True, help_text="Day of month for monthly pattern")
+    end_date = models.DateField(null=True, blank=True, help_text="End date for recurring pattern")
+    max_occurrences = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum number of occurrences")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self) -> str:
+        return f"{self.frequency} every {self.interval}"
 
 
 class Reservation(models.Model):
@@ -49,6 +75,25 @@ class Reservation(models.Model):
     end_time = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_BOOKED)
     notes = models.TextField(blank=True)
+    
+    # Recurring appointment fields
+    is_recurring = models.BooleanField(default=False)
+    recurring_pattern = models.ForeignKey(
+        'reservations.RecurringPattern',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reservations'
+    )
+    parent_reservation = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='child_reservations',
+        help_text="Parent reservation for recurring appointments"
+    )
+    
     # status timestamps
     checked_in_at = models.DateTimeField(null=True, blank=True)
     in_service_at = models.DateTimeField(null=True, blank=True)
@@ -72,55 +117,32 @@ class Reservation(models.Model):
         return f"Reservation #{self.pk or 'new'} for {self.guest} at {self.start_time}"
 
     def clean(self) -> None:
-        if self.end_time and self.start_time and self.end_time <= self.start_time:
-            raise ValidationError("End time must be after start time.")
-
-        # prevent overlap for same location and for same guest+location when status not cancelled/no_show
-        overlapping_q = models.Q(start_time__lt=self.end_time, end_time__gt=self.start_time)
-        exclude_self_q = ~models.Q(pk=self.pk) if self.pk else models.Q()
-        forbidden_statuses = [
-            self.STATUS_BOOKED,
-            self.STATUS_CHECKED_IN,
-            self.STATUS_IN_SERVICE,
-            self.STATUS_COMPLETED,
-            self.STATUS_CHECKED_OUT,
-        ]
-        # Overlap at location scope
-        if Reservation.objects.filter(
-            models.Q(location=self.location)
-            & overlapping_q
-            & exclude_self_q
-            & models.Q(status__in=forbidden_statuses)
-        ).exists():
-            raise ValidationError("Overlapping reservation exists for this location.")
-
-        # Overlap at service level (any service in multi-service booking)
-        if self.pk:
-            service_ids = list(self.reservation_services.values_list('service_id', flat=True))
-        else:
-            service_ids = []
-        if service_ids:
+        if self.end_time <= self.start_time:
+            raise ValidationError("End time must be after start time")
+        
+        # Check for booking conflicts
+        if self.pk:  # Only check for existing reservations
             conflicting = Reservation.objects.filter(
-                overlapping_q & exclude_self_q & models.Q(status__in=forbidden_statuses)
-            ).filter(
-                reservation_services__service_id__in=service_ids,
                 location=self.location,
-            ).exists()
-            if conflicting:
-                raise ValidationError("Overlapping reservation exists for one or more services at this location.")
+                start_time__lt=self.end_time,
+                end_time__gt=self.start_time,
+                status__in=[self.STATUS_BOOKED, self.STATUS_CHECKED_IN, self.STATUS_IN_SERVICE]
+            ).exclude(pk=self.pk)
+            
+            if conflicting.exists():
+                raise ValidationError("This time slot conflicts with an existing reservation")
 
-        # Ensure each selected service is allowed at the chosen location
-        if self.pk:
-            selected_services = self.reservation_services.values_list('service_id', flat=True)
-        else:
-            selected_services = []
-        if selected_services:
-            from services.models import Service
 
-            services_qs = Service.objects.filter(id__in=selected_services)
-            for svc in services_qs:
-                if not svc.locations.filter(id=self.location_id).exists():
-                    raise ValidationError(f"Service '{svc.name}' is not available at location '{self.location}'.")
+def mark_guest_in_house(guest):
+    """Mark guest as in house"""
+    guest.house_status = 'in_house'
+    guest.save(update_fields=['house_status'])
+
+
+def mark_guest_checked_out(guest):
+    """Mark guest as checked out"""
+    guest.house_status = 'checked_out'
+    guest.save(update_fields=['house_status'])
 
 
 class ReservationService(models.Model):
@@ -129,28 +151,81 @@ class ReservationService(models.Model):
         on_delete=models.CASCADE,
         related_name='reservation_services',
     )
-    # placeholder FK to services.Service to be added later; using string ref
     service = models.ForeignKey(
         'services.Service',
         on_delete=models.CASCADE,
         related_name='reservation_services',
     )
-    history = HistoricalRecords()
-
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
     class Meta:
-        unique_together = ("reservation", "service")
+        unique_together = ('reservation', 'service')
 
     def __str__(self) -> str:
-        return f"{self.service} for {self.reservation}"
+        return f"{self.reservation} - {self.service}"
 
 
-def mark_guest_in_house(guest):
-    guest.house_status = 'in_house'
-    guest.save(update_fields=['house_status'])
+class Waitlist(models.Model):
+    """Model to handle waitlist for fully booked slots"""
+    guest = models.ForeignKey(
+        'guests.Guest',
+        on_delete=models.CASCADE,
+        related_name='waitlist_entries'
+    )
+    service = models.ForeignKey(
+        'services.Service',
+        on_delete=models.CASCADE,
+        related_name='waitlist_entries'
+    )
+    preferred_date = models.DateField()
+    preferred_time_start = models.TimeField()
+    preferred_time_end = models.TimeField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_notified = models.BooleanField(default=False)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        unique_together = ('guest', 'service', 'preferred_date')
+
+    def __str__(self) -> str:
+        return f"{self.guest} - {self.service} on {self.preferred_date}"
 
 
-def mark_guest_checked_out(guest):
-    guest.house_status = 'checked_out'
-    guest.save(update_fields=['house_status'])
+class BookingRule(models.Model):
+    """Model to define booking rules and policies"""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    
+    # Time-based rules
+    min_advance_booking_hours = models.PositiveIntegerField(default=24)
+    max_advance_booking_days = models.PositiveIntegerField(default=30)
+    
+    # Cancellation rules
+    cancellation_deadline_hours = models.PositiveIntegerField(default=24)
+    cancellation_fee_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        validators=[MinValueValidator(0)]
+    )
+    
+    # No-show rules
+    no_show_fee_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        validators=[MinValueValidator(0)]
+    )
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
 
-# Create your models here.
+    def __str__(self) -> str:
+        return self.name

@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'employees',
     'pos',
     'assets',
+    'inventory',
 ]
 
 MIDDLEWARE = [

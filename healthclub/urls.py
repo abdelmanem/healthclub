@@ -31,6 +31,11 @@ from employees.views import (
     EmployeeShiftViewSet,
     ReservationEmployeeAssignmentViewSet,
 )
+from inventory.views import (
+    SupplierViewSet, ProductCategoryViewSet, ProductViewSet,
+    StockMovementViewSet, PurchaseOrderViewSet, ProductServiceLinkViewSet,
+    InventoryAlertViewSet
+)
 
 router = DefaultRouter()
 router.register(r'guests', GuestViewSet, basename='guest')
@@ -42,6 +47,13 @@ router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'employees', EmployeeViewSet, basename='employee')
 router.register(r'shifts', EmployeeShiftViewSet, basename='shift')
 router.register(r'reservation-assignments', ReservationEmployeeAssignmentViewSet, basename='reservation-assignment')
+router.register(r'suppliers', SupplierViewSet, basename='supplier')
+router.register(r'product-categories', ProductCategoryViewSet, basename='product-category')
+router.register(r'products', ProductViewSet, basename='product')
+router.register(r'stock-movements', StockMovementViewSet, basename='stock-movement')
+router.register(r'purchase-orders', PurchaseOrderViewSet, basename='purchase-order')
+router.register(r'product-service-links', ProductServiceLinkViewSet, basename='product-service-link')
+router.register(r'inventory-alerts', InventoryAlertViewSet, basename='inventory-alert')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
