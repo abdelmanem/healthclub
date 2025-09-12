@@ -49,6 +49,13 @@ class Reservation(models.Model):
     end_time = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_BOOKED)
     notes = models.TextField(blank=True)
+    # status timestamps
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    in_service_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    checked_out_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    no_show_recorded_at = models.DateTimeField(null=True, blank=True)
 
     history = HistoricalRecords()
 

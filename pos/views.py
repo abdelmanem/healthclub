@@ -19,6 +19,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         'total': ['gte', 'lte'],
     }
 
+    @decorators.action(detail=False, methods=["get"], url_path="report-revenue")
+    def report_revenue(self, request):
+        from django.db.models import Sum
+        total = self.get_queryset().filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PAID]).aggregate(Sum('total'))['total__sum'] or 0
+        paid = self.get_queryset().filter(status=Invoice.STATUS_PAID).aggregate(Sum('total'))['total__sum'] or 0
+        return response.Response({"total": total, "paid": paid})
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
@@ -34,6 +41,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
         result = {u.username: perms for u, perms in users.items()}
         return response.Response(result)
+
+    @decorators.action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        invoice = self.get_object()
+        invoice.status = Invoice.STATUS_CANCELLED
+        invoice.save(update_fields=["status"])
+        return response.Response({"status": invoice.status})
 
     @decorators.action(detail=True, methods=["post"], url_path="recalculate")
     def recalculate(self, request, pk=None):
@@ -71,3 +85,14 @@ class PaymentViewSet(viewsets.ModelViewSet):
         users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
         result = {u.username: perms for u, perms in users.items()}
         return response.Response(result)
+
+    def perform_create(self, serializer):
+        payment = serializer.save()
+        invoice = payment.invoice
+        invoice.recalculate_totals()
+        # Auto-mark paid if total covered
+        from decimal import Decimal
+        total_paid = sum(p.amount for p in invoice.payments.all())
+        if total_paid >= invoice.total:
+            invoice.status = Invoice.STATUS_PAID
+            invoice.save(update_fields=["status"])

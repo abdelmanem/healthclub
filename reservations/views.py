@@ -30,33 +30,39 @@ class ReservationViewSet(viewsets.ModelViewSet):
         'reservation_services__service': ['exact', 'in'],
     }
 
+    @decorators.action(detail=False, methods=["get"], url_path="report-utilization")
+    def report_utilization(self, request):
+        from django.db.models import Count
+        data = self.get_queryset().values('location__name').annotate(bookings=Count('id')).order_by('-bookings')
+        return response.Response(list(data))
+
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_CHECKED_IN
         reservation.save(update_fields=["status"])
-        return response.Response({"status": reservation.status})
+        return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="in-service")
     def in_service(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_IN_SERVICE
         reservation.save(update_fields=["status"])
-        return response.Response({"status": reservation.status})
+        return response.Response({"status": reservation.status, "in_service_at": reservation.in_service_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="complete")
     def complete(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_COMPLETED
         reservation.save(update_fields=["status"])
-        return response.Response({"status": reservation.status})
+        return response.Response({"status": reservation.status, "completed_at": reservation.completed_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="check-out")
     def check_out(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_CHECKED_OUT
         reservation.save(update_fields=["status"])
-        return response.Response({"status": reservation.status})
+        return response.Response({"status": reservation.status, "checked_out_at": reservation.checked_out_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="create-invoice")
     def create_invoice(self, request, pk=None):
