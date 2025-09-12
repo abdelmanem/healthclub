@@ -117,7 +117,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='reservation',
-            constraint=models.CheckConstraint(condition=models.Q(('end_time__gt', models.F('start_time'))), name='reservation_time_valid_range'),
+            constraint=models.CheckConstraint(check=models.Q(end_time__gt=models.F('start_time')), name='reservation_time_valid_range'),
         ),
         migrations.AlterUniqueTogether(
             name='reservationservice',

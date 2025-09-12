@@ -10,7 +10,7 @@ class ServiceCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
-    list_display = ("name", "category", "duration_minutes", "base_price", "active")
+    list_display = ("name", "category", "duration_minutes", "price", "active")
     list_filter = ("category", "active")
     search_fields = ("name", "description")
 
