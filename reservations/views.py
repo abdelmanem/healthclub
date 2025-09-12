@@ -64,6 +64,24 @@ class ReservationViewSet(viewsets.ModelViewSet):
         invoice = create_invoice_for_reservation(reservation)
         return response.Response({"invoice_id": invoice.id, "invoice_number": invoice.invoice_number}, status=status.HTTP_201_CREATED)
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+
+        return get_objects_for_user(user, 'reservations.view_reservation', qs)
+
+    @decorators.action(detail=True, methods=["get"], url_path="permissions")
+    def permissions(self, request, pk=None):
+        obj = self.get_object()
+        from guardian.shortcuts import get_users_with_perms
+
+        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
+        result = {u.username: perms for u, perms in users.items()}
+        return response.Response(result)
+
     @decorators.action(detail=True, methods=["post"], url_path="grant", permission_classes=[ObjectPermissionsOrReadOnly])
     def grant(self, request, pk=None):
         reservation = self.get_object()

@@ -21,6 +21,22 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         'position': ['exact', 'in'],
     }
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'employees.view_employee', qs)
+
+    @decorators.action(detail=True, methods=["get"], url_path="permissions")
+    def permissions(self, request, pk=None):
+        obj = self.get_object()
+        from guardian.shortcuts import get_users_with_perms
+        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
+        result = {u.username: perms for u, perms in users.items()}
+        return response.Response(result)
+
 
 class EmployeeShiftViewSet(viewsets.ModelViewSet):
     queryset = EmployeeShift.objects.all().select_related("employee", "location").order_by("-shift_date")
@@ -34,6 +50,22 @@ class EmployeeShiftViewSet(viewsets.ModelViewSet):
         'location': ['exact', 'in'],
         'shift_date': ['exact', 'gte', 'lte'],
     }
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'employees.view_employeeshift', qs)
+
+    @decorators.action(detail=True, methods=["get"], url_path="permissions")
+    def permissions(self, request, pk=None):
+        obj = self.get_object()
+        from guardian.shortcuts import get_users_with_perms
+        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
+        result = {u.username: perms for u, perms in users.items()}
+        return response.Response(result)
 
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
@@ -58,3 +90,19 @@ class ReservationEmployeeAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ReservationEmployeeAssignment.objects.all().select_related("reservation", "employee").order_by("-id")
     serializer_class = ReservationEmployeeAssignmentSerializer
     permission_classes = [ObjectPermissionsOrReadOnly]
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'employees.view_reservationemployeeassignment', qs)
+
+    @decorators.action(detail=True, methods=["get"], url_path="permissions")
+    def permissions(self, request, pk=None):
+        obj = self.get_object()
+        from guardian.shortcuts import get_users_with_perms
+        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
+        result = {u.username: perms for u, perms in users.items()}
+        return response.Response(result)
