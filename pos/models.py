@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator
 from simple_history.models import HistoricalRecords
+from decimal import Decimal
 
 
 class PosConfig(models.Model):
@@ -46,6 +47,44 @@ class Invoice(models.Model):
     def __str__(self) -> str:
         return f"Invoice {self.invoice_number}"
 
+    def recalculate_totals(self) -> None:
+        subtotal = Decimal("0.00")
+        for item in self.items.all():
+            line_subtotal = item.unit_price * item.quantity
+            subtotal += line_subtotal
+
+        # Service charge (percentage of subtotal)
+        from .models import PosConfig
+
+        cfg = PosConfig.objects.first()
+        service_charge = Decimal("0.00")
+        vat_total = Decimal("0.00")
+        if cfg:
+            if cfg.service_charge_rate:
+                service_charge = (subtotal * (cfg.service_charge_rate / Decimal("100")))
+
+        # Item-level tax + VAT on subtotal + service charge
+        item_tax = Decimal("0.00")
+        for item in self.items.all():
+            if item.tax_rate:
+                item_tax += (item.unit_price * item.quantity) * (item.tax_rate / Decimal("100"))
+        if cfg and cfg.vat_rate:
+            vat_total = (subtotal + service_charge) * (cfg.vat_rate / Decimal("100"))
+
+        self.tax = item_tax + vat_total
+        self.total = subtotal + service_charge + self.tax - self.discount
+        self.save(update_fields=["tax", "total"])
+
+    @staticmethod
+    def generate_invoice_number() -> str:
+        # Simple auto-incremental pattern: INV-<pk+1>-<YYYYMMDDHHMM>
+        from django.utils import timezone
+
+        timestamp = timezone.now().strftime("%Y%m%d%H%M")
+        last = Invoice.objects.order_by("-id").first()
+        base = (last.id + 1) if last else 1
+        return f"INV-{base}-{timestamp}"
+
 
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey('pos.Invoice', on_delete=models.CASCADE, related_name='items')
@@ -66,6 +105,10 @@ class InvoiceItem(models.Model):
         if self.service:
             return f"{self.service.name} x{self.quantity}"
         return f"{self.product_name} x{self.quantity}"
+
+    @property
+    def line_total(self):
+        return self.unit_price * self.quantity
 
 
 class Payment(models.Model):

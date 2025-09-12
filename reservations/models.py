@@ -49,6 +49,13 @@ class Reservation(models.Model):
     end_time = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_BOOKED)
     notes = models.TextField(blank=True)
+    # status timestamps
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    in_service_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    checked_out_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    no_show_recorded_at = models.DateTimeField(null=True, blank=True)
 
     history = HistoricalRecords()
 
@@ -101,6 +108,19 @@ class Reservation(models.Model):
             ).exists()
             if conflicting:
                 raise ValidationError("Overlapping reservation exists for one or more services at this location.")
+
+        # Ensure each selected service is allowed at the chosen location
+        if self.pk:
+            selected_services = self.reservation_services.values_list('service_id', flat=True)
+        else:
+            selected_services = []
+        if selected_services:
+            from services.models import Service
+
+            services_qs = Service.objects.filter(id__in=selected_services)
+            for svc in services_qs:
+                if not svc.locations.filter(id=self.location_id).exists():
+                    raise ValidationError(f"Service '{svc.name}' is not available at location '{self.location}'.")
 
 
 class ReservationService(models.Model):

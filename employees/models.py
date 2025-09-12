@@ -17,6 +17,7 @@ class Employee(models.Model):
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     certifications = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    services = models.ManyToManyField('services.Service', related_name='employees', blank=True)
 
     history = HistoricalRecords()
 
@@ -76,6 +77,28 @@ class ReservationEmployeeAssignment(models.Model):
 
     class Meta:
         unique_together = ('reservation', 'employee', 'role_in_service')
+
+    def clean(self):
+        # Ensure employee is qualified to perform at least one service in the reservation
+        services_for_reservation = list(self.reservation.reservation_services.values_list('service_id', flat=True))
+        qualified = self.employee.services.filter(id__in=services_for_reservation).exists()
+        if not qualified:
+            from django.core.exceptions import ValidationError
+            raise ValidationError("Employee is not qualified for any service in this reservation.")
+
+        # Ensure the employee has a shift covering the reservation time at the location
+        from django.db.models import Q
+        from datetime import datetime
+        res = self.reservation
+        covering_shift = self.employee.shifts.filter(
+            shift_date=res.start_time.date(),
+            location=res.location,
+            start_time__lte=res.start_time.time(),
+            end_time__gte=res.end_time.time(),
+        ).exists()
+        if not covering_shift:
+            from django.core.exceptions import ValidationError
+            raise ValidationError("No shift covers this reservation time/location for the employee.")
 
     def __str__(self) -> str:
         return f"{self.employee} -> {self.reservation} as {self.role_in_service}"
