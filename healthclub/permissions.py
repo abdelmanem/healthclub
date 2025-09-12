@@ -13,6 +13,10 @@ class ObjectPermissionsOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             perm_codename = f"view_{model_name}"
             return request.user.has_perm(f"{app_label}.{perm_codename}", obj)
+        # Separate delete permission
+        if request.method == 'DELETE':
+            perm_codename = f"delete_{model_name}"
+            return request.user.has_perm(f"{app_label}.{perm_codename}", obj)
         perm_codename = f"change_{model_name}"
         return request.user.has_perm(f"{app_label}.{perm_codename}", obj)
 
