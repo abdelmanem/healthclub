@@ -3,6 +3,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Location, Reservation
 from .serializers import LocationSerializer, ReservationSerializer
 from pos import create_invoice_for_reservation
+from healthclub.permissions import ObjectPermissionsOrReadOnly
 
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
@@ -16,6 +17,7 @@ class LocationViewSet(viewsets.ModelViewSet):
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all().select_related("guest", "location").order_by("-start_time")
     serializer_class = ReservationSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["guest__first_name", "guest__last_name", "notes"]
     ordering_fields = ["start_time", "end_time"]
@@ -61,3 +63,35 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation = self.get_object()
         invoice = create_invoice_for_reservation(reservation)
         return response.Response({"invoice_id": invoice.id, "invoice_number": invoice.invoice_number}, status=status.HTTP_201_CREATED)
+
+    @decorators.action(detail=True, methods=["post"], url_path="grant", permission_classes=[ObjectPermissionsOrReadOnly])
+    def grant(self, request, pk=None):
+        reservation = self.get_object()
+        from guardian.shortcuts import assign_perm
+        username = request.data.get("username")
+        perm = request.data.get("perm", "change_reservation")
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return response.Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+        assign_perm(perm, user, reservation)
+        return response.Response({"granted": perm, "to": username})
+
+    @decorators.action(detail=True, methods=["post"], url_path="revoke", permission_classes=[ObjectPermissionsOrReadOnly])
+    def revoke(self, request, pk=None):
+        reservation = self.get_object()
+        from guardian.shortcuts import remove_perm
+        username = request.data.get("username")
+        perm = request.data.get("perm", "change_reservation")
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return response.Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+        remove_perm(perm, user, reservation)
+        return response.Response({"revoked": perm, "from": username})

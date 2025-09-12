@@ -2,10 +2,12 @@ from rest_framework import viewsets, decorators, response, status, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Invoice, Payment
 from .serializers import InvoiceSerializer, PaymentSerializer
+from healthclub.permissions import ObjectPermissionsOrReadOnly
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all().select_related("guest", "reservation").order_by("-date")
     serializer_class = InvoiceSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["invoice_number", "guest__first_name", "guest__last_name"]
     ordering_fields = ["date", "total"]
@@ -27,6 +29,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all().select_related("invoice").order_by("-payment_date")
     serializer_class = PaymentSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["transaction_id", "invoice__invoice_number"]
     ordering_fields = ["payment_date", "amount"]

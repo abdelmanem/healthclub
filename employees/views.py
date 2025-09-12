@@ -6,10 +6,12 @@ from .serializers import (
     EmployeeShiftSerializer,
     ReservationEmployeeAssignmentSerializer,
 )
+from healthclub.permissions import ObjectPermissionsOrReadOnly
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all().select_related("user", "position").order_by("user__username")
     serializer_class = EmployeeSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["user__username", "user__first_name", "user__last_name"]
     ordering_fields = ["user__username", "hire_date"]
@@ -23,6 +25,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 class EmployeeShiftViewSet(viewsets.ModelViewSet):
     queryset = EmployeeShift.objects.all().select_related("employee", "location").order_by("-shift_date")
     serializer_class = EmployeeShiftSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["employee__user__username", "location__name"]
     ordering_fields = ["shift_date", "start_time", "end_time"]
@@ -54,3 +57,4 @@ class EmployeeShiftViewSet(viewsets.ModelViewSet):
 class ReservationEmployeeAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ReservationEmployeeAssignment.objects.all().select_related("reservation", "employee").order_by("-id")
     serializer_class = ReservationEmployeeAssignmentSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
