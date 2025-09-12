@@ -162,6 +162,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
 }
 
 # django-guardian settings
@@ -170,3 +174,10 @@ AUTHENTICATION_BACKENDS = (
     'guardian.backends.ObjectPermissionBackend',
 )
 ANONYMOUS_USER_NAME = None
+
+# drf-spectacular
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'HealthClub API',
+    'DESCRIPTION': 'API for guests, reservations, services, employees and POS',
+    'VERSION': '1.0.0',
+}

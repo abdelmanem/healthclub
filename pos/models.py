@@ -52,14 +52,27 @@ class Invoice(models.Model):
         for item in self.items.all():
             line_subtotal = item.unit_price * item.quantity
             subtotal += line_subtotal
-        # Apply tax from items (simple sum of item tax)
-        tax_total = Decimal("0.00")
+
+        # Service charge (percentage of subtotal)
+        from .models import PosConfig
+
+        cfg = PosConfig.objects.first()
+        service_charge = Decimal("0.00")
+        vat_total = Decimal("0.00")
+        if cfg:
+            if cfg.service_charge_rate:
+                service_charge = (subtotal * (cfg.service_charge_rate / Decimal("100")))
+
+        # Item-level tax + VAT on subtotal + service charge
+        item_tax = Decimal("0.00")
         for item in self.items.all():
             if item.tax_rate:
-                tax_total += (item.unit_price * item.quantity) * (item.tax_rate / Decimal("100"))
+                item_tax += (item.unit_price * item.quantity) * (item.tax_rate / Decimal("100"))
+        if cfg and cfg.vat_rate:
+            vat_total = (subtotal + service_charge) * (cfg.vat_rate / Decimal("100"))
 
-        self.tax = tax_total
-        self.total = subtotal + tax_total - self.discount
+        self.tax = item_tax + vat_total
+        self.total = subtotal + service_charge + self.tax - self.discount
         self.save(update_fields=["tax", "total"])
 
     @staticmethod
