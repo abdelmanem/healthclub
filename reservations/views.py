@@ -1,4 +1,5 @@
 from rest_framework import viewsets, decorators, response, status, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import Location, Reservation
 from .serializers import LocationSerializer, ReservationSerializer
 from pos import create_invoice_for_reservation
@@ -6,15 +7,26 @@ from pos import create_invoice_for_reservation
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
     serializer_class = LocationSerializer
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
+    ordering_fields = ["name"]
+    filterset_fields = { 'name': ['exact', 'icontains'] }
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all().select_related("guest", "location").order_by("-start_time")
     serializer_class = ReservationSerializer
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["guest__first_name", "guest__last_name", "notes"]
+    ordering_fields = ["start_time", "end_time"]
+    filterset_fields = {
+        'guest': ['exact', 'in'],
+        'location': ['exact', 'in'],
+        'status': ['exact', 'in'],
+        'start_time': ['gte', 'lte'],
+        'end_time': ['gte', 'lte'],
+        'reservation_services__service': ['exact', 'in'],
+    }
 
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
