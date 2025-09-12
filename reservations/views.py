@@ -8,10 +8,27 @@ from healthclub.permissions import ObjectPermissionsOrReadOnly
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
     serializer_class = LocationSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
     ordering_fields = ["name"]
     filterset_fields = { 'name': ['exact', 'icontains'] }
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'reservations.view_location', qs)
+
+    @decorators.action(detail=True, methods=["get"], url_path="permissions")
+    def permissions(self, request, pk=None):
+        obj = self.get_object()
+        from guardian.shortcuts import get_users_with_perms
+        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
+        result = {u.username: perms for u, perms in users.items()}
+        return response.Response(result)
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
