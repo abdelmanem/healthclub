@@ -2,8 +2,19 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
-  render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+// Mock the auth service
+jest.mock('./services/auth', () => ({
+  authService: {
+    login: jest.fn(),
+    logout: jest.fn(),
+    getCurrentUser: jest.fn(),
+    isAuthenticated: jest.fn(() => false),
+  },
+}));
+
+describe('App', () => {
+  it('renders without crashing', () => {
+    render(<App />);
+    expect(screen.getByText('Health Club Management')).toBeInTheDocument();
+  });
 });

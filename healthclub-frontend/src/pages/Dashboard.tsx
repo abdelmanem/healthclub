@@ -1,5 +1,5 @@
 import React from 'react';
-import { Container, Typography, Box, Card, CardContent, Grid } from '@mui/material';
+import { Container, Typography, Box, Card, CardContent, Grid2 as Grid } from '@mui/material';
 import { 
   People, 
   Event, 
@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Schedule
 } from '@mui/icons-material';
-import { usePermissions } from '../../contexts/PermissionContext';
+import { usePermissions } from '../contexts/PermissionContext';
 
 export const Dashboard: React.FC = () => {
   const { user } = usePermissions();
@@ -33,7 +33,7 @@ export const Dashboard: React.FC = () => {
 
       <Grid container spacing={3}>
         {stats.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Grid xs={12} sm={6} md={3} key={index}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center">

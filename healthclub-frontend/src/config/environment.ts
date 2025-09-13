@@ -24,19 +24,3 @@ export const API_ENDPOINTS = {
     BUSINESS_RULES: '/config/business-rules/',
   },
 };
-
-// Permission constants
-export const PERMISSIONS = {
-  VIEW: 'view',
-  ADD: 'add',
-  CHANGE: 'change',
-  DELETE: 'delete',
-};
-
-// User roles
-export const ROLES = {
-  ADMIN: 'Admin',
-  MANAGER: 'Manager',
-  FRONT_OFFICE: 'Front Office',
-  EMPLOYEE: 'Employee',
-};
