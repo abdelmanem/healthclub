@@ -165,6 +165,24 @@ class ReservationService(models.Model):
     def __str__(self) -> str:
         return f"{self.reservation} - {self.service}"
 
+    def save(self, *args, **kwargs):
+        # Auto-populate unit_price from service price if not set
+        if not self.unit_price and self.service:
+            self.unit_price = self.service.price
+        super().save(*args, **kwargs)
+
+    @property
+    def total_price(self):
+        """Calculate total price for this service (unit_price * quantity)"""
+        if self.unit_price:
+            return self.unit_price * self.quantity
+        return 0
+
+    @property
+    def service_duration_minutes(self):
+        """Get service duration from the linked service"""
+        return self.service.duration_minutes if self.service else 0
+
 
 class Waitlist(models.Model):
     """Model to handle waitlist for fully booked slots"""

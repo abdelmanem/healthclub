@@ -225,23 +225,25 @@ def main():
 
     # 10. Create invoice and payment
     print("💰 Creating invoice and payment...")
-    invoice = Invoice.objects.create(
+    import uuid
+    invoice, created = Invoice.objects.get_or_create(
         guest=guest1,
         reservation=past_reservation,
-        subtotal=80.00,
-        tax_amount=6.40,
-        total_amount=86.40,
-        status=Invoice.STATUS_PAID,
-        due_date=timezone.now().date() + timedelta(days=30),
+        defaults={
+            "invoice_number": f"INV-{timezone.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}",
+            "total": 80.00,
+            "tax": 6.40,
+            "status": Invoice.STATUS_PAID,
+        }
     )
     
-    Payment.objects.create(
-        invoice=invoice,
-        amount=86.40,
-        method=Payment.METHOD_CREDIT_CARD,
-        status=Payment.STATUS_COMPLETED,
-        processed_at=timezone.now(),
-    )
+    if created:
+        Payment.objects.create(
+            invoice=invoice,
+            amount=86.40,
+            method=Payment.METHOD_CARD,
+            status="completed",
+        )
     print("✅ Invoice and payment created")
 
     print("\n🎉 Sample data creation completed!")

@@ -32,7 +32,12 @@ class LocationViewSet(viewsets.ModelViewSet):
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
-    queryset = Reservation.objects.all().select_related("guest", "location").order_by("-start_time")
+    queryset = Reservation.objects.all().select_related(
+        "guest", 
+        "location"
+    ).prefetch_related(
+        "reservation_services__service__category"
+    ).order_by("-start_time")
     serializer_class = ReservationSerializer
     permission_classes = [ObjectPermissionsOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -80,6 +85,63 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation.status = Reservation.STATUS_CHECKED_OUT
         reservation.save(update_fields=["status"])
         return response.Response({"status": reservation.status, "checked_out_at": reservation.checked_out_at})
+
+    @decorators.action(detail=True, methods=["get"], url_path="services")
+    def get_services(self, request, pk=None):
+        """Get detailed service information for a reservation"""
+        reservation = self.get_object()
+        services = []
+        for rs in reservation.reservation_services.all():
+            services.append({
+                'id': rs.id,
+                'service_id': rs.service.id,
+                'service_name': rs.service.name,
+                'service_description': rs.service.description,
+                'service_duration_minutes': rs.service.duration_minutes,
+                'service_price': rs.service.price,
+                'service_category': rs.service.category.name if rs.service.category else None,
+                'quantity': rs.quantity,
+                'unit_price': rs.unit_price,
+                'total_price': rs.total_price,
+            })
+        return response.Response(services)
+
+    @decorators.action(detail=True, methods=["post"], url_path="add-service")
+    def add_service(self, request, pk=None):
+        """Add a service to an existing reservation"""
+        reservation = self.get_object()
+        service_id = request.data.get('service_id')
+        quantity = request.data.get('quantity', 1)
+        
+        if not service_id:
+            return response.Response(
+                {"error": "service_id is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from services.models import Service
+            service = Service.objects.get(id=service_id)
+            
+            # Check if service already exists in reservation
+            existing_service = reservation.reservation_services.filter(service=service).first()
+            if existing_service:
+                existing_service.quantity += quantity
+                existing_service.save()
+                return response.Response({"message": "Service quantity updated"})
+            else:
+                ReservationService.objects.create(
+                    reservation=reservation,
+                    service=service,
+                    quantity=quantity
+                )
+                return response.Response({"message": "Service added to reservation"})
+                
+        except Service.DoesNotExist:
+            return response.Response(
+                {"error": "Service not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     @decorators.action(detail=True, methods=["post"], url_path="create-invoice")
     def create_invoice(self, request, pk=None):
