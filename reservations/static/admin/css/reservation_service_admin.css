@@ -1,0 +1,48 @@
+/* Reservation Service Admin Styles */
+
+.service-details {
+    padding: 5px;
+    background-color: #f8f9fa;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+.service-details strong {
+    color: #495057;
+}
+
+.service-details small {
+    color: #6c757d;
+}
+
+.total-price-display {
+    font-weight: bold;
+    color: #28a745;
+}
+
+/* Improve inline form styling */
+.inline-group .tabular tr.has_original td {
+    background-color: #f8f9fa;
+}
+
+.inline-group .tabular tr.add-row td {
+    background-color: #e9ecef;
+}
+
+/* Service select styling */
+.service-select {
+    width: 100%;
+}
+
+/* Input field styling */
+.unit-price-input, .quantity-input {
+    width: 80px;
+    text-align: right;
+}
+
+/* Total price column styling */
+.field-total_price_display {
+    text-align: center;
+    font-weight: bold;
+    color: #28a745;
+}

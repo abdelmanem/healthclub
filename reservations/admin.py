@@ -1,11 +1,78 @@
-from django.contrib import admin, messages
-from django.utils import timezone
+from django import forms
+from django.contrib import admin
 from django.utils.html import format_html
-from django.db import models
-from django.forms import widgets
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+from django.http import JsonResponse
+from django.urls import path
 
 from .models import Location, Reservation, ReservationService
+from services.models import Service
 from pos import create_invoice_for_reservation
+
+
+class ReservationServiceForm(forms.ModelForm):
+    class Meta:
+        model = ReservationService
+        fields = '__all__'
+        widgets = {
+            'service': forms.Select(attrs={
+                'onchange': 'updateServiceDetails(this)',
+                'class': 'service-select'
+            }),
+            'unit_price': forms.NumberInput(attrs={
+                'step': '0.01',
+                'onchange': 'calculateTotal(this)',
+                'class': 'unit-price-input'
+            }),
+            'quantity': forms.NumberInput(attrs={
+                'min': '1',
+                'onchange': 'calculateTotal(this)',
+                'class': 'quantity-input'
+            })
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.service:
+            self.fields['unit_price'].initial = self.instance.service.price
+
+
+class ReservationServiceInline(admin.TabularInline):
+    model = ReservationService
+    form = ReservationServiceForm
+    extra = 1
+    fields = ('service', 'service_details', 'quantity', 'unit_price', 'total_price_display')
+    readonly_fields = ('service_details', 'total_price_display')
+    
+    def service_details(self, obj):
+        """Display service details"""
+        if obj.service:
+            return format_html(
+                '<div class="service-details">'
+                '<strong>{}</strong><br>'
+                '<small>Duration: {} min | Price: ${}</small>'
+                '</div>',
+                obj.service.name,
+                obj.service.duration_minutes,
+                obj.service.price
+            )
+        return "-"
+    service_details.short_description = "Service Details"
+    
+    def total_price_display(self, obj):
+        """Display calculated total price"""
+        if obj.unit_price and obj.quantity:
+            total = obj.unit_price * obj.quantity
+            return format_html('<strong>${:.2f}</strong>', total)
+        return "-"
+    total_price_display.short_description = "Total Price"
+    
+    class Media:
+        js = ('admin/js/reservation_service_admin.js',)
+        css = {
+            'all': ('admin/css/reservation_service_admin.css',)
+        }
 
 
 @admin.register(Location)
@@ -13,45 +80,6 @@ class LocationAdmin(admin.ModelAdmin):
     list_display = ("name", "description", "capacity", "is_active")
     search_fields = ("name", "description")
     list_filter = ("is_active",)
-
-
-class ReservationServiceInline(admin.TabularInline):
-    model = ReservationService
-    extra = 1
-    fields = ('service', 'service_name', 'service_price', 'service_duration', 'quantity', 'unit_price', 'total_price')
-    readonly_fields = ('service_name', 'service_price', 'service_duration', 'total_price')
-    
-    def service_name(self, obj):
-        """Display service name"""
-        if obj.service:
-            return obj.service.name
-        return "-"
-    service_name.short_description = "Service Name"
-    
-    def service_price(self, obj):
-        """Display service price"""
-        if obj.service:
-            return f"${obj.service.price}"
-        return "-"
-    service_price.short_description = "Service Price"
-    
-    def service_duration(self, obj):
-        """Display service duration"""
-        if obj.service:
-            return f"{obj.service.duration_minutes} min"
-        return "-"
-    service_duration.short_description = "Duration"
-    
-    def total_price(self, obj):
-        """Display calculated total price"""
-        if obj.unit_price and obj.quantity:
-            total = obj.unit_price * obj.quantity
-            return f"${total:.2f}"
-        return "-"
-    total_price.short_description = "Total Price"
-    
-    class Media:
-        js = ('admin/js/reservation_service_admin.js',)
 
 
 @admin.register(Reservation)
@@ -68,6 +96,27 @@ class ReservationAdmin(admin.ModelAdmin):
         "action_check_out",
         "action_create_invoice",
     ]
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('get-service-details/<int:service_id>/', self.get_service_details, name='get_service_details'),
+        ]
+        return custom_urls + urls
+    
+    def get_service_details(self, request, service_id):
+        """AJAX endpoint to get service details"""
+        try:
+            service = Service.objects.get(id=service_id)
+            return JsonResponse({
+                'name': service.name,
+                'price': float(service.price),
+                'duration_minutes': service.duration_minutes,
+                'description': service.description,
+                'category': service.category.name if service.category else None,
+            })
+        except Service.DoesNotExist:
+            return JsonResponse({'error': 'Service not found'}, status=404)
     
     def total_duration(self, obj):
         """Calculate total duration from all services"""
@@ -116,6 +165,7 @@ class ReservationAdmin(admin.ModelAdmin):
 
 @admin.register(ReservationService)
 class ReservationServiceAdmin(admin.ModelAdmin):
+    form = ReservationServiceForm
     list_display = ("reservation", "service", "service_price", "quantity", "unit_price", "total_price")
     list_select_related = ("reservation", "service")
     list_filter = ("service", "reservation__status")
