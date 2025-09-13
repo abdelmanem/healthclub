@@ -46,6 +46,11 @@ from analytics.views import (
     KPIViewSet, KPIMeasurementViewSet, AlertViewSet, DashboardViewSet,
     DashboardWidgetPositionViewSet
 )
+from config.views import (
+    SystemConfigurationViewSet, MembershipTierViewSet, GenderOptionViewSet,
+    CommissionTypeViewSet, TrainingTypeViewSet, ProductTypeViewSet,
+    BusinessRuleViewSet, NotificationTemplateViewSet
+)
 
 router = DefaultRouter()
 router.register(r'guests', GuestViewSet, basename='guest')
@@ -79,6 +84,14 @@ router.register(r'kpi-measurements', KPIMeasurementViewSet, basename='kpi-measur
 router.register(r'alerts', AlertViewSet, basename='alert')
 router.register(r'dashboards', DashboardViewSet, basename='dashboard')
 router.register(r'dashboard-widget-positions', DashboardWidgetPositionViewSet, basename='dashboard-widget-position')
+router.register(r'config/system-configurations', SystemConfigurationViewSet, basename='system-configuration')
+router.register(r'config/membership-tiers', MembershipTierViewSet, basename='membership-tier')
+router.register(r'config/gender-options', GenderOptionViewSet, basename='gender-option')
+router.register(r'config/commission-types', CommissionTypeViewSet, basename='commission-type')
+router.register(r'config/training-types', TrainingTypeViewSet, basename='training-type')
+router.register(r'config/product-types', ProductTypeViewSet, basename='product-type')
+router.register(r'config/business-rules', BusinessRuleViewSet, basename='business-rule')
+router.register(r'config/notification-templates', NotificationTemplateViewSet, basename='notification-template')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
