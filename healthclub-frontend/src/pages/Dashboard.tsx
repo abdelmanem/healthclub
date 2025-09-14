@@ -1,5 +1,5 @@
 import React from 'react';
-import { Container, Typography, Box, Card, CardContent, Grid2 as Grid } from '@mui/material';
+import { Container, Typography, Box, Card, CardContent } from '@mui/material';
 import { 
   People, 
   Event, 
@@ -31,39 +31,43 @@ export const Dashboard: React.FC = () => {
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Box 
+        sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 3 
+        }}
+      >
         {stats.map((stat, index) => (
-          <Grid xs={12} sm={6} md={3} key={index}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center">
-                  <Box
-                    sx={{
-                      backgroundColor: stat.color,
-                      borderRadius: '50%',
-                      p: 1,
-                      mr: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {React.cloneElement(stat.icon, { sx: { color: 'white' } })}
-                  </Box>
-                  <Box>
-                    <Typography variant="h4" component="div">
-                      {stat.value}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {stat.title}
-                    </Typography>
-                  </Box>
+          <Card key={index}>
+            <CardContent>
+              <Box display="flex" alignItems="center">
+                <Box
+                  sx={{
+                    backgroundColor: stat.color,
+                    borderRadius: '50%',
+                    p: 1,
+                    mr: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {React.cloneElement(stat.icon, { sx: { color: 'white' } })}
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+                <Box>
+                  <Typography variant="h4" component="div">
+                    {stat.value}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {stat.title}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
         ))}
-      </Grid>
+      </Box>
 
       <Box sx={{ mt: 4 }}>
         <Card>

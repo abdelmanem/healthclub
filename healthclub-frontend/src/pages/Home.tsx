@@ -5,7 +5,6 @@ import {
   Box,
   Paper,
   Button,
-  Grid,
   Card,
   CardContent,
   CardActions
@@ -65,42 +64,47 @@ export const Home: React.FC = () => {
         <Typography variant="h4" component="h2" gutterBottom textAlign="center" mb={4}>
           Quick Actions
         </Typography>
-        <Grid container spacing={3}>
+        <Box 
+          sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 3 
+          }}
+        >
           {quickActions.map((action, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
-              <Card 
-                sx={{ 
-                  height: '100%', 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  transition: 'transform 0.2s ease-in-out',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4
-                  }
-                }}
-              >
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" component="h3" gutterBottom color={action.color}>
-                    {action.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {action.description}
-                  </Typography>
-                </CardContent>
-                <CardActions>
-                  <Button 
-                    size="small" 
-                    onClick={action.action}
-                    sx={{ color: action.color }}
-                  >
-                    Go to {action.title}
-                  </Button>
-                </CardActions>
-              </Card>
-            </Grid>
+            <Card 
+              key={index}
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                transition: 'transform 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 4
+                }
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Typography variant="h6" component="h3" gutterBottom color={action.color}>
+                  {action.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {action.description}
+                </Typography>
+              </CardContent>
+              <CardActions>
+                <Button 
+                  size="small" 
+                  onClick={action.action}
+                  sx={{ color: action.color }}
+                >
+                  Go to {action.title}
+                </Button>
+              </CardActions>
+            </Card>
           ))}
-        </Grid>
+        </Box>
       </Box>
 
       {/* System Status */}
