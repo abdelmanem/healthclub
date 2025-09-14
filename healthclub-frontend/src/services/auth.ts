@@ -3,7 +3,7 @@ import { UserPermissions } from '../types/permissions';
 
 export const authService = {
   login: async (username: string, password: string) => {
-    const response = await api.post('/auth/login/', { username, password });
+    const response = await api.post('/token/', { username, password });
     localStorage.setItem('access_token', response.data.access);
     localStorage.setItem('refresh_token', response.data.refresh);
     return response.data;
@@ -25,7 +25,7 @@ export const authService = {
       throw new Error('No refresh token available');
     }
     
-    const response = await api.post('/auth/refresh/', {
+    const response = await api.post('/token/refresh/', {
       refresh: refreshToken,
     });
     

@@ -6,6 +6,7 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginForm } from './components/auth/LoginForm';
 import { Layout } from './components/common/Layout';
+import { Home } from './pages/Home';
 import { Dashboard } from './pages/Dashboard';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 
@@ -43,6 +44,16 @@ function App() {
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route
               path="/"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Home />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Layout>
