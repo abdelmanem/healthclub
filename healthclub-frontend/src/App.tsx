@@ -1,15 +1,22 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
+import { CssBaseline } from '@mui/material';
 import { PermissionProvider } from './contexts/PermissionContext';
+import { ConfigurationProvider } from './contexts/ConfigurationContext';
+import { Layout } from './components/common/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginForm } from './components/auth/LoginForm';
-import { Layout } from './components/common/Layout';
+import { LoadingSpinner } from './components/common/LoadingSpinner';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Home } from './pages/Home';
 import { Dashboard } from './pages/Dashboard';
-import { UnauthorizedPage } from './pages/UnauthorizedPage';
+import { GuestManagement } from './pages/GuestManagement';
 
+// Lazy load ConfigurationPage to avoid circular dependency
+const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
+
+// Create theme
 const theme = createTheme({
   palette: {
     primary: {
@@ -31,42 +38,96 @@ const theme = createTheme({
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
   },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+        },
+      },
+    },
+  },
 });
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <PermissionProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<LoginForm />} />
-            <Route path="/unauthorized" element={<UnauthorizedPage />} />
-            <Route
-              path="/"
-              element={
+    <ErrorBoundary>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <PermissionProvider>
+          <ConfigurationProvider>
+            <Router>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<LoginForm />} />
+              
+              {/* Protected Routes */}
+              <Route path="/" element={
                 <ProtectedRoute>
                   <Layout>
                     <Home />
                   </Layout>
                 </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
+              } />
+              
+              <Route path="/dashboard" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="dashboard">
                   <Layout>
                     <Dashboard />
                   </Layout>
                 </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Router>
-      </PermissionProvider>
-    </ThemeProvider>
+              } />
+              
+              <Route path="/guests" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="guests">
+                  <Layout>
+                    <GuestManagement />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/reservations" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <div>Reservation Management - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/services" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="services">
+                  <Layout>
+                    <div>Service Management - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/analytics" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="analytics">
+                  <Layout>
+                    <div>Analytics - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/config" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="config">
+                  <Layout>
+                    <Suspense fallback={<LoadingSpinner message="Loading configuration..." />}>
+                      <ConfigurationPage />
+                    </Suspense>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              {/* Catch all route */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+            </Router>
+          </ConfigurationProvider>
+        </PermissionProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

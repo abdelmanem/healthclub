@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
-import { CircularProgress, Box } from '@mui/material';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,11 +20,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!user) {

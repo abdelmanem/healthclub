@@ -32,3 +32,16 @@ export interface Role {
   description: string;
   permissions: Permission[];
 }
+
+export interface PermissionContextType {
+  user: UserPermissions | null;
+  permissions: string[];
+  hasPermission: (permission: string, model?: string) => boolean;
+  hasObjectPermission: (permission: string, model: string, objectId: number) => Promise<boolean>;
+  canView: (model: string) => boolean;
+  canAdd: (model: string) => boolean;
+  canChange: (model: string) => boolean;
+  canDelete: (model: string) => boolean;
+  isLoading: boolean;
+  reloadPermissions: () => void;
+}

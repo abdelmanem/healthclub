@@ -1,20 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { UserPermissions } from '../types/permissions';
+import { UserPermissions, PermissionContextType } from '../types/permissions';
 import { authService } from '../services/auth';
-
-interface PermissionContextType {
-  user: UserPermissions | null;
-  permissions: string[];
-  hasPermission: (permission: string, model?: string) => boolean;
-  hasObjectPermission: (permission: string, model: string, objectId: number) => Promise<boolean>;
-  canView: (model: string) => boolean;
-  canAdd: (model: string) => boolean;
-  canChange: (model: string) => boolean;
-  canDelete: (model: string) => boolean;
-  isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
-}
 
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
@@ -24,15 +10,18 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (authService.isAuthenticated()) {
-      loadUserPermissions();
-    } else {
-      setIsLoading(false);
-    }
+    loadUserPermissions();
   }, []);
 
   const loadUserPermissions = async () => {
     try {
+      if (!authService.isAuthenticated()) {
+        setUser(null);
+        setPermissions([]);
+        setIsLoading(false);
+        return;
+      }
+
       const userData = await authService.getCurrentUser();
       setUser(userData);
       
@@ -44,25 +33,19 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setPermissions(allPermissions);
     } catch (error) {
       console.error('Failed to load user permissions:', error);
+      // If token is invalid, clear it
       authService.logout();
+      setUser(null);
+      setPermissions([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (username: string, password: string) => {
-    try {
-      await authService.login(username, password);
-      await loadUserPermissions();
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const logout = () => {
-    authService.logout();
-    setUser(null);
-    setPermissions([]);
+  // Add a function to reload permissions (useful after login)
+  const reloadPermissions = () => {
+    setIsLoading(true);
+    loadUserPermissions();
   };
 
   const hasPermission = (permission: string, model?: string): boolean => {
@@ -106,8 +89,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       canChange,
       canDelete,
       isLoading,
-      login,
-      logout
+      reloadPermissions
     }}>
       {children}
     </PermissionContext.Provider>

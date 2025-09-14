@@ -1,64 +1,41 @@
 import React from 'react';
-import { Button, IconButton, Menu, MenuItem, Typography, Box } from '@mui/material';
-import { AccountCircle, Logout } from '@mui/icons-material';
-import { usePermissions } from '../../contexts/PermissionContext';
+import { Button, IconButton } from '@mui/material';
+import { Logout } from '@mui/icons-material';
+import { authService } from '../../services/auth';
+import { useNavigate } from 'react-router-dom';
 
-export const LogoutButton: React.FC = () => {
-  const { user, logout } = usePermissions();
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+interface LogoutButtonProps {
+  variant?: 'button' | 'icon';
+  size?: 'small' | 'medium' | 'large';
+}
 
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+export const LogoutButton: React.FC<LogoutButtonProps> = ({ 
+  variant = 'button', 
+  size = 'medium' 
+}) => {
+  const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    handleClose();
+    authService.logout();
+    navigate('/login');
   };
 
-  if (!user) {
-    return null;
+  if (variant === 'icon') {
+    return (
+      <IconButton onClick={handleLogout} size={size} color="inherit">
+        <Logout />
+      </IconButton>
+    );
   }
 
   return (
-    <Box display="flex" alignItems="center">
-      <Typography variant="body2" sx={{ mr: 1 }}>
-        {user.user.first_name} {user.user.last_name}
-      </Typography>
-      <IconButton
-        size="large"
-                aria-label="account of current user"
-        aria-controls="menu-appbar"
-        aria-haspopup="true"
-        onClick={handleMenu}
-        color="inherit"
-      >
-        <AccountCircle />
-      </IconButton>
-      <Menu
-        id="menu-appbar"
-        anchorEl={anchorEl}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        keepMounted
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        open={Boolean(anchorEl)}
-        onClose={handleClose}
-      >
-        <MenuItem onClick={handleLogout}>
-          <Logout sx={{ mr: 1 }} />
-          Logout
-        </MenuItem>
-      </Menu>
-    </Box>
+    <Button
+      onClick={handleLogout}
+      startIcon={<Logout />}
+      variant="outlined"
+      size={size}
+    >
+      Logout
+    </Button>
   );
 };

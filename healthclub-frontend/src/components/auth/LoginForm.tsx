@@ -1,105 +1,134 @@
 import React, { useState } from 'react';
 import {
-  Container,
-  Paper,
+  Box,
+  Card,
+  CardContent,
   TextField,
   Button,
   Typography,
-  Box,
   Alert,
   CircularProgress
 } from '@mui/material';
-import { usePermissions } from '../../contexts/PermissionContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { authService, LoginCredentials } from '../../services/auth';
+import { usePermissions } from '../../contexts/PermissionContext';
 
 export const LoginForm: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [credentials, setCredentials] = useState<LoginCredentials>({
+    username: '',
+    password: ''
+  });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  const { login } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
-
+  const { reloadPermissions } = usePermissions();
+  
   const from = location.state?.from?.pathname || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setIsLoading(true);
+    setError(null);
 
     try {
-      await login(username, password);
+      await authService.login(credentials);
+      // Reload permissions after successful login with a small delay
+      setTimeout(() => {
+        reloadPermissions();
+      }, 100);
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed');
+      setError(err.response?.data?.detail || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleChange = (field: keyof LoginCredentials) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setCredentials(prev => ({
+      ...prev,
+      [field]: e.target.value
+    }));
+  };
+
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            Health Club Management
-          </Typography>
-          <Typography component="h2" variant="h6" align="center" color="text.secondary" gutterBottom>
-            Sign In
-          </Typography>
-          
+    <Box
+      display="flex"
+      justifyContent="center"
+      alignItems="center"
+      minHeight="100vh"
+      sx={{ backgroundColor: '#f5f5f5' }}
+    >
+      <Card sx={{ maxWidth: 400, width: '100%', mx: 2 }}>
+        <CardContent sx={{ p: 4 }}>
+          <Box textAlign="center" mb={3}>
+            <Typography variant="h4" component="h1" gutterBottom>
+              Health Club Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Sign in to your account
+            </Typography>
+          </Box>
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+          <Box component="form" onSubmit={handleSubmit}>
             <TextField
+              fullWidth
+              label="Username"
+              value={credentials.username}
+              onChange={handleChange('username')}
               margin="normal"
               required
-              fullWidth
-              id="username"
-              label="Username"
-              name="username"
               autoComplete="username"
               autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
             />
+            
             <TextField
-              margin="normal"
-              required
               fullWidth
-              name="password"
               label="Password"
               type="password"
-              id="password"
+              value={credentials.password}
+              onChange={handleChange('password')}
+              margin="normal"
+              required
               autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
             />
+
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              size="large"
               disabled={isLoading}
+              sx={{ mt: 3, mb: 2 }}
             >
-              {isLoading ? <CircularProgress size={24} /> : 'Sign In'}
+              {isLoading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                'Sign In'
+              )}
             </Button>
           </Box>
-        </Paper>
-      </Box>
-    </Container>
+
+          <Box textAlign="center" mt={2}>
+            <Typography variant="body2" color="text.secondary">
+              Demo Mode: Use any username and password
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              (Backend not available - using mock authentication)
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
