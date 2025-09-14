@@ -36,11 +36,13 @@ export interface UserPermissions {
 export const authService = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     try {
+      console.log('Attempting to login with backend...');
       const response = await api.post('/auth/login/', credentials);
       const { access, refresh } = response.data;
       
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
+      console.log('Backend login successful');
       
       return response.data;
     } catch (error) {
@@ -53,6 +55,7 @@ export const authService = {
       
       localStorage.setItem('access_token', mockTokens.access);
       localStorage.setItem('refresh_token', mockTokens.refresh);
+      console.log('Mock tokens stored:', mockTokens);
       
       return mockTokens;
     }
@@ -65,12 +68,14 @@ export const authService = {
   
   getCurrentUser: async (): Promise<UserPermissions> => {
     try {
+      console.log('Attempting to get user from backend...');
       const response = await api.get('/auth/user/');
+      console.log('Backend user data received:', response.data);
       return response.data;
     } catch (error) {
       // Return mock data for development when backend is not available
       console.warn('Backend not available, using mock user data');
-      return {
+      const mockUserData = {
         user: {
           id: 1,
           username: 'demo',
@@ -97,6 +102,8 @@ export const authService = {
         },
         groups: ['admin']
       };
+      console.log('Returning mock user data:', mockUserData);
+      return mockUserData;
     }
   },
   
@@ -117,7 +124,9 @@ export const authService = {
   },
   
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('access_token');
+    const hasToken = !!localStorage.getItem('access_token');
+    console.log('Checking authentication status:', hasToken);
+    return hasToken;
   },
   
   getToken: (): string | null => {

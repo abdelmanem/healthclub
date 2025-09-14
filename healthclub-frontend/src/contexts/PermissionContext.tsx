@@ -15,14 +15,18 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const loadUserPermissions = async () => {
     try {
+      console.log('Loading user permissions...');
       if (!authService.isAuthenticated()) {
+        console.log('User not authenticated, clearing state');
         setUser(null);
         setPermissions([]);
         setIsLoading(false);
         return;
       }
 
+      console.log('Fetching user data...');
       const userData = await authService.getCurrentUser();
+      console.log('User data loaded:', userData);
       setUser(userData);
       
       // Extract all permissions
@@ -31,6 +35,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         allPermissions.push(...modelPermissions);
       });
       setPermissions(allPermissions);
+      console.log('Permissions loaded:', allPermissions);
     } catch (error) {
       console.error('Failed to load user permissions:', error);
       // If token is invalid, clear it
@@ -38,14 +43,15 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setUser(null);
       setPermissions([]);
     } finally {
+      console.log('Finished loading permissions, setting isLoading to false');
       setIsLoading(false);
     }
   };
 
   // Add a function to reload permissions (useful after login)
-  const reloadPermissions = () => {
+  const reloadPermissions = async () => {
     setIsLoading(true);
-    loadUserPermissions();
+    await loadUserPermissions();
   };
 
   const hasPermission = (permission: string, model?: string): boolean => {
