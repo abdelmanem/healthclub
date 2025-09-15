@@ -20,6 +20,8 @@ import { CreateAddressDialog } from '../components/guest/CreateAddressDialog';
 import { CreateEmergencyContactDialog } from '../components/guest/CreateEmergencyContactDialog';
 import { guestsService, Guest as GuestType } from '../services/guests';
 import { useNavigate } from 'react-router-dom';
+import { QuickReservationDialog } from '../components/guest/QuickReservationDialog';
+
 
 type Guest = GuestType;
 
@@ -31,6 +33,7 @@ export const GuestManagement: React.FC = () => {
   const [editingAddress, setEditingAddress] = useState<any | null>(null);
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<any | null>(null);
+  const [isQuickResOpen, setIsQuickResOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleGuestSelect = (guest: Guest) => {
@@ -157,6 +160,7 @@ export const GuestManagement: React.FC = () => {
                   guest={selectedGuest}
                   onEdit={() => setIsEditOpen(true)}
                   onViewReservations={() => navigate(`/reservations?guest=${selectedGuest?.id}`)}
+                  onQuickReserve={() => setIsQuickResOpen(true)}
                 />
               ) : (
                 <Typography variant="body2" color="text.secondary">
@@ -230,6 +234,15 @@ export const GuestManagement: React.FC = () => {
         initialValue={editingContact}
         onClose={() => { setIsContactDialogOpen(false); setEditingContact(null); }}
         onSubmit={handleSubmitContact}
+      />
+
+      <QuickReservationDialog
+        open={isQuickResOpen}
+        guestId={selectedGuest?.id ?? null}
+        onClose={() => setIsQuickResOpen(false)}
+        onCreated={(id) => {
+          // Optionally navigate or toast
+        }}
       />
     </Box>
   );

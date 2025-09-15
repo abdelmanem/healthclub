@@ -9,9 +9,10 @@ interface GuestProfileProps {
   guest: Guest;
   onEdit?: () => void;
   onViewReservations?: () => void;
+  onQuickReserve?: () => void;
 }
 
-export const GuestProfile: React.FC<GuestProfileProps> = ({ guest, onEdit, onViewReservations }) => {
+export const GuestProfile: React.FC<GuestProfileProps> = ({ guest, onEdit, onViewReservations, onQuickReserve }) => {
   return (
     <Box>
       <Box display="flex" alignItems="center" mb={2}>
@@ -49,6 +50,9 @@ export const GuestProfile: React.FC<GuestProfileProps> = ({ guest, onEdit, onVie
         </PermissionGate>
         <PermissionGate permission="view" model="reservations">
           <Button variant="outlined" size="small" onClick={onViewReservations}>View Reservations</Button>
+        </PermissionGate>
+        <PermissionGate permission="add" model="reservations">
+          <Button variant="contained" size="small" color="primary" onClick={onQuickReserve}>Quick Reserve</Button>
         </PermissionGate>
       </Box>
     </Box>
