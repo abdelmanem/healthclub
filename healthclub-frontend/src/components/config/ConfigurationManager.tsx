@@ -63,6 +63,10 @@ export const ConfigurationManager: React.FC = () => {
     membershipTiers, 
     genderOptions, 
     businessRules,
+    commissionTypes,
+    trainingTypes,
+    productTypes,
+    notificationTemplates,
     isLoading 
   } = useConfiguration();
 
@@ -104,6 +108,10 @@ export const ConfigurationManager: React.FC = () => {
           <Tab label="Membership Tiers" />
           <Tab label="Gender Options" />
           <Tab label="Business Rules" />
+          <Tab label="Commission Types" />
+          <Tab label="Training Types" />
+          <Tab label="Product Types" />
+          <Tab label="Notification Templates" />
         </Tabs>
       </Box>
 
@@ -292,6 +300,196 @@ export const ConfigurationManager: React.FC = () => {
                       <TableCell>
                         <PermissionGate permission="change" model="config">
                           <IconButton onClick={() => handleEdit({ key, value })}>
+                            <Edit />
+                          </IconButton>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={4}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Commission Types
+            </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Percentage</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {commissionTypes.map((ct: any) => (
+                    <TableRow key={ct.id}>
+                      <TableCell>{ct.code}</TableCell>
+                      <TableCell>{ct.name}</TableCell>
+                      <TableCell>{ct.description}</TableCell>
+                      <TableCell>{ct.percentage ?? '-'}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={ct.is_active ? 'Active' : 'Inactive'} 
+                          color={ct.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PermissionGate permission="change" model="config">
+                          <IconButton onClick={() => handleEdit(ct)}>
+                            <Edit />
+                          </IconButton>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={5}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Training Types
+            </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {trainingTypes.map((tt: any) => (
+                    <TableRow key={tt.id}>
+                      <TableCell>{tt.code}</TableCell>
+                      <TableCell>{tt.name}</TableCell>
+                      <TableCell>{tt.description}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={tt.is_active ? 'Active' : 'Inactive'} 
+                          color={tt.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PermissionGate permission="change" model="config">
+                          <IconButton onClick={() => handleEdit(tt)}>
+                            <Edit />
+                          </IconButton>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={6}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Product Types
+            </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell>Requires Tracking</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {productTypes.map((pt: any) => (
+                    <TableRow key={pt.id}>
+                      <TableCell>{pt.code}</TableCell>
+                      <TableCell>{pt.name}</TableCell>
+                      <TableCell>{pt.description}</TableCell>
+                      <TableCell>{pt.category}</TableCell>
+                      <TableCell>{pt.requires_tracking ? 'Yes' : 'No'}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={pt.is_active ? 'Active' : 'Inactive'} 
+                          color={pt.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PermissionGate permission="change" model="config">
+                          <IconButton onClick={() => handleEdit(pt)}>
+                            <Edit />
+                          </IconButton>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={7}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Notification Templates
+            </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Subject</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {notificationTemplates.map((nt: any) => (
+                    <TableRow key={nt.id}>
+                      <TableCell>{nt.name}</TableCell>
+                      <TableCell>{nt.template_type ?? nt.type}</TableCell>
+                      <TableCell>{nt.subject}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={nt.is_active ? 'Active' : 'Inactive'} 
+                          color={nt.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PermissionGate permission="change" model="config">
+                          <IconButton onClick={() => handleEdit(nt)}>
                             <Edit />
                           </IconButton>
                         </PermissionGate>
