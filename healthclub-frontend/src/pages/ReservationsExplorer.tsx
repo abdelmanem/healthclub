@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Card, CardContent, TextField, MenuItem, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip } from '@mui/material';
+import { Box, Typography, Card, CardContent, TextField, MenuItem, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton, Collapse, Tooltip } from '@mui/material';
+import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { reservationsService, Reservation } from '../services/reservations';
 import { api } from '../services/api';
@@ -14,6 +15,7 @@ export const ReservationsExplorer: React.FC = () => {
   const [search, setSearch] = useState<string>('');
   const [from, setFrom] = useState<string>(dayjs().startOf('day').format('YYYY-MM-DD'));
   const [to, setTo] = useState<string>(dayjs().endOf('day').format('YYYY-MM-DD'));
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const params = useMemo(() => {
     const p: any = {};
@@ -42,6 +44,15 @@ export const ReservationsExplorer: React.FC = () => {
   }, [params]);
 
   const statusColor = (s?: string) => s === 'confirmed' ? 'primary' : s === 'in_service' || s === 'checked_in' ? 'warning' : s === 'completed' ? 'success' : s === 'cancelled' ? 'default' : 'info';
+
+  const toggleExpanded = (id: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <Box>
@@ -85,20 +96,63 @@ export const ReservationsExplorer: React.FC = () => {
                 <TableCell>Status</TableCell>
                 <TableCell>Duration</TableCell>
                 <TableCell>Price</TableCell>
+                <TableCell align="right">Details</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {reservations.map((r) => (
-                <TableRow key={r.id} hover>
-                  <TableCell>{r.id}</TableCell>
-                  <TableCell>{r.guest_name ?? r.guest}</TableCell>
-                  <TableCell>{r.location_name ?? r.location ?? '-'}</TableCell>
-                  <TableCell>{dayjs(r.start_time).format('MMM D, YYYY, h:mm A')}</TableCell>
-                  <TableCell>{r.end_time ? dayjs(r.end_time).format('MMM D, YYYY, h:mm A') : '-'}</TableCell>
-                  <TableCell><Chip label={(r.status ?? 'pending').replace('_',' ')} color={statusColor(r.status) as any} size="small" /></TableCell>
-                  <TableCell>{r.total_duration_minutes ? `${r.total_duration_minutes} min` : '-'}</TableCell>
-                  <TableCell>{typeof r.total_price === 'number' ? `$${r.total_price.toFixed(2)}` : '-'}</TableCell>
-                </TableRow>
+                <React.Fragment key={r.id}>
+                  <TableRow hover>
+                    <TableCell>{r.id}</TableCell>
+                    <TableCell>{r.guest_name ?? r.guest}</TableCell>
+                    <TableCell>{r.location_name ?? r.location ?? '-'}</TableCell>
+                    <TableCell>{dayjs(r.start_time).format('MMM D, YYYY, h:mm A')}</TableCell>
+                    <TableCell>{r.end_time ? dayjs(r.end_time).format('MMM D, YYYY, h:mm A') : '-'}</TableCell>
+                    <TableCell><Chip label={(r.status ?? 'pending').replace('_',' ')} color={statusColor(r.status) as any} size="small" /></TableCell>
+                    <TableCell>{r.total_duration_minutes ? `${r.total_duration_minutes} min` : '-'}</TableCell>
+                    <TableCell>{typeof r.total_price === 'number' ? `$${r.total_price.toFixed(2)}` : '-'}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title={expandedRows.has(r.id) ? 'Collapse' : 'Expand'}>
+                        <IconButton size="small" onClick={() => toggleExpanded(r.id)}>
+                          {expandedRows.has(r.id) ? <ExpandLess /> : <ExpandMore />}
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={9} sx={{ p: 0, border: 0 }}>
+                      <Collapse in={expandedRows.has(r.id)}>
+                        <Box p={2} bgcolor="grey.50">
+                          <Typography variant="subtitle2" gutterBottom>Reservation Details</Typography>
+                          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }} gap={2}>
+                            <Box>
+                              <Typography variant="body2" color="text.secondary">Guest ID:</Typography>
+                              <Typography variant="body1">{r.guest}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="body2" color="text.secondary">Location ID:</Typography>
+                              <Typography variant="body1">{r.location ?? 'Not assigned'}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="body2" color="text.secondary">Employee ID:</Typography>
+                              <Typography variant="body1">{r.employee ?? 'Not assigned'}</Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="body2" color="text.secondary">Service ID:</Typography>
+                              <Typography variant="body1">{r.service ?? 'Not assigned'}</Typography>
+                            </Box>
+                            {r.notes && (
+                              <Box gridColumn="span 2">
+                                <Typography variant="body2" color="text.secondary">Notes:</Typography>
+                                <Typography variant="body1">{r.notes}</Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>
