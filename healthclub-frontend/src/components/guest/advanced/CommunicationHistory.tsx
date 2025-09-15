@@ -1,5 +1,6 @@
 import React from 'react';
-import { Card, CardContent, Typography, List, ListItem, ListItemText } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, ListItemText, Button } from '@mui/material';
+import { Add } from '@mui/icons-material';
 
 interface CommunicationItem {
   id: number;
@@ -11,12 +12,22 @@ interface CommunicationItem {
   is_successful?: boolean;
 }
 
-export const CommunicationHistory: React.FC<{ communications?: CommunicationItem[] }>
-  = ({ communications = [] }) => {
+interface CommunicationHistoryProps {
+  communications?: CommunicationItem[];
+  onAdd?: () => void;
+}
+
+export const CommunicationHistory: React.FC<CommunicationHistoryProps>
+  = ({ communications = [], onAdd }) => {
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" gutterBottom>Communication History</Typography>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <Typography variant="h6">Communication History</Typography>
+          {onAdd && (
+            <Button size="small" startIcon={<Add />} onClick={onAdd}>Add</Button>
+          )}
+        </div>
         {communications.length === 0 ? (
           <Typography variant="body2" color="text.secondary">No communications yet.</Typography>
         ) : (

@@ -13,6 +13,10 @@ export interface Guest {
   email: string;
   phone: string;
   membership_tier?: string | MembershipTierObject;
+  addresses?: GuestAddress[];
+  emergency_contacts?: EmergencyContact[];
+  preferences?: GuestPreference[];
+  communications?: GuestCommunication[];
 }
 
 export interface CreateGuestInput {
@@ -24,6 +28,44 @@ export interface CreateGuestInput {
 }
 
 export interface UpdateGuestInput extends Partial<CreateGuestInput> {}
+
+export interface GuestAddress {
+  id: number;
+  address_type: 'home' | 'work' | 'billing';
+  street_address: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  is_primary: boolean;
+}
+
+export interface EmergencyContact {
+  id: number;
+  name: string;
+  relationship: string;
+  phone: string;
+  email: string;
+  is_primary: boolean;
+}
+
+export interface GuestPreference {
+  id: number;
+  service: number;
+  service_name?: string;
+  rating: number;
+  notes?: string;
+}
+
+export interface GuestCommunication {
+  id: number;
+  communication_type: 'email' | 'sms' | 'phone' | 'in_person';
+  subject: string;
+  message: string;
+  sent_at: string;
+  sent_by_name?: string;
+  is_successful?: boolean;
+}
 
 interface PaginatedResponse<T> {
   count: number;
