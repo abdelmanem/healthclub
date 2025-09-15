@@ -6,6 +6,7 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import { Layout } from './components/common/Layout';
 import { ReservationManagement } from './pages/ReservationManagement';
+import { ReservationsExplorer } from './pages/ReservationsExplorer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginForm } from './components/auth/LoginForm';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
@@ -91,6 +92,13 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="reservations">
                   <Layout>
                     <ReservationManagement />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/reservations/explore" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <ReservationsExplorer />
                   </Layout>
                 </ProtectedRoute>
               } />

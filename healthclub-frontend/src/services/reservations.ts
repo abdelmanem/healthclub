@@ -10,6 +10,11 @@ export interface Reservation {
   end_time?: string; // ISO
   status?: 'pending' | 'confirmed' | 'checked_in' | 'in_service' | 'completed' | 'cancelled';
   notes?: string;
+  // denormalized fields from backend
+  guest_name?: string;
+  location_name?: string;
+  total_duration_minutes?: number;
+  total_price?: number;
 }
 
 export interface CreateReservationInput {
@@ -28,6 +33,10 @@ export const reservationsService = {
     if (Array.isArray(data)) return data;
     return data.results ?? [];
   },
+  async retrieve(id: number): Promise<Reservation> {
+    const response = await api.get(`/reservations/${id}/`);
+    return response.data;
+  },
   async create(payload: CreateReservationInput): Promise<Reservation> {
     const response = await api.post('/reservations/', payload);
     return response.data;
@@ -38,6 +47,22 @@ export const reservationsService = {
   },
   async conflictCheck(payload: { service?: number; employee?: number; location?: number; start: string }): Promise<{ conflicts: any[] }> {
     const response = await api.post('/reservations/conflict-check/', payload);
+    return response.data;
+  },
+  async checkIn(id: number): Promise<Reservation> {
+    const response = await api.post(`/reservations/${id}/check-in/`, {});
+    return response.data;
+  },
+  async inService(id: number): Promise<Reservation> {
+    const response = await api.post(`/reservations/${id}/in-service/`, {});
+    return response.data;
+  },
+  async complete(id: number): Promise<Reservation> {
+    const response = await api.post(`/reservations/${id}/complete/`, {});
+    return response.data;
+  },
+  async checkOut(id: number): Promise<Reservation> {
+    const response = await api.post(`/reservations/${id}/check-out/`, {});
     return response.data;
   },
 };
