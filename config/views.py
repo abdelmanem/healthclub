@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from rest_framework.permissions import SAFE_METHODS
 
 from .models import (
     SystemConfiguration, MembershipTier, GenderOption, 
@@ -142,6 +143,9 @@ class MembershipTierViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
+        # Allow any authenticated user to read active tiers without object-level perms
+        if self.request.method in SAFE_METHODS:
+            return qs.filter(is_active=True)
         if user.is_staff or user.is_superuser:
             return qs
         from guardian.shortcuts import get_objects_for_user
