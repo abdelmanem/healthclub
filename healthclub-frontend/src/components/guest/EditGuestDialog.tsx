@@ -5,9 +5,14 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Button
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { guestsService, Guest, UpdateGuestInput } from '../../services/guests';
+import { useConfiguration } from '../../contexts/ConfigurationContext';
 
 interface EditGuestDialogProps {
   open: boolean;
@@ -19,6 +24,7 @@ interface EditGuestDialogProps {
 export const EditGuestDialog: React.FC<EditGuestDialogProps> = ({ open, guest, onClose, onUpdated }) => {
   const [form, setForm] = useState<UpdateGuestInput>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { membershipTiers } = useConfiguration();
 
   useEffect(() => {
     if (guest) {
@@ -27,7 +33,8 @@ export const EditGuestDialog: React.FC<EditGuestDialogProps> = ({ open, guest, o
         last_name: guest.last_name,
         email: guest.email,
         phone: guest.phone,
-        membership_tier: typeof guest.membership_tier === 'string' ? guest.membership_tier : guest.membership_tier?.display_name,
+        // store the slug (name) for submission
+        membership_tier: typeof guest.membership_tier === 'string' ? guest.membership_tier : (guest.membership_tier as any)?.name,
       });
     }
   }, [guest]);
@@ -83,13 +90,21 @@ export const EditGuestDialog: React.FC<EditGuestDialogProps> = ({ open, guest, o
           value={form.phone || ''}
           onChange={handleChange('phone')}
         />
-        <TextField
-          fullWidth
-          label="Membership Tier"
-          margin="normal"
-          value={(form as any).membership_tier || ''}
-          onChange={handleChange('membership_tier')}
-        />
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="edit-guest-membership-label">Membership Tier</InputLabel>
+          <Select
+            labelId="edit-guest-membership-label"
+            label="Membership Tier"
+            value={(form as any).membership_tier || ''}
+            onChange={(e) => setForm(prev => ({ ...prev, membership_tier: e.target.value as any }))}
+          >
+            {membershipTiers.map((tier: any) => (
+              <MenuItem key={tier.name} value={tier.name}>
+                {tier.display_name || tier.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={isSubmitting}>Cancel</Button>
