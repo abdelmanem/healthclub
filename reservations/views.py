@@ -1,6 +1,6 @@
 from rest_framework import viewsets, decorators, response, status, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Location, Reservation
+from .models import Location, Reservation, ReservationService
 from .serializers import LocationSerializer, ReservationSerializer
 from pos import create_invoice_for_reservation
 from healthclub.permissions import ObjectPermissionsOrReadOnly

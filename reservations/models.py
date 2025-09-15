@@ -70,6 +70,8 @@ class Reservation(models.Model):
         'reservations.Location',
         on_delete=models.CASCADE,
         related_name='reservations',
+        null=True,
+        blank=True,
     )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()

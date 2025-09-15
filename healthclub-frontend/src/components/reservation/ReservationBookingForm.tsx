@@ -139,20 +139,30 @@ export const ReservationBookingForm: React.FC = () => {
     if (!noConflicts) { setError('Conflicts detected. Adjust time or override.'); return; }
 
     try {
-      // For now, create reservation with first service (backend needs to be updated for multiple services)
-      await reservationsService.create({
+      // Create reservation with multiple services
+      const reservationData: any = {
         guest: Number(guestId),
-        service: selectedServices[0].id,
         employee: employeeId ? Number(employeeId) : null,
         location: locationId ? Number(locationId) : null,
         start_time: start,
-      });
+      };
+
+      // Add services in the format expected by the backend
+      if (selectedServices.length > 0) {
+        reservationData.reservation_services = selectedServices.map(service => ({
+          service: service.id,
+          quantity: 1
+        }));
+      }
+
+      await reservationsService.create(reservationData);
       setSuccess('Reservation created');
       // Reset form
       setSelectedServices([]);
       setTotalPrice(0);
-    } catch (e) {
-      setError('Failed to create reservation');
+    } catch (e: any) {
+      console.error('Reservation creation error:', e);
+      setError(`Failed to create reservation: ${e.response?.data?.detail || e.message || 'Unknown error'}`);
     }
   };
 

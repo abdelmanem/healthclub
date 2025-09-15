@@ -38,7 +38,8 @@ export interface Reservation {
 
 export interface CreateReservationInput {
   guest: number;
-  service: number;
+  service?: number; // Legacy field for single service
+  services?: Array<{service: number, quantity?: number}>; // New field for multiple services
   employee?: number | null;
   location?: number | null;
   start_time: string;
