@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Grid, TextField, FormControlLabel, Checkbox } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, FormControlLabel, Checkbox, Box } from '@mui/material';
 
 export interface EmergencyContactFormValues {
   id?: number;
@@ -46,23 +46,23 @@ export const CreateEmergencyContactDialog: React.FC<CreateEmergencyContactDialog
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{values.id ? 'Edit Emergency Contact' : 'Add Emergency Contact'}</DialogTitle>
       <DialogContent>
-        <Grid container spacing={2} mt={0.5}>
-          <Grid item xs={12} sm={8}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2, mt: 0.5 }}>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 8' } }}>
             <TextField fullWidth label="Name" value={values.name} onChange={handleChange('name')} />
-          </Grid>
-          <Grid item xs={12} sm={4}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
             <FormControlLabel control={<Checkbox checked={values.is_primary} onChange={handleChange('is_primary')} />} label="Primary" />
-          </Grid>
-          <Grid item xs={12} sm={6}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
             <TextField fullWidth label="Relationship" value={values.relationship} onChange={handleChange('relationship')} />
-          </Grid>
-          <Grid item xs={12} sm={3}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
             <TextField fullWidth label="Phone" value={values.phone} onChange={handleChange('phone')} />
-          </Grid>
-          <Grid item xs={12} sm={3}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
             <TextField fullWidth label="Email" value={values.email} onChange={handleChange('email')} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Grid, TextField, FormControlLabel, Checkbox, MenuItem } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, FormControlLabel, Checkbox, MenuItem, Box } from '@mui/material';
 
 export interface AddressFormValues {
   id?: number;
@@ -49,33 +49,33 @@ export const CreateAddressDialog: React.FC<CreateAddressDialogProps> = ({ open, 
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{values.id ? 'Edit Address' : 'Add Address'}</DialogTitle>
       <DialogContent>
-        <Grid container spacing={2} mt={0.5}>
-          <Grid item xs={12} sm={6}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2, mt: 0.5 }}>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
             <TextField select fullWidth label="Type" value={values.address_type} onChange={handleChange('address_type')}>
               <MenuItem value="home">Home</MenuItem>
               <MenuItem value="work">Work</MenuItem>
               <MenuItem value="billing">Billing</MenuItem>
             </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
             <FormControlLabel control={<Checkbox checked={values.is_primary} onChange={handleChange('is_primary')} />} label="Primary" />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12' } }}>
             <TextField fullWidth label="Street Address" value={values.street_address} onChange={handleChange('street_address')} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
             <TextField fullWidth label="City" value={values.city} onChange={handleChange('city')} />
-          </Grid>
-          <Grid item xs={12} sm={3}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
             <TextField fullWidth label="State" value={values.state} onChange={handleChange('state')} />
-          </Grid>
-          <Grid item xs={12} sm={3}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
             <TextField fullWidth label="Postal Code" value={values.postal_code} onChange={handleChange('postal_code')} />
-          </Grid>
-          <Grid item xs={12}>
+          </Box>
+          <Box sx={{ gridColumn: { xs: 'span 12' } }}>
             <TextField fullWidth label="Country" value={values.country} onChange={handleChange('country')} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
