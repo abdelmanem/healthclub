@@ -3,7 +3,7 @@ import { api } from './api';
 export interface Reservation {
   id: number;
   guest: number;
-  service: number;
+  service?: number;
   employee?: number | null;
   location?: number | null;
   start_time: string; // ISO
@@ -22,6 +22,12 @@ export interface CreateReservationInput {
 }
 
 export const reservationsService = {
+  async list(params?: Partial<{ guest: number; location: number; status: string | string[]; start_time__gte: string; start_time__lte: string }>): Promise<Reservation[]> {
+    const response = await api.get('/reservations/', { params });
+    const data = response.data as Reservation[] | { results: Reservation[] };
+    if (Array.isArray(data)) return data;
+    return data.results ?? [];
+  },
   async create(payload: CreateReservationInput): Promise<Reservation> {
     const response = await api.post('/reservations/', payload);
     return response.data;

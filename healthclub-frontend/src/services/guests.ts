@@ -100,36 +100,12 @@ export const guestsService = {
     if (!('membership_id' in normalized) || !normalized.membership_id) {
       normalized.membership_id = `M-${Date.now()}`;
     }
-    if (normalized.membership_tier) {
-      const mt = String(normalized.membership_tier).toLowerCase();
-      // accept common names but backend expects enum keys
-      const map: Record<string, string> = {
-        bronze: 'bronze',
-        silver: 'silver',
-        gold: 'gold',
-        platinum: 'platinum',
-        vip: 'vip',
-      };
-      normalized.membership_tier = map[mt] || 'bronze';
-    }
     const response = await api.post('/guests/', normalized);
     return response.data;
   },
 
   async update(id: number, payload: UpdateGuestInput): Promise<Guest> {
-    const normalized: any = { ...payload };
-    if (normalized.membership_tier) {
-      const mt = String(normalized.membership_tier).toLowerCase();
-      const map: Record<string, string> = {
-        bronze: 'bronze',
-        silver: 'silver',
-        gold: 'gold',
-        platinum: 'platinum',
-        vip: 'vip',
-      };
-      normalized.membership_tier = map[mt] || 'bronze';
-    }
-    const response = await api.patch(`/guests/${id}/`, normalized);
+    const response = await api.patch(`/guests/${id}/`, payload);
     return response.data;
   },
 };
