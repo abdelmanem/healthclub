@@ -28,23 +28,18 @@ export const LoginForm: React.FC = () => {
   const from = location.state?.from?.pathname || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('=== FORM SUBMISSION STARTED ===');
-    console.log('Form submitted!', e);
     e.preventDefault();
-    console.log('Credentials:', credentials);
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log('Starting login process...');
       await authService.login(credentials);
-      console.log('Login successful, reloading permissions...');
-      // Reload permissions and wait for them to complete before redirecting
-      await reloadPermissions();
-      console.log('Permissions reloaded, navigating to:', from);
+      // Reload permissions after successful login with a small delay
+      setTimeout(() => {
+        reloadPermissions();
+      }, 100);
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error('Login failed:', err);
       setError(err.response?.data?.detail || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -54,7 +49,6 @@ export const LoginForm: React.FC = () => {
   const handleChange = (field: keyof LoginCredentials) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    console.log(`Input changed: ${field} = ${e.target.value}`);
     setCredentials(prev => ({
       ...prev,
       [field]: e.target.value
@@ -86,7 +80,7 @@ export const LoginForm: React.FC = () => {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
               label="Username"
@@ -123,7 +117,7 @@ export const LoginForm: React.FC = () => {
                 'Sign In'
               )}
             </Button>
-          </form>
+          </Box>
 
           <Box textAlign="center" mt={2}>
             <Typography variant="body2" color="text.secondary">
