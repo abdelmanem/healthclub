@@ -48,6 +48,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     reservation_services = ReservationServiceSerializer(many=True, required=False)
     guest_name = serializers.CharField(source='guest.full_name', read_only=True)
     location_name = serializers.CharField(source='location.name', read_only=True)
+    employee = serializers.SerializerMethodField()
+    employee_name = serializers.SerializerMethodField()
     total_duration_minutes = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
 
@@ -59,6 +61,8 @@ class ReservationSerializer(serializers.ModelSerializer):
             "guest_name",
             "location",
             "location_name",
+            "employee",
+            "employee_name",
             "start_time",
             "end_time",
             "status",
@@ -81,6 +85,18 @@ class ReservationSerializer(serializers.ModelSerializer):
             "cancelled_at",
             "no_show_recorded_at",
         ]
+
+    def get_employee(self, obj):
+        """Get the primary employee assigned to this reservation"""
+        assignment = obj.employee_assignments.first()
+        return assignment.employee.id if assignment else None
+
+    def get_employee_name(self, obj):
+        """Get the name of the primary employee assigned to this reservation"""
+        assignment = obj.employee_assignments.first()
+        if assignment:
+            return f"{assignment.employee.user.first_name} {assignment.employee.user.last_name}".strip()
+        return None
 
     def get_total_duration_minutes(self, obj):
         """Calculate total duration from all services"""

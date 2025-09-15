@@ -3,6 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from django.db.models import Count, Sum, Q
+from django.utils import timezone
+from datetime import datetime, timedelta
 from .models import (
     DashboardWidget, Report, ReportExecution, KPI, KPIMeasurement,
     Alert, Dashboard, DashboardWidgetPosition
@@ -231,6 +234,65 @@ class DashboardViewSet(viewsets.ModelViewSet):
             position.save()
         
         return Response({'message': 'Widget added to dashboard'})
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Get basic dashboard statistics"""
+        from guests.models import Guest
+        from reservations.models import Reservation
+        from services.models import Service
+        from employees.models import Employee
+        
+        today = timezone.now().date()
+        start_of_day = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+        end_of_day = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+        
+        # Total guests
+        total_guests = Guest.objects.count()
+        
+        # Today's reservations
+        todays_reservations = Reservation.objects.filter(
+            start_time__date=today
+        ).count()
+        
+        # Active services
+        active_services = Service.objects.filter(active=True).count()
+        
+        # Today's revenue
+        completed_reservations = Reservation.objects.filter(
+            start_time__date=today,
+            status__in=['completed', 'checked_out']
+        ).prefetch_related('reservation_services')
+        
+        todays_revenue = 0
+        for reservation in completed_reservations:
+            for service in reservation.reservation_services.all():
+                if service.unit_price:
+                    todays_revenue += service.unit_price * service.quantity
+        
+        # Active employees
+        active_employees = Employee.objects.filter(active=True).count()
+        
+        # Recent reservations (last 7 days)
+        week_ago = today - timedelta(days=7)
+        recent_reservations = Reservation.objects.filter(
+            start_time__date__gte=week_ago
+        ).count()
+        
+        # Pending reservations
+        pending_reservations = Reservation.objects.filter(
+            status__in=['booked', 'confirmed']
+        ).count()
+        
+        return Response({
+            'total_guests': total_guests,
+            'todays_reservations': todays_reservations,
+            'active_services': active_services,
+            'todays_revenue': float(todays_revenue),
+            'active_employees': active_employees,
+            'recent_reservations': recent_reservations,
+            'pending_reservations': pending_reservations,
+        })
 
 
 class DashboardWidgetPositionViewSet(viewsets.ModelViewSet):

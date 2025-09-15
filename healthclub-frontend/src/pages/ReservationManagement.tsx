@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Card, CardContent, Chip, IconButton, Table, TableHead, TableRow, TableCell, TableBody, Tooltip, Button, Collapse } from '@mui/material';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
-import { reservationsService, Reservation } from '../services/reservations';
+import { reservationsService, Reservation, ReservationService } from '../services/reservations';
 import dayjs from 'dayjs';
 import { Check, DirectionsRun, DoneAll, Logout, ExpandMore, ExpandLess } from '@mui/icons-material';
 
@@ -130,20 +130,25 @@ export const ReservationManagement: React.FC = () => {
                                 <Typography variant="subtitle2" gutterBottom>Reservation Details</Typography>
                                 <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }} gap={2}>
                                   <Box>
-                                    <Typography variant="body2" color="text.secondary">Guest ID:</Typography>
-                                    <Typography variant="body1">{r.guest}</Typography>
+                                    <Typography variant="body2" color="text.secondary">Guest:</Typography>
+                                    <Typography variant="body1">{r.guest_name ?? `Guest #${r.guest}`}</Typography>
                                   </Box>
                                   <Box>
-                                    <Typography variant="body2" color="text.secondary">Location ID:</Typography>
-                                    <Typography variant="body1">{r.location ?? 'Not assigned'}</Typography>
+                                    <Typography variant="body2" color="text.secondary">Location:</Typography>
+                                    <Typography variant="body1">{r.location_name ?? `Location #${r.location}`}</Typography>
                                   </Box>
                                   <Box>
-                                    <Typography variant="body2" color="text.secondary">Employee ID:</Typography>
-                                    <Typography variant="body1">{r.employee ?? 'Not assigned'}</Typography>
+                                    <Typography variant="body2" color="text.secondary">Employee:</Typography>
+                                    <Typography variant="body1">{r.employee_name ?? 'Not assigned'}</Typography>
                                   </Box>
                                   <Box>
-                                    <Typography variant="body2" color="text.secondary">Service ID:</Typography>
-                                    <Typography variant="body1">{r.service ?? 'Not assigned'}</Typography>
+                                    <Typography variant="body2" color="text.secondary">Services:</Typography>
+                                    <Typography variant="body1">
+                                      {r.reservation_services && r.reservation_services.length > 0 
+                                        ? r.reservation_services.map((rs: ReservationService) => rs.service_details?.name || `Service #${rs.service}`).join(', ')
+                                        : 'No services'
+                                      }
+                                    </Typography>
                                   </Box>
                                   {r.notes && (
                                     <Box gridColumn="span 2">

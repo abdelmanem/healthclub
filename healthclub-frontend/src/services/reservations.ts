@@ -1,5 +1,22 @@
 import { api } from './api';
 
+export interface ReservationService {
+  id: number;
+  service: number;
+  service_details?: {
+    id: number;
+    name: string;
+    description: string;
+    duration_minutes: number;
+    price: string;
+    category: string;
+  };
+  quantity: number;
+  unit_price: string;
+  total_price: string;
+  service_duration_minutes: number;
+}
+
 export interface Reservation {
   id: number;
   guest: number;
@@ -13,6 +30,8 @@ export interface Reservation {
   // denormalized fields from backend
   guest_name?: string;
   location_name?: string;
+  employee_name?: string;
+  reservation_services?: ReservationService[];
   total_duration_minutes?: number;
   total_price?: number;
 }
