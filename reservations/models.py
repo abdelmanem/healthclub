@@ -117,19 +117,23 @@ class Reservation(models.Model):
         return f"Reservation #{self.pk or 'new'} for {self.guest} at {self.start_time}"
 
     def clean(self) -> None:
+        # Skip validation until both times are provided
+        if not self.start_time or not self.end_time:
+            return
         if self.end_time <= self.start_time:
             raise ValidationError("End time must be after start time")
         
-        # Check for booking conflicts
-        if self.pk:  # Only check for existing reservations
-            conflicting = Reservation.objects.filter(
-                location=self.location,
+        # Check for booking conflicts only when we have a location and both times
+        if self.location_id and self.start_time and self.end_time:
+            qs = Reservation.objects.filter(
+                location_id=self.location_id,
                 start_time__lt=self.end_time,
                 end_time__gt=self.start_time,
                 status__in=[self.STATUS_BOOKED, self.STATUS_CHECKED_IN, self.STATUS_IN_SERVICE]
-            ).exclude(pk=self.pk)
-            
-            if conflicting.exists():
+            )
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
                 raise ValidationError("This time slot conflicts with an existing reservation")
 
 
@@ -163,12 +167,16 @@ class ReservationService(models.Model):
         unique_together = ('reservation', 'service')
 
     def __str__(self) -> str:
-        return f"{self.reservation} - {self.service}"
+        reservation_label = f"Reservation {self.reservation_id}" if self.reservation_id else "Reservation (unsaved)"
+        service_label = f"Service {self.service_id}" if self.service_id else "Service (unset)"
+        return f"{reservation_label} - {service_label}"
 
     def save(self, *args, **kwargs):
         # Auto-populate unit_price from service price if not set
-        if not self.unit_price and self.service:
-            self.unit_price = self.service.price
+        # Avoid triggering RelatedObjectDoesNotExist by checking service_id instead of service
+        if not self.unit_price and getattr(self, 'service_id', None):
+            # Accessing self.service is safe here since service_id exists
+            self.unit_price = getattr(self.service, 'price', self.unit_price)
         super().save(*args, **kwargs)
 
     @property
@@ -181,7 +189,12 @@ class ReservationService(models.Model):
     @property
     def service_duration_minutes(self):
         """Get service duration from the linked service"""
-        return self.service.duration_minutes if self.service else 0
+        if getattr(self, 'service_id', None):
+            try:
+                return self.service.duration_minutes
+            except Exception:
+                return 0
+        return 0
 
 
 class Waitlist(models.Model):

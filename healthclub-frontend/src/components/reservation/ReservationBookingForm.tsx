@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, TextField, MenuItem, Button, Typography, Alert } from '@mui/material';
+import { Box, TextField, MenuItem, Button, Typography, Alert, Chip } from '@mui/material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { reservationsService } from '../../services/reservations';
@@ -7,9 +7,16 @@ import { RecurringBookingManager } from './advanced/RecurringBookingManager';
 import { WaitlistManager } from './advanced/WaitlistManager';
 import { BookingRuleManager } from './advanced/BookingRuleManager';
 import { ConflictResolver } from './advanced/ConflictResolver';
+import { GuestSearch } from '../guest/GuestSearch';
+import { CreateGuestDialog } from '../guest/CreateGuestDialog';
+import { guestsService } from '../../services/guests';
+import { useSearchParams } from 'react-router-dom';
 
 export const ReservationBookingForm: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
+  const [guestName, setGuestName] = React.useState<string>('');
+  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [serviceId, setServiceId] = React.useState<number | ''>('' as any);
   const [employeeId, setEmployeeId] = React.useState<number | ''>('' as any);
   const [locationId, setLocationId] = React.useState<number | ''>('' as any);
@@ -38,6 +45,22 @@ export const ReservationBookingForm: React.FC = () => {
       setLocations((loc.data.results ?? loc.data ?? []));
     })();
   }, []);
+
+  React.useEffect(() => {
+    const gid = searchParams.get('guest');
+    if (gid) {
+      const idNum = Number(gid);
+      if (!Number.isNaN(idNum)) {
+        guestsService.retrieve(idNum).then((g: any) => {
+          setGuestId(g.id);
+          setGuestName(`${g.first_name} ${g.last_name}`.trim());
+        }).catch(() => {
+          setGuestId('' as any);
+          setGuestName('');
+        });
+      }
+    }
+  }, [searchParams]);
 
   React.useEffect(() => {
     const calc = async () => {
@@ -116,8 +139,21 @@ export const ReservationBookingForm: React.FC = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField type="number" label="Guest ID" fullWidth value={guestId} onChange={(e) => setGuestId(Number(e.target.value))} />
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
+          {!guestId ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Search Guests</Typography>
+              <GuestSearch onGuestSelect={(g: any) => { setGuestId(g.id); setGuestName(`${g.first_name} ${g.last_name}`.trim()); }} />
+              <Box mt={1}>
+                <Button size="small" variant="outlined" onClick={() => setIsCreateOpen(true)}>Add Guest</Button>
+              </Box>
+            </Box>
+          ) : (
+            <Box display="flex" alignItems="center" gap={1}>
+              <Chip label={`Guest: ${guestName || guestId}`} />
+              <Button size="small" onClick={() => { setGuestId('' as any); setGuestName(''); }}>Change</Button>
+            </Box>
+          )}
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField select label="Service" fullWidth value={serviceId} onChange={(e) => setServiceId(e.target.value as any)}>
@@ -152,6 +188,16 @@ export const ReservationBookingForm: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      <CreateGuestDialog
+        open={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={(g: any) => {
+          setGuestId(g.id);
+          setGuestName(`${g.first_name} ${g.last_name}`.trim());
+          setIsCreateOpen(false);
+        }}
+      />
 
       <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
         <BookingRuleManager onChange={setRules} value={rules} />

@@ -34,8 +34,12 @@ class ReservationServiceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance and self.instance.service:
-            self.fields['unit_price'].initial = self.instance.service.price
+        # Avoid touching related object when not set yet
+        if getattr(self.instance, 'service_id', None):
+            try:
+                self.fields['unit_price'].initial = self.instance.service.price
+            except Exception:
+                pass
 
 
 class ReservationServiceInline(admin.TabularInline):
@@ -47,7 +51,8 @@ class ReservationServiceInline(admin.TabularInline):
     
     def service_details(self, obj):
         """Display service details"""
-        if obj.service:
+        # Use service_id guard to avoid RelatedObjectDoesNotExist on empty inline rows
+        if getattr(obj, 'service_id', None):
             return format_html(
                 '<div class="service-details">'
                 '<strong>{}</strong><br>'
@@ -173,8 +178,11 @@ class ReservationServiceAdmin(admin.ModelAdmin):
     
     def service_price(self, obj):
         """Display service price"""
-        if obj.service:
-            return f"${obj.service.price}"
+        if getattr(obj, 'service_id', None):
+            try:
+                return f"${obj.service.price}"
+            except Exception:
+                return "-"
         return "-"
     service_price.short_description = "Service Price"
     
