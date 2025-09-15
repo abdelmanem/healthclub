@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, TextField, MenuItem, Button, Typography, Alert, Chip } from '@mui/material';
+import { Box, TextField, MenuItem, Button, Typography, Alert, Chip, Card, CardContent, IconButton, List, ListItem, ListItemText, ListItemSecondaryAction } from '@mui/material';
+import { Add, Delete } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { reservationsService } from '../../services/reservations';
@@ -17,11 +18,12 @@ export const ReservationBookingForm: React.FC = () => {
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
-  const [serviceId, setServiceId] = React.useState<number | ''>('' as any);
+  const [selectedServiceId, setSelectedServiceId] = React.useState<number | ''>('' as any);
+  const [selectedServices, setSelectedServices] = React.useState<Array<{id: number, name: string, duration: number, price: number}>>([]);
   const [employeeId, setEmployeeId] = React.useState<number | ''>('' as any);
   const [locationId, setLocationId] = React.useState<number | ''>('' as any);
   const [start, setStart] = React.useState<string>(dayjs().add(1, 'hour').minute(0).second(0).toISOString());
-  const [price, setPrice] = React.useState<number | null>(null);
+  const [totalPrice, setTotalPrice] = React.useState<number>(0);
   const [services, setServices] = React.useState<any[]>([]);
   const [employees, setEmployees] = React.useState<any[]>([]);
   const [locations, setLocations] = React.useState<any[]>([]);
@@ -63,27 +65,38 @@ export const ReservationBookingForm: React.FC = () => {
   }, [searchParams]);
 
   React.useEffect(() => {
-    const calc = async () => {
-      if (!serviceId) { setPrice(null); return; }
-      try {
-        const res = await api.post(`/services/${serviceId}/calculate-price/`).catch(() => ({ data: { price: null } }));
-        setPrice(res.data.price ?? null);
-      } catch {
-        setPrice(null);
-      }
-    };
-    calc();
-  }, [serviceId]);
+    // Calculate total price from selected services
+    const total = selectedServices.reduce((sum, service) => sum + service.price, 0);
+    setTotalPrice(total);
+  }, [selectedServices]);
+
+  const addService = () => {
+    if (!selectedServiceId) return;
+    const service = services.find(s => s.id === selectedServiceId);
+    if (service && !selectedServices.find(s => s.id === service.id)) {
+      setSelectedServices(prev => [...prev, {
+        id: service.id,
+        name: service.name,
+        duration: service.duration_minutes || 60,
+        price: parseFloat(service.price) || 0
+      }]);
+      setSelectedServiceId('' as any);
+    }
+  };
+
+  const removeService = (serviceId: number) => {
+    setSelectedServices(prev => prev.filter(s => s.id !== serviceId));
+  };
 
   const checkAvailability = async () => {
     // If essential inputs are missing, don't block submission
-    if (!serviceId || !start) {
+    if (selectedServices.length === 0 || !start) {
       setSlots([]);
       return true;
     }
     try {
       const res = await api.get('/reservations/availability/', { params: {
-        service: serviceId || undefined,
+        service: selectedServices[0]?.id || undefined,
         employee: employeeId || undefined,
         location: locationId || undefined,
         start: start,
@@ -100,7 +113,7 @@ export const ReservationBookingForm: React.FC = () => {
   const detectConflicts = async () => {
     try {
       const res = await api.post('/reservations/conflict-check/', {
-        service: serviceId || undefined,
+        service: selectedServices[0]?.id || undefined,
         employee: employeeId || undefined,
         location: locationId || undefined,
         start: start,
@@ -117,8 +130,8 @@ export const ReservationBookingForm: React.FC = () => {
   const handleSubmit = async () => {
     setError(null);
     setSuccess(null);
-    if (!guestId || !serviceId || !start) {
-      setError('Guest, service, and start time are required.');
+    if (!guestId || selectedServices.length === 0 || !start) {
+      setError('Guest, at least one service, and start time are required.');
       return;
     }
     const avail = await checkAvailability();
@@ -126,14 +139,18 @@ export const ReservationBookingForm: React.FC = () => {
     if (!noConflicts) { setError('Conflicts detected. Adjust time or override.'); return; }
 
     try {
+      // For now, create reservation with first service (backend needs to be updated for multiple services)
       await reservationsService.create({
         guest: Number(guestId),
-        service: Number(serviceId),
+        service: selectedServices[0].id,
         employee: employeeId ? Number(employeeId) : null,
         location: locationId ? Number(locationId) : null,
         start_time: start,
       });
       setSuccess('Reservation created');
+      // Reset form
+      setSelectedServices([]);
+      setTotalPrice(0);
     } catch (e) {
       setError('Failed to create reservation');
     }
@@ -160,10 +177,35 @@ export const ReservationBookingForm: React.FC = () => {
             </Box>
           )}
         </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField select label="Service" fullWidth value={serviceId} onChange={(e) => setServiceId(e.target.value as any)}>
-            {services.map((s: any) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-          </TextField>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
+          <Box display="flex" gap={1}>
+            <TextField 
+              select 
+              label="Add Service" 
+              fullWidth 
+              value={selectedServiceId} 
+              onChange={(e) => setSelectedServiceId(e.target.value as any)}
+            >
+              {services.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s: any) => (
+                <MenuItem key={s.id} value={s.id}>
+                  <Box>
+                    <Typography variant="body2" fontWeight="bold">{s.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Duration: {s.duration_minutes || 60} min | Price: ${parseFloat(s.price || 0).toFixed(2)}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button 
+              variant="contained" 
+              onClick={addService} 
+              disabled={!selectedServiceId}
+              sx={{ minWidth: 'auto', px: 2 }}
+            >
+              <Add />
+            </Button>
+          </Box>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField select label="Employee" fullWidth value={employeeId} onChange={(e) => setEmployeeId(e.target.value as any)}>
@@ -181,7 +223,7 @@ export const ReservationBookingForm: React.FC = () => {
           <TextField type="datetime-local" label="Start" fullWidth value={dayjs(start).format('YYYY-MM-DDTHH:mm')} onChange={(e) => setStart(dayjs(e.target.value).toISOString())} InputLabelProps={{ shrink: true }} />
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 2' } }}>
-          <TextField label="Price" fullWidth value={price ?? ''} InputProps={{ readOnly: true }} />
+          <TextField label="Total Price" fullWidth value={`$${totalPrice.toFixed(2)}`} InputProps={{ readOnly: true }} />
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
           <Typography variant="body2" color="text.secondary">Available Slots:</Typography>
@@ -193,6 +235,42 @@ export const ReservationBookingForm: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Selected Services */}
+      {selectedServices.length > 0 && (
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Selected Services</Typography>
+            <List>
+              {selectedServices.map((service) => (
+                <ListItem key={service.id} divider>
+                  <ListItemText
+                    primary={service.name}
+                    secondary={
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Duration: {service.duration} min | Price: ${service.price.toFixed(2)}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <IconButton edge="end" onClick={() => removeService(service.id)}>
+                      <Delete />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+            <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6">Total: ${totalPrice.toFixed(2)}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Total Duration: {selectedServices.reduce((sum, s) => sum + s.duration, 0)} min
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       <CreateGuestDialog
         open={isCreateOpen}

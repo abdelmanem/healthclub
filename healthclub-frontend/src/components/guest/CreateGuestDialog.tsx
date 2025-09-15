@@ -5,9 +5,14 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Button
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { guestsService, CreateGuestInput, Guest } from '../../services/guests';
+import { useConfiguration } from '../../contexts/ConfigurationContext';
 
 interface CreateGuestDialogProps {
   open: boolean;
@@ -16,6 +21,7 @@ interface CreateGuestDialogProps {
 }
 
 export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onClose, onCreated }) => {
+  const { membershipTiers } = useConfiguration();
   const [form, setForm] = useState<CreateGuestInput>({
     first_name: '',
     last_name: '',
@@ -25,7 +31,11 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange = (field: keyof CreateGuestInput) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (field: keyof CreateGuestInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleSelectChange = (field: keyof CreateGuestInput) => (e: any) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
   };
 
@@ -76,13 +86,22 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
           value={form.phone}
           onChange={handleChange('phone')}
         />
-        <TextField
-          fullWidth
-          label="Membership Tier (e.g., Silver)"
-          margin="normal"
-          value={form.membership_tier || ''}
-          onChange={handleChange('membership_tier')}
-        />
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="membership-tier-label">Membership Tier</InputLabel>
+          <Select
+            labelId="membership-tier-label"
+            id="membership-tier"
+            value={form.membership_tier || ''}
+            label="Membership Tier"
+            onChange={handleSelectChange('membership_tier')}
+          >
+            {membershipTiers.map((tier) => (
+              <MenuItem key={tier.id} value={tier.name}>
+                {tier.display_name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={isSubmitting}>Cancel</Button>
