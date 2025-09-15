@@ -27,7 +27,10 @@ export interface CreateGuestInput {
   membership_tier?: string | null;
 }
 
-export interface UpdateGuestInput extends Partial<CreateGuestInput> {}
+export interface UpdateGuestInput extends Partial<CreateGuestInput> {
+  addresses?: GuestAddress[];
+  emergency_contacts?: EmergencyContact[];
+}
 
 export interface GuestAddress {
   id: number;

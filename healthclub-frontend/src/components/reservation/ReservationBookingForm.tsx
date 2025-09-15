@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, TextField, MenuItem, Button, Grid, Typography, Alert } from '@mui/material';
+import { Box, TextField, MenuItem, Button, Typography, Alert } from '@mui/material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { reservationsService } from '../../services/reservations';
@@ -115,34 +115,34 @@ export const ReservationBookingForm: React.FC = () => {
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={3}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField type="number" label="Guest ID" fullWidth value={guestId} onChange={(e) => setGuestId(Number(e.target.value))} />
-        </Grid>
-        <Grid item xs={12} sm={3}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField select label="Service" fullWidth value={serviceId} onChange={(e) => setServiceId(e.target.value as any)}>
             {services.map((s: any) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
           </TextField>
-        </Grid>
-        <Grid item xs={12} sm={3}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField select label="Employee" fullWidth value={employeeId} onChange={(e) => setEmployeeId(e.target.value as any)}>
             <MenuItem value="">Unassigned</MenuItem>
             {employees.map((e: any) => <MenuItem key={e.id} value={e.id}>{e.full_name ?? `${e.first_name} ${e.last_name}`}</MenuItem>)}
           </TextField>
-        </Grid>
-        <Grid item xs={12} sm={3}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField select label="Location" fullWidth value={locationId} onChange={(e) => setLocationId(e.target.value as any)}>
             <MenuItem value="">Any</MenuItem>
             {locations.map((l: any) => <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>)}
           </TextField>
-        </Grid>
-        <Grid item xs={12} sm={4}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
           <TextField type="datetime-local" label="Start" fullWidth value={dayjs(start).format('YYYY-MM-DDTHH:mm')} onChange={(e) => setStart(dayjs(e.target.value).toISOString())} InputLabelProps={{ shrink: true }} />
-        </Grid>
-        <Grid item xs={12} sm={2}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 2' } }}>
           <TextField label="Price" fullWidth value={price ?? ''} InputProps={{ readOnly: true }} />
-        </Grid>
-        <Grid item xs={12} sm={6}>
+        </Box>
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
           <Typography variant="body2" color="text.secondary">Available Slots:</Typography>
           <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
             {slots.length === 0 ? <Typography variant="caption" color="text.secondary">No slots loaded</Typography> : slots.map((s) => (
@@ -150,8 +150,8 @@ export const ReservationBookingForm: React.FC = () => {
             ))}
             <Button size="small" onClick={checkAvailability}>Refresh</Button>
           </Box>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
         <BookingRuleManager onChange={setRules} value={rules} />

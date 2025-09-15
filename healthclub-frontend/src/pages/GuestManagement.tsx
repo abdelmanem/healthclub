@@ -19,6 +19,8 @@ import { EmergencyContactList } from '../components/guest/EmergencyContactList';
 import { CreateAddressDialog } from '../components/guest/CreateAddressDialog';
 import { CreateEmergencyContactDialog } from '../components/guest/CreateEmergencyContactDialog';
 import { guestsService, Guest as GuestType } from '../services/guests';
+import { guestPreferencesService } from '../services/guestPreferences';
+import { guestCommunicationsService } from '../services/guestCommunications';
 import { useNavigate } from 'react-router-dom';
 import { QuickReservationDialog } from '../components/guest/QuickReservationDialog';
 
@@ -59,28 +61,28 @@ export const GuestManagement: React.FC = () => {
     setIsAddressDialogOpen(true);
   };
 
-  const handleDeleteAddress = (address: any) => {
-    updateSelectedGuest((prev) => ({
-      ...prev,
-      addresses: addresses.filter((a: any) => a.id !== address.id),
-    }));
+  const handleDeleteAddress = async (address: any) => {
+    const next = addresses.filter((a: any) => a.id !== address.id);
+    updateSelectedGuest((prev) => ({ ...prev, addresses: next }));
+    if (selectedGuest) {
+      try { await guestsService.update(selectedGuest.id, { addresses: next }); } catch (e) { console.error(e); }
+    }
   };
 
-  const handleSubmitAddress = (values: any) => {
+  const handleSubmitAddress = async (values: any) => {
+    let next = [] as any[];
     if (values.id) {
-      updateSelectedGuest((prev) => ({
-        ...prev,
-        addresses: addresses.map((a: any) => (a.id === values.id ? { ...a, ...values } : a)),
-      }));
+      next = addresses.map((a: any) => (a.id === values.id ? { ...a, ...values } : a));
     } else {
       const newItem = { ...values, id: Date.now() };
-      updateSelectedGuest((prev) => ({
-        ...prev,
-        addresses: [...addresses, newItem],
-      }));
+      next = [...addresses, newItem];
     }
+    updateSelectedGuest((prev) => ({ ...prev, addresses: next }));
     setIsAddressDialogOpen(false);
     setEditingAddress(null);
+    if (selectedGuest) {
+      try { await guestsService.update(selectedGuest.id, { addresses: next }); } catch (e) { console.error(e); }
+    }
   };
 
   const handleAddContact = () => {
@@ -93,28 +95,28 @@ export const GuestManagement: React.FC = () => {
     setIsContactDialogOpen(true);
   };
 
-  const handleDeleteContact = (contact: any) => {
-    updateSelectedGuest((prev) => ({
-      ...prev,
-      emergency_contacts: contacts.filter((c: any) => c.id !== contact.id),
-    }));
+  const handleDeleteContact = async (contact: any) => {
+    const next = contacts.filter((c: any) => c.id !== contact.id);
+    updateSelectedGuest((prev) => ({ ...prev, emergency_contacts: next }));
+    if (selectedGuest) {
+      try { await guestsService.update(selectedGuest.id, { emergency_contacts: next }); } catch (e) { console.error(e); }
+    }
   };
 
-  const handleSubmitContact = (values: any) => {
+  const handleSubmitContact = async (values: any) => {
+    let next = [] as any[];
     if (values.id) {
-      updateSelectedGuest((prev) => ({
-        ...prev,
-        emergency_contacts: contacts.map((c: any) => (c.id === values.id ? { ...c, ...values } : c)),
-      }));
+      next = contacts.map((c: any) => (c.id === values.id ? { ...c, ...values } : c));
     } else {
       const newItem = { ...values, id: Date.now() };
-      updateSelectedGuest((prev) => ({
-        ...prev,
-        emergency_contacts: [...contacts, newItem],
-      }));
+      next = [...contacts, newItem];
     }
+    updateSelectedGuest((prev) => ({ ...prev, emergency_contacts: next }));
     setIsContactDialogOpen(false);
     setEditingContact(null);
+    if (selectedGuest) {
+      try { await guestsService.update(selectedGuest.id, { emergency_contacts: next }); } catch (e) { console.error(e); }
+    }
   };
 
   return (
@@ -173,20 +175,28 @@ export const GuestManagement: React.FC = () => {
             <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
               <PreferenceManager
                 preferences={preferences}
-                onAdd={() => {
-                  // Stub: open a preference add flow (not implemented)
+                onAdd={async () => {
+                  if (!selectedGuest) return;
+                  // Simple demo: add first service if exists
+                  try {
+                    const created = await guestPreferencesService.create(selectedGuest.id, { service: (preferences[0]?.service ?? 1), rating: 5 });
+                    updateSelectedGuest((prev) => ({ ...prev, preferences: [...preferences, created] }));
+                  } catch (e) { console.error(e); }
                 }}
-                onRemove={(pref) => {
-                  updateSelectedGuest((prev) => ({
-                    ...prev,
-                    preferences: preferences.filter((p: any) => p.id !== pref.id),
-                  }));
+                onRemove={async (pref) => {
+                  if (!selectedGuest) return;
+                  updateSelectedGuest((prev) => ({ ...prev, preferences: preferences.filter((p: any) => p.id !== pref.id) }));
+                  try { await guestPreferencesService.delete(selectedGuest.id, pref.id); } catch (e) { console.error(e); }
                 }}
               />
               <CommunicationHistory
                 communications={communications}
-                onAdd={() => {
-                  // Stub: open a communication compose flow (not implemented)
+                onAdd={async () => {
+                  if (!selectedGuest) return;
+                  try {
+                    const created = await guestCommunicationsService.create(selectedGuest.id, { communication_type: 'in_person', subject: 'Front Desk Note', message: 'Spoke with guest about preferences' });
+                    updateSelectedGuest((prev) => ({ ...prev, communications: [created, ...communications] }));
+                  } catch (e) { console.error(e); }
                 }}
               />
               <AddressList
