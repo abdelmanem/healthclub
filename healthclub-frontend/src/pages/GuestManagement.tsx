@@ -4,29 +4,26 @@ import {
   Typography,
   Card,
   CardContent,
-  Button,
-  Grid,
-  Chip,
-  Divider
+  Button
 } from '@mui/material';
-import { Add, Person } from '@mui/icons-material';
+import { Add } from '@mui/icons-material';
 import { GuestSearch } from '../components/guest/GuestSearch';
 import { PermissionGate } from '../components/common/PermissionGate';
+import { GuestProfile } from '../components/guest/GuestProfile';
+import { CreateGuestDialog } from '../components/guest/CreateGuestDialog';
+import { EditGuestDialog } from '../components/guest/EditGuestDialog';
+import { PreferenceManager } from '../components/guest/advanced/PreferenceManager';
+import { CommunicationHistory } from '../components/guest/advanced/CommunicationHistory';
+import { AddressList } from '../components/guest/AddressList';
+import { EmergencyContactList } from '../components/guest/EmergencyContactList';
+import { guestsService, Guest as GuestType } from '../services/guests';
 
-interface Guest {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  membership_tier?: {
-    name: string;
-    display_name: string;
-  };
-}
+type Guest = GuestType;
 
 export const GuestManagement: React.FC = () => {
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const handleGuestSelect = (guest: Guest) => {
     setSelectedGuest(guest);
@@ -42,18 +39,19 @@ export const GuestManagement: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<Add />}
-            onClick={() => {
-              // TODO: Open create guest dialog
-              console.log('Create new guest');
-            }}
+            onClick={() => setIsCreateOpen(true)}
           >
             Add Guest
           </Button>
         </PermissionGate>
       </Box>
 
-      <Grid container spacing={3}>
-        <Grid size={12} md={6}>
+      <Box
+        display="grid"
+        gap={3}
+        gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}
+      >
+        <Box>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -62,57 +60,22 @@ export const GuestManagement: React.FC = () => {
               <GuestSearch onGuestSelect={handleGuestSelect} />
             </CardContent>
           </Card>
-        </Grid>
-
-        <Grid size={12} md={6}>
+        </Box>
+        <Box>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Guest Details
               </Typography>
-              
               {selectedGuest ? (
-                <Box>
-                  <Box display="flex" alignItems="center" mb={2}>
-                    <Person sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6">
-                      {selectedGuest.first_name} {selectedGuest.last_name}
-                    </Typography>
-                  </Box>
-                  
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  <Box mb={2}>
-                    <Typography variant="body2" color="text.secondary">
-                      Email: {selectedGuest.email}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Phone: {selectedGuest.phone}
-                    </Typography>
-                    {selectedGuest.membership_tier && (
-                      <Box mt={1}>
-                        <Chip
-                          label={selectedGuest.membership_tier.display_name}
-                          color="primary"
-                          size="small"
-                        />
-                      </Box>
-                    )}
-                  </Box>
-
-                  <Box display="flex" gap={1}>
-                    <PermissionGate permission="change" model="guests">
-                      <Button variant="outlined" size="small">
-                        Edit Guest
-                      </Button>
-                    </PermissionGate>
-                    <PermissionGate permission="view" model="reservations">
-                      <Button variant="outlined" size="small">
-                        View Reservations
-                      </Button>
-                    </PermissionGate>
-                  </Box>
-                </Box>
+                <GuestProfile
+                  guest={selectedGuest}
+                  onEdit={() => setIsEditOpen(true)}
+                  onViewReservations={() => {
+                    // TODO: navigate to reservations page filtered by guest
+                    console.log('View reservations for guest', selectedGuest?.id);
+                  }}
+                />
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   Select a guest from the search results to view details
@@ -120,8 +83,32 @@ export const GuestManagement: React.FC = () => {
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+          {selectedGuest && (
+            <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
+              <PreferenceManager preferences={(selectedGuest as any).preferences} />
+              <CommunicationHistory communications={(selectedGuest as any).communications} />
+              <AddressList addresses={(selectedGuest as any).addresses} />
+              <EmergencyContactList contacts={(selectedGuest as any).emergency_contacts} />
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      <CreateGuestDialog
+        open={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={(guest) => {
+          setSelectedGuest(guest);
+          setIsCreateOpen(false);
+        }}
+      />
+
+      <EditGuestDialog
+        open={isEditOpen}
+        guest={selectedGuest}
+        onClose={() => setIsEditOpen(false)}
+        onUpdated={(guest) => setSelectedGuest(guest)}
+      />
     </Box>
   );
 };

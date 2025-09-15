@@ -29,7 +29,13 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadAllConfigurations();
+    // Only load when authenticated
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      loadAllConfigurations();
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const loadAllConfigurations = async () => {
@@ -73,8 +79,11 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
       setTrainingTypes(Array.isArray(trainings) ? trainings.filter(training => training.is_active) : []);
       setProductTypes(Array.isArray(products) ? products.filter(product => product.is_active) : []);
       setNotificationTemplates(Array.isArray(templates) ? templates.filter(template => template.is_active) : []);
-    } catch (error) {
-      console.error('Failed to load configurations:', error);
+    } catch (error: any) {
+      // Ignore unauthorized during unauthenticated states
+      if (error?.response?.status !== 401) {
+        console.error('Failed to load configurations:', error);
+      }
     } finally {
       setIsLoading(false);
     }

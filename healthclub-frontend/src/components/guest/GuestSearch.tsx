@@ -12,19 +12,9 @@ import {
   Alert
 } from '@mui/material';
 import { Search } from '@mui/icons-material';
-import { api } from '../../services/api';
+import { guestsService } from '../../services/guests';
 
-interface Guest {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  membership_tier?: {
-    name: string;
-    display_name: string;
-  };
-}
+import type { Guest } from '../../services/guests';
 
 interface GuestSearchProps {
   onGuestSelect: (guest: Guest) => void;
@@ -53,8 +43,8 @@ export const GuestSearch: React.FC<GuestSearchProps> = ({ onGuestSelect }) => {
     setError(null);
 
     try {
-      const response = await api.get(`/guests/search/?q=${encodeURIComponent(term)}`);
-      setGuests(response.data);
+      const results = await guestsService.list({ search: term });
+      setGuests(results);
     } catch (err: any) {
       setError('Failed to search guests. Please try again.');
       console.error('Guest search error:', err);
@@ -104,13 +94,15 @@ export const GuestSearch: React.FC<GuestSearchProps> = ({ onGuestSelect }) => {
                   <ListItemText
                     primary={`${guest.first_name} ${guest.last_name}`}
                     secondary={
-                      <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          {guest.email} • {guest.phone}
-                        </Typography>
+                      <Box component="span" display="block">
+                        <Box component="span" display="block">
+                          <Typography component="span" variant="body2" color="text.secondary">
+                            {guest.email} • {guest.phone}
+                          </Typography>
+                        </Box>
                         {guest.membership_tier && (
-                          <Typography variant="caption" color="primary">
-                            {guest.membership_tier.display_name}
+                          <Typography component="span" variant="caption" color="primary" display="block">
+                            {typeof guest.membership_tier === 'string' ? guest.membership_tier : guest.membership_tier.display_name}
                           </Typography>
                         )}
                       </Box>
