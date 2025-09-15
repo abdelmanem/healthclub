@@ -11,11 +11,20 @@ import {
 } from '../types/config';
 
 export const configService = {
+  // Internal helper to unwrap paginated/non-paginated lists
+  _unwrapList: <T>(response: any): T[] => {
+    const data = response?.data;
+    if (!data) return [] as T[];
+    if (Array.isArray(data)) return data as T[];
+    if (Array.isArray(data?.results)) return data.results as T[];
+    return [] as T[];
+  },
+
   // System Configuration
   getSystemConfigs: async (): Promise<SystemConfiguration[]> => {
     try {
       const response = await api.get('/config/system-configurations/');
-      return response.data;
+      return configService._unwrapList<SystemConfiguration>(response);
     } catch (error) {
       // Return mock data for development when backend is not available
       console.warn('Backend not available, using mock data for system configs');
@@ -48,7 +57,7 @@ export const configService = {
   getMembershipTiers: async (): Promise<MembershipTier[]> => {
     try {
       const response = await api.get('/config/membership-tiers/');
-      return response.data;
+      return configService._unwrapList<MembershipTier>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for membership tiers');
       return [
@@ -83,7 +92,7 @@ export const configService = {
   getGenderOptions: async (): Promise<GenderOption[]> => {
     try {
       const response = await api.get('/config/gender-options/');
-      return response.data;
+      return configService._unwrapList<GenderOption>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for gender options');
       return [
@@ -116,7 +125,7 @@ export const configService = {
   getBusinessRules: async (): Promise<BusinessRule[]> => {
     try {
       const response = await api.get('/config/business-rules/');
-      return response.data;
+      return configService._unwrapList<BusinessRule>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for business rules');
       return [
@@ -150,7 +159,7 @@ export const configService = {
   getCommissionTypes: async (): Promise<CommissionType[]> => {
     try {
       const response = await api.get('/config/commission-types/');
-      return response.data;
+      return configService._unwrapList<CommissionType>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for commission types');
       return [
@@ -169,7 +178,7 @@ export const configService = {
   getTrainingTypes: async (): Promise<TrainingType[]> => {
     try {
       const response = await api.get('/config/training-types/');
-      return response.data;
+      return configService._unwrapList<TrainingType>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for training types');
       return [
@@ -188,7 +197,7 @@ export const configService = {
   getProductTypes: async (): Promise<ProductType[]> => {
     try {
       const response = await api.get('/config/product-types/');
-      return response.data;
+      return configService._unwrapList<ProductType>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for product types');
       return [
@@ -207,7 +216,7 @@ export const configService = {
   getNotificationTemplates: async (): Promise<NotificationTemplate[]> => {
     try {
       const response = await api.get('/config/notification-templates/');
-      return response.data;
+      return configService._unwrapList<NotificationTemplate>(response);
     } catch (error) {
       console.warn('Backend not available, using mock data for notification templates');
       return [

@@ -11,13 +11,7 @@ class Guest(models.Model):
         ("prefer_not_to_say", "Prefer not to say"),
     )
 
-    MEMBERSHIP_TIER_CHOICES = (
-        ("bronze", "Bronze"),
-        ("silver", "Silver"),
-        ("gold", "Gold"),
-        ("platinum", "Platinum"),
-        ("vip", "VIP"),
-    )
+    # Membership tiers are configurable in config.MembershipTier
 
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
@@ -29,10 +23,15 @@ class Guest(models.Model):
     membership_id = models.CharField(max_length=64, unique=True)
     
     # Enhanced guest information
-    membership_tier = models.CharField(
-        max_length=20,
-        choices=MEMBERSHIP_TIER_CHOICES,
-        default="bronze"
+    membership_tier = models.ForeignKey(
+        'config.MembershipTier',
+        to_field='name',
+        db_column='membership_tier',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='guests_by_name',
+        help_text="Guest's membership tier (references MembershipTier.name)"
     )
     loyalty_points = models.PositiveIntegerField(default=0)
     total_spent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -82,15 +81,15 @@ class Guest(models.Model):
         self.save(update_fields=['loyalty_points'])
     
     def get_membership_benefits(self):
-        """Get benefits based on membership tier"""
-        benefits = {
-            'bronze': {'discount': 0, 'priority_booking': False, 'free_services': 0},
-            'silver': {'discount': 5, 'priority_booking': False, 'free_services': 1},
-            'gold': {'discount': 10, 'priority_booking': True, 'free_services': 2},
-            'platinum': {'discount': 15, 'priority_booking': True, 'free_services': 3},
-            'vip': {'discount': 20, 'priority_booking': True, 'free_services': 5},
+        """Get benefits based on membership tier from config"""
+        tier = self.membership_tier
+        if not tier or not getattr(tier, 'is_active', True):
+            return {'discount': 0, 'priority_booking': False, 'free_services': 0}
+        return {
+            'discount': float(getattr(tier, 'discount_percentage', 0)),
+            'priority_booking': bool(getattr(tier, 'priority_booking', False)),
+            'free_services': int(getattr(tier, 'free_services_count', 0)),
         }
-        return benefits.get(self.membership_tier, benefits['bronze'])
 
 
 class GuestAddress(models.Model):

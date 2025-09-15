@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from config.models import MembershipTier
 from .models import (
     Guest, GuestAddress, EmergencyContact, GuestPreference, 
     GuestCommunication
@@ -85,6 +86,14 @@ class GuestSerializer(serializers.ModelSerializer):
             "communications",
             "membership_benefits",
         ]
+
+    # Represent membership_tier by its unique "name" slug from config.MembershipTier
+    membership_tier = serializers.SlugRelatedField(
+        slug_field='name',
+        queryset=MembershipTier.objects.filter(is_active=True),
+        allow_null=True,
+        required=False
+    )
 
     def get_membership_benefits(self, obj):
         return obj.get_membership_benefits()
