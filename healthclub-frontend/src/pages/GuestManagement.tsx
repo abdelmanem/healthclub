@@ -241,7 +241,8 @@ export const GuestManagement: React.FC = () => {
         guestId={selectedGuest?.id ?? null}
         onClose={() => setIsQuickResOpen(false)}
         onCreated={(id) => {
-          // Optionally navigate or toast
+          // Toast then navigate
+          navigate(`/reservations?guest=${selectedGuest?.id}`);
         }}
       />
     </Box>

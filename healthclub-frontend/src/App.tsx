@@ -5,6 +5,7 @@ import { CssBaseline } from '@mui/material';
 import { PermissionProvider } from './contexts/PermissionContext';
 import { ConfigurationProvider } from './contexts/ConfigurationContext';
 import { Layout } from './components/common/Layout';
+import { ReservationManagement } from './pages/ReservationManagement';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginForm } from './components/auth/LoginForm';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
@@ -89,7 +90,7 @@ function App() {
               <Route path="/reservations" element={
                 <ProtectedRoute requiredPermission="view" requiredModel="reservations">
                   <Layout>
-                    <div>Reservation Management - Coming Soon</div>
+                    <ReservationManagement />
                   </Layout>
                 </ProtectedRoute>
               } />

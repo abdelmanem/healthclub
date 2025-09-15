@@ -26,6 +26,14 @@ export const reservationsService = {
     const response = await api.post('/reservations/', payload);
     return response.data;
   },
+  async availability(params: { service?: number; employee?: number; location?: number; start: string }): Promise<{ slots: string[] }> {
+    const response = await api.get('/reservations/availability/', { params });
+    return response.data;
+  },
+  async conflictCheck(payload: { service?: number; employee?: number; location?: number; start: string }): Promise<{ conflicts: any[] }> {
+    const response = await api.post('/reservations/conflict-check/', payload);
+    return response.data;
+  },
 };
 
 
