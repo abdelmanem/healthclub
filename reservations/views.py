@@ -4,6 +4,10 @@ from .models import Location, Reservation, ReservationService
 from .serializers import LocationSerializer, ReservationSerializer
 from pos import create_invoice_for_reservation
 from healthclub.permissions import ObjectPermissionsOrReadOnly
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.utils import timezone
+from django.db.models import Q
 
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
@@ -198,3 +202,73 @@ class ReservationViewSet(viewsets.ModelViewSet):
             return response.Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
         remove_perm(perm, user, reservation)
         return response.Response({"revoked": perm, "from": username})
+        
+    @decorators.action(detail=False, methods=["get"], url_path="availability")
+    def availability(self, request):
+        """Check if a location/employee/service is available at a given start time"""
+        service_id = request.query_params.get("service")
+        employee_id = request.query_params.get("employee")
+        start_time = request.query_params.get("start")
+
+        if not (service_id and start_time):
+            return response.Response(
+                {"error": "service and start are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # TODO: add your service duration lookup
+        from services.models import Service
+        try:
+            service = Service.objects.get(pk=service_id)
+        except Service.DoesNotExist:
+            return response.Response({"error": "Service not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # calculate end time
+        from datetime import timedelta
+        start_dt = timezone.datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        end_dt = start_dt + timedelta(minutes=service.duration_minutes)
+
+        # check conflicts
+        conflicts = Reservation.objects.filter(
+            start_time__lt=end_dt,
+            end_time__gt=start_dt,
+            status__in=[
+                Reservation.STATUS_BOOKED,
+                Reservation.STATUS_CHECKED_IN,
+                Reservation.STATUS_IN_SERVICE,
+            ],
+        )
+
+        if employee_id:
+            conflicts = conflicts.filter(reservation_services__employee_id=employee_id)
+
+        return response.Response({"available": not conflicts.exists()})
+
+    @decorators.action(detail=False, methods=["post"], url_path="conflict-check")
+    def conflict_check(self, request):
+        """Check if a new reservation conflicts with existing ones"""
+        start_time = request.data.get("start_time")
+        end_time = request.data.get("end_time")
+        location_id = request.data.get("location")
+
+        if not (start_time and end_time and location_id):
+            return response.Response(
+                {"error": "start_time, end_time, and location are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        start_dt = timezone.datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        end_dt = timezone.datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+
+        conflicts = Reservation.objects.filter(
+            location_id=location_id,
+            start_time__lt=end_dt,
+            end_time__gt=start_dt,
+            status__in=[
+                Reservation.STATUS_BOOKED,
+                Reservation.STATUS_CHECKED_IN,
+                Reservation.STATUS_IN_SERVICE,
+            ],
+        )
+
+        return response.Response({"conflict": conflicts.exists()})

@@ -142,7 +142,7 @@ export const ReservationBookingForm: React.FC = () => {
       // Create reservation with multiple services
       const reservationData: any = {
         guest: Number(guestId),
-        employee: employeeId ? Number(employeeId) : null,
+        //employee: employeeId ? Number(employeeId) : null,
         location: locationId ? Number(locationId) : null,
         start_time: start,
       };
