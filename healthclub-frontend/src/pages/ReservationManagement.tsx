@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
-  CardHeader,
   Chip,
-  IconButton,
   Button,
   Tabs,
   Tab,
-  Grid,
   Drawer,
   Dialog,
   DialogTitle,
@@ -21,9 +18,15 @@ import {
   Select,
   MenuItem,
   TextField,
-  Switch,
   Stack,
   Paper,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
+  IconButton,
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -33,16 +36,15 @@ import interactionPlugin from '@fullcalendar/interaction';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
+import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
+import { reservationsService, Reservation } from '../services/reservations';
+import { api } from '../services/api';
 
 dayjs.extend(isBetween);
-import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
-import { reservationsService, Reservation, ReservationService } from '../services/reservations';
-import { api } from '../services/api';
 
 // Helper: status color
 const statusColor = (status?: string) => {
   switch (status) {
-    case 'booked': return '#1976d2';
     case 'confirmed': return '#1976d2';
     case 'checked_in': return '#ed6c02';
     case 'in_service': return '#f97316';
@@ -53,36 +55,37 @@ const statusColor = (status?: string) => {
 };
 
 export const ReservationManagement: React.FC = () => {
-  const [tab, setTab] = useState<number>(4); // 4 = Calendar tab by default
+  const [tab, setTab] = useState<number>(0);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [loading, setLoading] = useState(false);
   const [locations, setLocations] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
 
-  // calendar & filters
+  // filters
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('');
   const [employeeFilter, setEmployeeFilter] = useState<string>('');
   const [guestSearch, setGuestSearch] = useState<string>('');
-  const [serviceFilter, setServiceFilter] = useState<string>('');
-
-  const [groupBy, setGroupBy] = useState<'location'|'employee'|'none'>('none');
-  const [showTimers, setShowTimers] = useState(true);
+  const [dateFilter, setDateFilter] = useState<string>(dayjs().format('YYYY-MM-DD'));
+  const [groupBy] = useState<'location'|'employee'|'none'>('none');
+  const [showTimers] = useState(true);
   const [now, setNow] = useState<number>(Date.now());
 
-  const calendarRef = useRef<any>(null);
-
-  // drag-drop confirmation dialog state
-  const [pendingMove, setPendingMove] = useState<any | null>(null);
+  // drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+
+  // pending drag move
+  const [pendingMove, setPendingMove] = useState<any | null>(null);
 
   // KPI
   const [kpi, setKpi] = useState({ arrivalsToday: 0, checkedInNow: 0, inServiceNow: 0, revenueToday: 0 });
 
-  // New reservation form state
+  // New reservation form
   const [editing, setEditing] = useState<Reservation | null | undefined>(undefined);
   const [formVersion, setFormVersion] = useState<number>(0);
+
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
@@ -99,30 +102,24 @@ export const ReservationManagement: React.FC = () => {
     })();
   }, []);
 
-  const loadReservations = async (params: any = {}) => {
-    setLoading(true);
+  const loadReservations = async () => {
     try {
-      const data = await reservationsService.list(params);
+      const data = await reservationsService.list();
       setReservations(Array.isArray(data) ? data : ((data as any).results ?? data));
     } catch (e) {
       console.error('Failed to load reservations', e);
-    } finally { 
-      setLoading(false); 
     }
   };
 
-  // initial load
-  useEffect(() => { 
-    loadReservations(); 
-  }, []);
+  useEffect(() => { loadReservations(); }, []);
 
-  // KPI compute
+  // KPI
   useEffect(() => {
     const todayStart = dayjs().startOf('day');
     const todayEnd = dayjs().endOf('day');
-    const arrivalsToday = reservations.filter(r => 
-      dayjs(r.start_time).isBetween(todayStart, todayEnd, null, '[]') && 
-      ['booked','confirmed','pending'].includes(r.status ?? 'pending')
+    const arrivalsToday = reservations.filter(r =>
+      dayjs(r.start_time).isBetween(todayStart, todayEnd, null, '[]') &&
+      r.status === 'confirmed'
     ).length;
     const checkedInNow = reservations.filter(r => r.status === 'checked_in').length;
     const inServiceNow = reservations.filter(r => r.status === 'in_service').length;
@@ -134,43 +131,51 @@ export const ReservationManagement: React.FC = () => {
     setKpi({ arrivalsToday, checkedInNow, inServiceNow, revenueToday });
   }, [reservations]);
 
-  // now ticker: only when calendar tab active and timers enabled
+  // keep ticking for timers
   useEffect(() => {
     if (tab !== 4 || !showTimers) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [tab, showTimers]);
 
-  // map reservations -> calendar events
-  const events = reservations
-    .filter(r => !statusFilter || (r.status ?? '').toString() === statusFilter)
-    .filter(r => !locationFilter || String(r.location) === locationFilter)
-    .filter(r => !employeeFilter || String(r.employee) === employeeFilter)
-    .filter(r => !guestSearch || (r.guest_name ?? '').toLowerCase().includes(guestSearch.toLowerCase()))
-    .filter(r => !serviceFilter || (r.reservation_services || []).some((s:any) => 
-      (s.service_details?.name || '').toLowerCase() === serviceFilter.toLowerCase() || 
-      String(s.service) === serviceFilter
-    ))
-    .map(r => ({
-      id: String(r.id),
-      title: `${r.guest_name ?? 'Guest'}`,
-      start: r.start_time,
-      end: r.end_time,
-      backgroundColor: statusColor(r.status),
-      borderColor: '#ffffff',
-      textColor: '#fff',
-      extendedProps: { reservation: r, status: r.status, locationId: r.location, employeeId: r.employee },
-      resourceId: groupBy === 'location' ? String(r.location) : (groupBy === 'employee' ? String(r.employee) : undefined),
-      editable: true,
-    }));
+  // Get filtered reservations
+  const getFilteredReservations = () => {
+    return reservations
+      .filter(r => !statusFilter || (r.status ?? '').toString() === statusFilter)
+      .filter(r => !locationFilter || String(r.location) === locationFilter)
+      .filter(r => !employeeFilter || String(r.employee) === employeeFilter)
+      .filter(r => !guestSearch || (r.guest_name ?? '').toLowerCase().includes(guestSearch.toLowerCase()))
+      .filter(r => !dateFilter || dayjs(r.start_time).format('YYYY-MM-DD') === dateFilter);
+  };
 
-  // resources for timeline grouping
-  const resources = (groupBy === 'location' ? locations : groupBy === 'employee' ? employees : []).map((x:any) => ({ 
-    id: String(x.id), 
-    title: x.name 
+  // Get calendar events (without date filter for calendar view)
+  const getCalendarEvents = () => {
+    return reservations
+      .filter(r => !statusFilter || (r.status ?? '').toString() === statusFilter)
+      .filter(r => !locationFilter || String(r.location) === locationFilter)
+      .filter(r => !employeeFilter || String(r.employee) === employeeFilter)
+      .filter(r => !guestSearch || (r.guest_name ?? '').toLowerCase().includes(guestSearch.toLowerCase()));
+  };
+
+  // map reservations -> calendar events
+  const events = getCalendarEvents().map(r => ({
+    id: String(r.id),
+    title: `${r.guest_name ?? 'Guest'}`,
+    start: r.start_time,
+    end: r.end_time,
+    backgroundColor: statusColor(r.status),
+    borderColor: '#ffffff',
+    textColor: '#fff',
+    extendedProps: { reservation: r, status: r.status, locationId: r.location, employeeId: r.employee },
+    resourceId: groupBy === 'location' ? String(r.location) : (groupBy === 'employee' ? String(r.employee) : undefined),
+    editable: true,
   }));
 
-  // event rendering (adds live timer for in_service)
+  const resources = (groupBy === 'location' ? locations : groupBy === 'employee' ? employees : []).map((x:any) => ({
+    id: String(x.id),
+    title: x.name
+  }));
+
   const renderEventContent = (arg:any) => {
     const ev:any = arg.event;
     const props = ev.extendedProps || {};
@@ -192,68 +197,166 @@ export const ReservationManagement: React.FC = () => {
     );
   };
 
-  // event click -> open drawer
   const onEventClick = (clickInfo:any) => {
     const r = clickInfo.event.extendedProps?.reservation;
-    if (r) { 
-      setSelectedReservation(r); 
-      setDrawerOpen(true); 
+    if (r) {
+      setSelectedReservation(r);
+      setDrawerOpen(true);
     }
   };
 
-  // event drop (drag) -> show confirmation dialog before saving
-  const onEventDrop = (dropInfo:any) => {
+  const onEventDrop = async (dropInfo: any) => {
     const event = dropInfo.event;
-    const res = event.extendedProps?.reservation;
-    const oldStart = dropInfo.oldEvent.start;
-    const oldEnd = dropInfo.oldEvent.end;
-    const newStart = event.start;
-    const newEnd = event.end;
-    const oldResource = (dropInfo.oldEvent as any).getResources ? (dropInfo.oldEvent as any).getResources()[0]?.id : null;
-    const newResource = (event as any).getResources ? (event as any).getResources()[0]?.id : null;
-    setPendingMove({ dropInfo, res, oldStart, oldEnd, newStart, newEnd, oldResource, newResource });
-  };
+    const reservation = event.extendedProps?.reservation;
+    
+    if (!reservation) return;
 
-  // cancel pending move
-  const cancelPendingMove = () => {
-    if (pendingMove?.dropInfo) pendingMove.dropInfo.revert();
-    setPendingMove(null);
-  };
-
-  // confirm pending move -> call API
-  const confirmPendingMove = async () => {
-    if (!pendingMove) return;
-    const { res, newStart, newEnd, newResource, dropInfo } = pendingMove;
+    setIsDragging(true);
+    
     try {
-      // prepare update payload; adapt to your backend
-      const payload:any = { start_time: dayjs(newStart).toISOString() };
-      if (newEnd) payload.end_time = dayjs(newEnd).toISOString();
-      if (groupBy === 'location' && newResource) payload.location = Number(newResource);
-      if (groupBy === 'employee' && newResource) payload.employee = Number(newResource);
-      await reservationsService.update(res.id, payload);
+      // Calculate new end time based on original duration
+      const originalStart = dayjs(reservation.start_time);
+      const originalEnd = dayjs(reservation.end_time);
+      const duration = originalEnd.diff(originalStart, 'minutes');
+      
+      const newStart = dayjs(event.start);
+      const newEnd = newStart.add(duration, 'minutes');
+
+      // Update the reservation
+      await reservationsService.update(reservation.id, {
+        start_time: newStart.toISOString(),
+        end_time: newEnd.toISOString(),
+      });
+
+      // Reload reservations to reflect changes
       await loadReservations();
-      setPendingMove(null);
+      
+      // Show success feedback
+      console.log(`Reservation for ${reservation.guest_name} moved to ${newStart.format('MMM D, h:mm A')}`);
+    } catch (error) {
+      console.error('Failed to update reservation time:', error);
+      
+      // Revert the event position on error
+      event.setStart(reservation.start_time);
+      if (reservation.end_time) {
+        event.setEnd(reservation.end_time);
+      }
+      
+      // Show error feedback
+      alert('Failed to update reservation time. Please try again.');
+    } finally {
+      setIsDragging(false);
+    }
+  };
+
+  const onEventResize = async (resizeInfo: any) => {
+    const event = resizeInfo.event;
+    const reservation = event.extendedProps?.reservation;
+    
+    if (!reservation) return;
+
+    setIsDragging(true);
+    
+    try {
+      const newStart = dayjs(event.start);
+      const newEnd = dayjs(event.end);
+
+      // Update the reservation
+      await reservationsService.update(reservation.id, {
+        start_time: newStart.toISOString(),
+        end_time: newEnd.toISOString(),
+      });
+
+      // Reload reservations to reflect changes
+      await loadReservations();
+      
+      console.log(`Reservation for ${reservation.guest_name} duration updated to ${newEnd.diff(newStart, 'minutes')} minutes`);
+    } catch (error) {
+      console.error('Failed to update reservation duration:', error);
+      
+      // Revert the event size on error
+      event.setStart(reservation.start_time);
+      if (reservation.end_time) {
+        event.setEnd(reservation.end_time);
+      }
+      
+      alert('Failed to update reservation duration. Please try again.');
+    } finally {
+      setIsDragging(false);
+    }
+  };
+
+  const performAction = async (action:'check_in'|'in_service'|'complete'|'check_out', reservation?: Reservation) => {
+    const targetReservation = reservation || selectedReservation;
+    if (!targetReservation) return;
+    try {
+      if (action === 'check_in') await reservationsService.checkIn(targetReservation.id);
+      if (action === 'in_service') await reservationsService.inService(targetReservation.id);
+      if (action === 'complete') await reservationsService.complete(targetReservation.id);
+      if (action === 'check_out') await reservationsService.checkOut(targetReservation.id);
+      await loadReservations();
+      if (!reservation) setDrawerOpen(false);
     } catch (e) {
-      console.error('Failed to save move', e);
-      if (dropInfo) dropInfo.revert();
-      setPendingMove(null);
+      console.error('Action failed', e);
     }
   };
 
-  // quick actions in drawer
-  const performAction = async (action:'check_in'|'in_service'|'complete'|'check_out') => {
-    if (!selectedReservation) return;
-    try {
-      if (action === 'check_in') await reservationsService.checkIn(selectedReservation.id);
-      if (action === 'in_service') await reservationsService.inService(selectedReservation.id);
-      if (action === 'complete') await reservationsService.complete(selectedReservation.id);
-      if (action === 'check_out') await reservationsService.checkOut(selectedReservation.id);
-      await loadReservations();
-      setDrawerOpen(false);
-    } catch (e) { 
-      console.error('Action failed', e); 
-    }
-  };
+  // Table renderer for tabs
+  const renderTable = (rows: Reservation[]) => (
+    <TableContainer component={Paper}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Guest</TableCell>
+            <TableCell>Location</TableCell>
+            <TableCell>Employee</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Start</TableCell>
+            <TableCell>End</TableCell>
+            <TableCell>Total Price</TableCell>
+            <TableCell>Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell>{r.guest_name}</TableCell>
+              <TableCell>{r.location_name}</TableCell>
+              <TableCell>{r.employee_name}</TableCell>
+              <TableCell>
+                <Chip label={r.status} sx={{ bgcolor: statusColor(r.status), color: '#fff' }} />
+              </TableCell>
+              <TableCell>{dayjs(r.start_time).format('MMM D, h:mm A')}</TableCell>
+              <TableCell>{r.end_time ? dayjs(r.end_time).format('h:mm A') : '-'}</TableCell>
+              <TableCell>${Number(r.total_price || 0).toFixed(2)}</TableCell>
+              <TableCell>
+                <Stack direction="row" spacing={1}>
+                  <IconButton size="small" onClick={() => { setSelectedReservation(r); setDrawerOpen(true); }}>
+                    <Edit fontSize="small" />
+                  </IconButton>
+                  {r.status === 'confirmed' && (
+                    <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary">
+                      <Check fontSize="small" />
+                    </IconButton>
+                  )}
+                  {r.status === 'checked_in' && (
+                    <IconButton size="small" onClick={() => performAction('in_service', r)} color="warning">
+                      <DirectionsRun fontSize="small" />
+                    </IconButton>
+                  )}
+                  {r.status === 'in_service' && (
+                    <IconButton size="small" onClick={() => performAction('complete', r)} color="success">
+                      <DoneAll fontSize="small" />
+                    </IconButton>
+                  )}
+                </Stack>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 
   return (
     <Box p={2}>
@@ -261,10 +364,90 @@ export const ReservationManagement: React.FC = () => {
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems="center">
           <Typography variant="h5">Reservation Management</Typography>
           <Stack direction="row" spacing={1}>
-            <Chip label={`Arrivals: ${kpi.arrivalsToday}`} />
+            <Chip label={`Today's Arrivals: ${kpi.arrivalsToday}`} />
             <Chip label={`Checked-in: ${kpi.checkedInNow}`} color="primary" />
             <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: '#f97316', color: '#fff' }} />
             <Chip label={`Revenue: $${kpi.revenueToday.toFixed(2)}`} color="success" />
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Filters */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" gutterBottom>Filters</Typography>
+        <Stack spacing={2}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <FormControl sx={{ minWidth: 120 }} size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={statusFilter}
+                label="Status"
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="confirmed">Confirmed</MenuItem>
+                <MenuItem value="checked_in">Checked In</MenuItem>
+                <MenuItem value="in_service">In Service</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="cancelled">Cancelled</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl sx={{ minWidth: 120 }} size="small">
+              <InputLabel>Location</InputLabel>
+              <Select
+                value={locationFilter}
+                label="Location"
+                onChange={(e) => setLocationFilter(e.target.value)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {locations.map((loc) => (
+                  <MenuItem key={loc.id} value={String(loc.id)}>{loc.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl sx={{ minWidth: 120 }} size="small">
+              <InputLabel>Employee</InputLabel>
+              <Select
+                value={employeeFilter}
+                label="Employee"
+                onChange={(e) => setEmployeeFilter(e.target.value)}
+              >
+                <MenuItem value="">All</MenuItem>
+                {employees.map((emp) => (
+                  <MenuItem key={emp.id} value={String(emp.id)}>{emp.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              sx={{ minWidth: 200 }}
+              size="small"
+              label="Guest Search"
+              value={guestSearch}
+              onChange={(e) => setGuestSearch(e.target.value)}
+              placeholder="Search by guest name..."
+            />
+            <TextField
+              sx={{ minWidth: 150 }}
+              size="small"
+              label="Date"
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setStatusFilter('');
+                setLocationFilter('');
+                setEmployeeFilter('');
+                setGuestSearch('');
+                setDateFilter(dayjs().format('YYYY-MM-DD'));
+              }}
+            >
+              Clear Filters
+            </Button>
           </Stack>
         </Stack>
       </Paper>
@@ -281,56 +464,37 @@ export const ReservationManagement: React.FC = () => {
         <Button variant="contained" startIcon={<Add />} onClick={() => setEditing(null)}>New Reservation</Button>
       </Box>
 
-      {/* Filters & grouping controls (only shown above calendar) */}
-      {tab === 4 && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Box display="flex" flexWrap="wrap" gap={2} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Status</InputLabel>
-              <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="booked">Booked</MenuItem>
-                <MenuItem value="checked_in">Checked In</MenuItem>
-                <MenuItem value="in_service">In Service</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Location</InputLabel>
-              <Select value={locationFilter} label="Location" onChange={(e) => setLocationFilter(e.target.value)}>
-                <MenuItem value="">All</MenuItem>
-                {locations.map(l => <MenuItem key={l.id} value={String(l.id)}>{l.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Employee</InputLabel>
-              <Select value={employeeFilter} label="Employee" onChange={(e) => setEmployeeFilter(e.target.value)}>
-                <MenuItem value="">All</MenuItem>
-                {employees.map(emp => <MenuItem key={emp.id} value={String(emp.id)}>{emp.full_name ?? `${emp.first_name} ${emp.last_name}`}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField size="small" label="Guest" value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} sx={{ minWidth: 120 }} />
-            <TextField size="small" label="Service" value={serviceFilter} onChange={(e)=> setServiceFilter(e.target.value)} placeholder="Type service name" sx={{ minWidth: 120 }} />
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Group by</InputLabel>
-              <Select value={groupBy} label="Group by" onChange={(e) => setGroupBy(e.target.value as any)}>
-                <MenuItem value={'none'}>None</MenuItem>
-                <MenuItem value={'location'}>Location</MenuItem>
-                <MenuItem value={'employee'}>Employee</MenuItem>
-              </Select>
-            </FormControl>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2">Show Timers</Typography>
-              <Switch checked={showTimers} onChange={(e)=> setShowTimers(e.target.checked)} />
-            </Stack>
-          </Box>
-        </Paper>
-      )}
+      {/* Table views */}
+      {tab === 0 && renderTable(getFilteredReservations())}
+      {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'confirmed'))}
+      {tab === 2 && renderTable(getFilteredReservations().filter(r => r.status === 'in_service'))}
+      {tab === 3 && renderTable(getFilteredReservations().filter(r => r.status === 'completed'))}
 
       {/* Calendar */}
-      {tab === 4 ? (
+      {tab === 4 && (
         <Card>
-          <CardContent>
+          <CardContent sx={{ position: 'relative' }}>
+            {isDragging && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1000,
+                  borderRadius: 1,
+                }}
+              >
+                <Typography variant="h6" color="primary">
+                  Updating reservation...
+                </Typography>
+              </Box>
+            )}
             <FullCalendar
               plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin, resourceTimelinePlugin]}
               initialView={groupBy === 'none' ? 'timeGridDay' : 'resourceTimelineDay'}
@@ -339,22 +503,19 @@ export const ReservationManagement: React.FC = () => {
               resources={resources}
               selectable={true}
               editable={true}
+              eventStartEditable={true}
+              eventDurationEditable={true}
               eventClick={onEventClick}
               eventDrop={onEventDrop}
+              eventResize={onEventResize}
               eventContent={renderEventContent}
               height="auto"
             />
           </CardContent>
         </Card>
-      ) : (
-        <Card>
-          <CardContent>
-            <Typography>Table views for other tabs (Reservations / Arrivals / In Service / Completed) — use the tables we discussed earlier.</Typography>
-          </CardContent>
-        </Card>
       )}
 
-      {/* Drawer for reservation summary & quick actions */}
+      {/* Drawer for reservation summary */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 380, p: 2 }}>
           {selectedReservation ? (
@@ -389,48 +550,46 @@ export const ReservationManagement: React.FC = () => {
         </Box>
       </Drawer>
 
-      {/* Confirmation dialog for drag-drop move */}
-      <Dialog open={!!pendingMove} onClose={cancelPendingMove}>
+      {/* Confirmation dialog for drag-drop (optional, can be expanded later) */}
+      <Dialog open={!!pendingMove} onClose={() => setPendingMove(null)}>
         <DialogTitle>Confirm reschedule</DialogTitle>
         <DialogContent>
-          {pendingMove && (
-            <Box>
-              <Typography>Move <strong>{pendingMove.res.guest_name}</strong></Typography>
-              <Typography>From: {dayjs(pendingMove.oldStart).format('MMM D, h:mm A')} {pendingMove.oldResource ? ` (resource ${pendingMove.oldResource})` : ''}</Typography>
-              <Typography>To: {dayjs(pendingMove.newStart).format('MMM D, h:mm A')} {pendingMove.newResource ? ` (resource ${pendingMove.newResource})` : ''}</Typography>
-            </Box>
-          )}
+          <Typography>Move reservation?</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={cancelPendingMove}>Cancel</Button>
-          <Button onClick={confirmPendingMove} variant="contained">Save</Button>
+          <Button onClick={() => setPendingMove(null)}>Cancel</Button>
+          <Button onClick={() => setPendingMove(null)} variant="contained">Save</Button>
         </DialogActions>
       </Dialog>
 
-      {/* New/Edit Reservation Form */}
-      {(editing !== undefined) && (
-        <Card sx={{ mt: 2 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>{editing ? 'Edit Reservation' : 'New Reservation'}</Typography>
-            <ReservationBookingForm
-              key={`rv-${formVersion}-${editing ? editing.id : 'new'}`}
-              reservation={editing}
-              onCreated={async () => {
-                await loadReservations();
-                setEditing(undefined);
-                setFormVersion(v => v + 1);
-              }}
-              onSaved={async () => {
-                await loadReservations();
-                setEditing(undefined);
-                setFormVersion(v => v + 1);
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {/* New/Edit form dialog */}
+      <Dialog 
+        open={editing !== undefined} 
+        onClose={() => setEditing(undefined)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>{editing ? 'Edit Reservation' : 'New Reservation'}</DialogTitle>
+        <DialogContent>
+          <ReservationBookingForm
+            key={`rv-${formVersion}-${editing ? editing.id : 'new'}`}
+            reservation={editing}
+            onCreated={async () => {
+              await loadReservations();
+              setEditing(undefined);
+              setFormVersion(v => v + 1);
+            }}
+            onSaved={async () => {
+              await loadReservations();
+              setEditing(undefined);
+              setFormVersion(v => v + 1);
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditing(undefined)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
-
-
