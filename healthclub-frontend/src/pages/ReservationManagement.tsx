@@ -27,6 +27,10 @@ import {
   TableBody,
   TableContainer,
   IconButton,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -73,6 +77,7 @@ export const ReservationManagement: React.FC = () => {
   // drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [historicalReservations, setHistoricalReservations] = useState<Reservation[]>([]);
 
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
