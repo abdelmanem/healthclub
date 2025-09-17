@@ -2,6 +2,8 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from simple_history.models import HistoricalRecords
+from django.utils import timezone
+from datetime import timedelta
 
 
 class Location(models.Model):
@@ -119,6 +121,10 @@ class Reservation(models.Model):
         return f"Reservation #{self.pk or 'new'} for {self.guest} at {self.start_time}"
 
     def clean(self) -> None:
+                # 1. Prevent past reservations
+        if self.start_time < timezone.now():
+            raise ValidationError("Cannot create a reservation in the past.")
+
         # Skip validation until both times are provided
         if not self.start_time or not self.end_time:
             return
@@ -137,7 +143,18 @@ class Reservation(models.Model):
                 qs = qs.exclude(pk=self.pk)
             if qs.exists():
                 raise ValidationError("This time slot conflicts with an existing reservation")
+        
+def save(self, *args, **kwargs):
+    # Auto-set end_time if missing or mismatched
+    if self.start_time and self.reservation_services.exists():
+        total_minutes = sum(
+            s.service.duration_minutes * s.quantity
+            for s in self.reservation_services.all()
+        )
+        self.end_time = self.start_time + timedelta(minutes=total_minutes)
 
+    self.full_clean()
+    super().save(*args, **kwargs)
 
 def mark_guest_in_house(guest):
     """Mark guest as in house"""

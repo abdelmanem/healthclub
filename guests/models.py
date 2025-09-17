@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ObjectDoesNotExist
 from simple_history.models import HistoricalRecords
 
 
@@ -81,8 +82,13 @@ class Guest(models.Model):
         self.save(update_fields=['loyalty_points'])
     
     def get_membership_benefits(self):
-        """Get benefits based on membership tier from config"""
-        tier = self.membership_tier
+        """Get benefits based on membership tier from config.
+        Safe against missing related MembershipTier rows.
+        """
+        try:
+            tier = self.membership_tier
+        except ObjectDoesNotExist:
+            tier = None
         if not tier or not getattr(tier, 'is_active', True):
             return {'discount': 0, 'priority_booking': False, 'free_services': 0}
         return {

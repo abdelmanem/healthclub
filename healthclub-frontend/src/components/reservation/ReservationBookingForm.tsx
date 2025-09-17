@@ -258,11 +258,12 @@ export const ReservationBookingForm: React.FC = () => {
                     primary={service.name}
                     secondary={
                       <Box>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography component="span" variant="body2" color="text.secondary">
                           Duration: {service.duration} min | Price: ${service.price.toFixed(2)}
                         </Typography>
                       </Box>
                     }
+                    secondaryTypographyProps={{ component: 'div' }}
                   />
                   <ListItemSecondaryAction>
                     <IconButton edge="end" onClick={() => removeService(service.id)}>
@@ -294,7 +295,20 @@ export const ReservationBookingForm: React.FC = () => {
 
       <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
         <BookingRuleManager onChange={setRules} value={rules} />
-        <RecurringBookingManager enabled={recurring.enabled} onChange={(v) => setRecurring({ ...recurring, ...v })} value={recurring} />
+        <RecurringBookingManager
+          enabled={recurring.enabled}
+          onChange={(v) => {
+            // Guard against unnecessary updates to prevent update loops
+            setRecurring((prev) => {
+              const next = { ...prev, ...v };
+              if (prev.enabled === next.enabled && prev.frequency === next.frequency && prev.count === next.count) {
+                return prev; // no state change
+              }
+              return next;
+            });
+          }}
+          value={recurring}
+        />
         <WaitlistManager enabled={waitlist.enabled} onChange={(v) => setWaitlist({ ...waitlist, ...v })} value={waitlist} />
         <ConflictResolver conflicts={conflicts} onResolve={() => setConflicts([])} />
       </Box>

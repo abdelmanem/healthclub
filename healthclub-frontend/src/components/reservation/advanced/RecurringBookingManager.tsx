@@ -12,8 +12,9 @@ export const RecurringBookingManager: React.FC<RecurringBookingManagerProps> = (
   const [count, setCount] = React.useState<number>(value?.count || 4);
 
   React.useEffect(() => {
+    // Notify parent when local values change. Avoid including onChange in deps to prevent loops.
     onChange({ enabled, frequency: freq, count });
-  }, [enabled, freq, count, onChange]);
+  }, [enabled, freq, count]);
 
   return (
     <Card>

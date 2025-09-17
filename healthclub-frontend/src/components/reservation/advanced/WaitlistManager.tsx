@@ -11,8 +11,14 @@ export const WaitlistManager: React.FC<WaitlistManagerProps> = ({ enabled, onCha
   const [maxWaitMinutes, setMaxWaitMinutes] = React.useState<number>(value?.maxWaitMinutes || 30);
 
   React.useEffect(() => {
-    onChange({ enabled, maxWaitMinutes });
-  }, [enabled, maxWaitMinutes, onChange]);
+    // Only propagate changes when actual values differ to avoid render loops
+    const valueEnabled = value?.enabled ?? false;
+    const valueMaxWait = value?.maxWaitMinutes ?? 30;
+    if (enabled !== valueEnabled || maxWaitMinutes !== valueMaxWait) {
+      onChange({ enabled, maxWaitMinutes });
+    }
+    // Intentionally exclude onChange from deps to avoid infinite loops when parent recreates callbacks
+  }, [enabled, maxWaitMinutes, value]);
 
   return (
     <Card>

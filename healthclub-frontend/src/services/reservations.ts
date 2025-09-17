@@ -58,7 +58,32 @@ export const reservationsService = {
     return response.data;
   },
   async create(payload: CreateReservationInput): Promise<Reservation> {
-    const response = await api.post('/reservations/', payload);
+    // Normalize payload to backend shape
+    const body: any = {
+      guest: payload.guest,
+      employee: payload.employee ?? null,
+      location: payload.location ?? null,
+      start_time: payload.start_time,
+      notes: payload.notes ?? undefined,
+    };
+
+    // Map single service -> reservation_services
+    const servicesList: Array<{ service: number; quantity?: number }> = [];
+    if (payload.service) {
+      servicesList.push({ service: payload.service, quantity: 1 });
+    }
+    if (Array.isArray(payload.services) && payload.services.length > 0) {
+      for (const s of payload.services) {
+        if (s && typeof s.service === 'number') {
+          servicesList.push({ service: s.service, quantity: s.quantity ?? 1 });
+        }
+      }
+    }
+    if (servicesList.length > 0) {
+      body.reservation_services = servicesList;
+    }
+
+    const response = await api.post('/reservations/', body);
     return response.data;
   },
   async availability(params: { service?: number; employee?: number; location?: number; start: string }): Promise<{ slots: string[] }> {

@@ -88,9 +88,10 @@ class GuestSerializer(serializers.ModelSerializer):
         ]
 
     # Represent membership_tier by its unique "name" slug from config.MembershipTier
+    # If the related row is missing or inactive, treat it as null on read
     membership_tier = serializers.SlugRelatedField(
         slug_field='name',
-        queryset=MembershipTier.objects.filter(is_active=True),
+        queryset=MembershipTier.objects.all(),
         allow_null=True,
         required=False
     )

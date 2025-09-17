@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Location, Reservation, ReservationService
+from datetime import timedelta
+from config.models import SystemConfiguration
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -86,6 +88,47 @@ class ReservationSerializer(serializers.ModelSerializer):
             "no_show_recorded_at",
         ]
 
+    def _compute_end_time(self, start_time, services_data):
+        """Compute end_time from service durations or default config."""
+        total_minutes = 0
+        if services_data:
+            for srv in services_data:
+                service = srv.get('service')
+                quantity = srv.get('quantity', 1) or 1
+                if service is not None:
+                    try:
+                        total_minutes += int(service.duration_minutes) * int(quantity)
+                    except Exception:
+                        pass
+        if total_minutes <= 0:
+            default_minutes = SystemConfiguration.get_value(
+                key='default_reservation_duration_minutes',
+                default=60,
+                data_type='integer',
+            )
+            total_minutes = int(default_minutes or 60)
+        return start_time + timedelta(minutes=total_minutes)
+
+    def validate(self, attrs):
+        start_time = attrs.get('start_time')
+        end_time = attrs.get('end_time')
+        services_data = attrs.get('reservation_services', [])
+
+        if not start_time:
+            raise serializers.ValidationError({"start_time": "This field is required."})
+
+        # Auto-compute end_time if missing
+        if not end_time:
+            attrs['end_time'] = self._compute_end_time(start_time, services_data)
+        else:
+            # If provided but invalid, raise a clear error instead of DB IntegrityError
+            if end_time <= start_time:
+                raise serializers.ValidationError({
+                    "end_time": "end_time must be after start_time. Omit end_time to auto-calculate."
+                })
+
+        return attrs
+
     def get_employee(self, obj):
         """Get the primary employee assigned to this reservation"""
         assignment = obj.employee_assignments.first()
@@ -114,6 +157,9 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         services_data = validated_data.pop("reservation_services", [])
+        # Ensure end_time is set correctly (in case validate wasn't run for some reason)
+        if not validated_data.get('end_time') and validated_data.get('start_time'):
+            validated_data['end_time'] = self._compute_end_time(validated_data['start_time'], services_data)
         reservation = Reservation.objects.create(**validated_data)
         for srv in services_data:
             ReservationService.objects.create(reservation=reservation, **srv)
