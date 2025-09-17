@@ -85,6 +85,18 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
     }
   };
 
+  const addServiceById = (id: number) => {
+    const service = services.find((s: any) => s.id === id);
+    if (service && !selectedServices.find(s => s.id === service.id)) {
+      setSelectedServices(prev => [...prev, {
+        id: service.id,
+        name: service.name,
+        duration: service.duration_minutes || 60,
+        price: parseFloat(service.price) || 0
+      }]);
+    }
+  };
+
   const removeService = (serviceId: number) => {
     setSelectedServices(prev => prev.filter(s => s.id !== serviceId));
   };
@@ -165,7 +177,19 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
         }));
       }
 
-      await reservationsService.create(reservationData);
+      const created = await reservationsService.create(reservationData);
+      // Assign employee if selected
+      if (employeeId) {
+        try {
+          await api.post('/reservation-assignments/', {
+            reservation: created.id,
+            employee: Number(employeeId),
+            role_in_service: 'Primary',
+          });
+        } catch (assignErr) {
+          console.warn('Employee assignment failed:', assignErr);
+        }
+      }
       setSuccess('Reservation created');
       if (onCreated) onCreated();
       // Reset form
@@ -212,7 +236,14 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
               label="Add Service" 
               fullWidth 
               value={selectedServiceId} 
-              onChange={(e) => setSelectedServiceId(e.target.value as any)}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                setSelectedServiceId(id as any);
+                if (!Number.isNaN(id)) {
+                  addServiceById(id);
+                  setSelectedServiceId('' as any);
+                }
+              }}
             >
               {services.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s: any) => (
                 <MenuItem key={s.id} value={s.id}>

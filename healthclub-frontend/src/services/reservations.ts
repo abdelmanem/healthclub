@@ -40,6 +40,7 @@ export interface CreateReservationInput {
   guest: number;
   service?: number; // Legacy field for single service
   services?: Array<{service: number, quantity?: number}>; // New field for multiple services
+  reservation_services?: Array<{ service: number; quantity?: number }>; // Direct nested payload
   employee?: number | null;
   location?: number | null;
   start_time: string;
@@ -84,6 +85,15 @@ export const reservationsService = {
         }
       }
     }
+    // Include directly provided reservation_services if present
+    if (Array.isArray(payload.reservation_services) && payload.reservation_services.length > 0) {
+      for (const s of payload.reservation_services) {
+        if (s && typeof s.service === 'number') {
+          servicesList.push({ service: s.service, quantity: s.quantity ?? 1 });
+        }
+      }
+    }
+
     if (servicesList.length > 0) {
       body.reservation_services = servicesList;
     }
