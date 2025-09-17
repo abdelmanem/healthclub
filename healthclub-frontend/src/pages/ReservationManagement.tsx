@@ -174,7 +174,7 @@ export const ReservationManagement: React.FC = () => {
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>New Reservation</Typography>
-          <ReservationBookingForm />
+          <ReservationBookingForm onCreated={loadReservations} />
         </CardContent>
       </Card>
     </Box>

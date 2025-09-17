@@ -13,7 +13,7 @@ import { CreateGuestDialog } from '../guest/CreateGuestDialog';
 import { guestsService } from '../../services/guests';
 import { useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC = () => {
+export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
@@ -34,6 +34,7 @@ export const ReservationBookingForm: React.FC = () => {
   const [rules, setRules] = React.useState({ minAdvanceHours: 1, maxAdvanceDays: 60, enforceGapMinutes: 10, enforceRules: true });
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const [availabilityStatus, setAvailabilityStatus] = React.useState<'unknown' | 'available' | 'unavailable' | 'error'>('unknown');
 
   React.useEffect(() => {
     (async () => {
@@ -91,20 +92,23 @@ export const ReservationBookingForm: React.FC = () => {
   const checkAvailability = async () => {
     // If essential inputs are missing, don't block submission
     if (selectedServices.length === 0 || !start) {
+      setAvailabilityStatus('unknown');
       setSlots([]);
       return true;
     }
     try {
-      const res = await api.get('/reservations/availability/', { params: {
+      const res = await reservationsService.availability({
         service: selectedServices[0]?.id || undefined,
         employee: employeeId || undefined,
         location: locationId || undefined,
         start: start,
-      }});
-      setSlots(res.data?.slots ?? []);
-      return true;
+      });
+      const isAvailable = !!res.available;
+      setAvailabilityStatus(isAvailable ? 'available' : 'unavailable');
+      setSlots([]);
+      return isAvailable;
     } catch (e) {
-      // Fallback: treat as available if endpoint not implemented server-side
+      setAvailabilityStatus('error');
       setSlots([]);
       return true;
     }
@@ -112,15 +116,17 @@ export const ReservationBookingForm: React.FC = () => {
 
   const detectConflicts = async () => {
     try {
-      const res = await api.post('/reservations/conflict-check/', {
-        service: selectedServices[0]?.id || undefined,
-        employee: employeeId || undefined,
-        location: locationId || undefined,
-        start: start,
+      // Compute end_time from selected services durations
+      const totalMinutes = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
+      const end = dayjs(start).add(totalMinutes, 'minute').toISOString();
+      const res = await reservationsService.conflictCheck({
+        start_time: start,
+        end_time: end,
+        location: locationId ? Number(locationId) : null,
       });
-      const arr = res.data?.conflicts ?? [];
-      setConflicts(arr.map((c: any, idx: number) => ({ id: idx, description: c.description || 'Conflict detected' })));
-      return arr.length === 0;
+      const hasConflict = !!res.conflict;
+      setConflicts(hasConflict ? [{ id: 1, description: 'Conflict detected for selected time range' }] : []);
+      return !hasConflict;
     } catch (e) {
       setConflicts([]);
       return true;
@@ -147,6 +153,10 @@ export const ReservationBookingForm: React.FC = () => {
         start_time: start,
       };
 
+      // Compute end_time from selected services
+      const totalMinutesForCreate = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
+      reservationData.end_time = dayjs(start).add(totalMinutesForCreate, 'minute').toISOString();
+
       // Add services in the format expected by the backend
       if (selectedServices.length > 0) {
         reservationData.reservation_services = selectedServices.map(service => ({
@@ -157,12 +167,20 @@ export const ReservationBookingForm: React.FC = () => {
 
       await reservationsService.create(reservationData);
       setSuccess('Reservation created');
+      if (onCreated) onCreated();
       // Reset form
       setSelectedServices([]);
       setTotalPrice(0);
     } catch (e: any) {
       console.error('Reservation creation error:', e);
-      setError(`Failed to create reservation: ${e.response?.data?.detail || e.message || 'Unknown error'}`);
+      const serverDetail = e?.response?.data;
+      let msg = e?.response?.data?.detail || e?.message || 'Unknown error';
+      if (serverDetail && typeof serverDetail === 'object' && !serverDetail.detail) {
+        try {
+          msg = JSON.stringify(serverDetail);
+        } catch {}
+      }
+      setError(`Failed to create reservation: ${msg}`);
     }
   };
 
@@ -236,12 +254,21 @@ export const ReservationBookingForm: React.FC = () => {
           <TextField label="Total Price" fullWidth value={`$${totalPrice.toFixed(2)}`} InputProps={{ readOnly: true }} />
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <Typography variant="body2" color="text.secondary">Available Slots:</Typography>
-          <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
-            {slots.length === 0 ? <Typography variant="caption" color="text.secondary">No slots loaded</Typography> : slots.map((s) => (
-              <Button key={s} size="small" variant={dayjs(start).toISOString() === s ? 'contained' : 'outlined'} onClick={() => setStart(s)}>{dayjs(s).format('MMM D, HH:mm')}</Button>
-            ))}
-            <Button size="small" onClick={checkAvailability}>Refresh</Button>
+          <Typography variant="body2" color="text.secondary">Availability:</Typography>
+          <Box display="flex" alignItems="center" gap={1} mt={1}>
+            {availabilityStatus === 'unknown' && (
+              <Typography variant="caption" color="text.secondary">Unknown (click Check)</Typography>
+            )}
+            {availabilityStatus === 'available' && (
+              <Typography variant="caption" color="success.main">Available</Typography>
+            )}
+            {availabilityStatus === 'unavailable' && (
+              <Typography variant="caption" color="error.main">Unavailable</Typography>
+            )}
+            {availabilityStatus === 'error' && (
+              <Typography variant="caption" color="warning.main">Could not check (server error)</Typography>
+            )}
+            <Button size="small" onClick={checkAvailability}>Check</Button>
           </Box>
         </Box>
       </Box>

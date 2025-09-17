@@ -43,6 +43,7 @@ export interface CreateReservationInput {
   employee?: number | null;
   location?: number | null;
   start_time: string;
+  end_time?: string;
   notes?: string;
 }
 
@@ -61,11 +62,15 @@ export const reservationsService = {
     // Normalize payload to backend shape
     const body: any = {
       guest: payload.guest,
-      employee: payload.employee ?? null,
+      // employee is not writable on backend serializer; omit it
       location: payload.location ?? null,
       start_time: payload.start_time,
       notes: payload.notes ?? undefined,
     };
+
+    if (payload.end_time) {
+      body.end_time = payload.end_time;
+    }
 
     // Map single service -> reservation_services
     const servicesList: Array<{ service: number; quantity?: number }> = [];
@@ -86,11 +91,11 @@ export const reservationsService = {
     const response = await api.post('/reservations/', body);
     return response.data;
   },
-  async availability(params: { service?: number; employee?: number; location?: number; start: string }): Promise<{ slots: string[] }> {
+  async availability(params: { service?: number; employee?: number; location?: number; start: string }): Promise<{ available: boolean }> {
     const response = await api.get('/reservations/availability/', { params });
     return response.data;
   },
-  async conflictCheck(payload: { service?: number; employee?: number; location?: number; start: string }): Promise<{ conflicts: any[] }> {
+  async conflictCheck(payload: { start_time: string; end_time: string; location: number | null }): Promise<{ conflict: boolean }> {
     const response = await api.post('/reservations/conflict-check/', payload);
     return response.data;
   },
