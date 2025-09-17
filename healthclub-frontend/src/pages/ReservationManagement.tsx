@@ -116,6 +116,22 @@ export const ReservationManagement: React.FC = () => {
     }
   };
 
+  const loadHistoricalReservations = async (guestId: number) => {
+    try {
+      const data = await reservationsService.list({ guest: guestId });
+      const allReservations = Array.isArray(data) ? data : ((data as any).results ?? data);
+      // Filter out the current reservation and only show completed/cancelled ones
+      const historical = allReservations.filter((r: Reservation) => 
+        r.id !== selectedReservation?.id && 
+        ['completed', 'cancelled'].includes(r.status ?? '')
+      );
+      setHistoricalReservations(historical);
+    } catch (e) {
+      console.error('Failed to load historical reservations', e);
+      setHistoricalReservations([]);
+    }
+  };
+
   useEffect(() => { loadReservations(); }, []);
 
   // KPI
@@ -219,11 +235,15 @@ export const ReservationManagement: React.FC = () => {
     );
   };
 
-  const onEventClick = (clickInfo:any) => {
+  const onEventClick = async (clickInfo:any) => {
     const r = clickInfo.event.extendedProps?.reservation;
     if (r) {
       setSelectedReservation(r);
       setDrawerOpen(true);
+      // Load historical reservations for this guest
+      if (r.guest) {
+        await loadHistoricalReservations(r.guest);
+      }
     }
   };
 
@@ -335,7 +355,13 @@ export const ReservationManagement: React.FC = () => {
               <TableCell>${Number(r.total_price || 0).toFixed(2)}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={1}>
-                  <IconButton size="small" onClick={() => { setSelectedReservation(r); setDrawerOpen(true); }}>
+                  <IconButton size="small" onClick={async () => { 
+                    setSelectedReservation(r); 
+                    setDrawerOpen(true);
+                    if (r.guest) {
+                      await loadHistoricalReservations(r.guest);
+                    }
+                  }}>
                     <Edit fontSize="small" />
                   </IconButton>
                   {r.status === 'confirmed' && (
@@ -546,6 +572,59 @@ export const ReservationManagement: React.FC = () => {
                 <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />} disabled={!(selectedReservation.status === 'completed')}>Check-out</Button>
                 <Button variant="text" onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}>Edit</Button>
               </Box>
+
+              {/* Historical Reservations */}
+              {historicalReservations.length > 0 && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" gutterBottom>
+                    Historical Reservations ({historicalReservations.length})
+                  </Typography>
+                  <List dense>
+                    {historicalReservations.slice(0, 5).map((reservation) => (
+                      <ListItem key={reservation.id} sx={{ px: 0 }}>
+                        <ListItemText
+                          primary={
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="body2">
+                                {dayjs(reservation.start_time).format('MMM D, YYYY')}
+                              </Typography>
+                              <Chip 
+                                label={reservation.status} 
+                                size="small"
+                                sx={{ 
+                                  bgcolor: statusColor(reservation.status), 
+                                  color: '#fff',
+                                  fontSize: '0.7rem',
+                                  height: 20
+                                }} 
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {dayjs(reservation.start_time).format('h:mm A')} - {reservation.end_time ? dayjs(reservation.end_time).format('h:mm A') : 'TBD'}
+                              </Typography>
+                              <br />
+                              <Typography variant="caption" color="text.secondary">
+                                ${Number(reservation.total_price || 0).toFixed(2)} • {reservation.location_name}
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                    {historicalReservations.length > 5 && (
+                      <ListItem sx={{ px: 0 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          ... and {historicalReservations.length - 5} more
+                        </Typography>
+                      </ListItem>
+                    )}
+                  </List>
+                </>
+              )}
             </>
           ) : (
             <Typography>No selection</Typography>
