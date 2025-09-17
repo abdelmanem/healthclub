@@ -9,6 +9,7 @@ export const ReservationManagement: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState<Reservation | null>(null);
 
   const startOfDay = useMemo(() => dayjs().startOf('day').toISOString(), []);
   const endOfDay = useMemo(() => dayjs().endOf('day').toISOString(), []);
@@ -117,6 +118,13 @@ export const ReservationManagement: React.FC = () => {
                                 {expandedRows.has(r.id) ? <ExpandLess /> : <ExpandMore />}
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Edit">
+                              <span>
+                                <IconButton size="small" onClick={() => setEditing(r)}>
+                                  <span className="material-icons">edit</span>
+                                </IconButton>
+                              </span>
+                            </Tooltip>
                             <Tooltip title="Check-in"><span><IconButton size="small" onClick={() => handleAction(r.id, 'check_in')} disabled={r.status !== 'confirmed' && r.status !== 'pending'}><Check /></IconButton></span></Tooltip>
                             <Tooltip title="In service"><span><IconButton size="small" onClick={() => handleAction(r.id, 'in_service')} disabled={r.status !== 'checked_in'}><DirectionsRun /></IconButton></span></Tooltip>
                             <Tooltip title="Complete"><span><IconButton size="small" onClick={() => handleAction(r.id, 'complete')} disabled={r.status !== 'in_service'}><DoneAll /></IconButton></span></Tooltip>
@@ -173,8 +181,8 @@ export const ReservationManagement: React.FC = () => {
 
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>New Reservation</Typography>
-          <ReservationBookingForm onCreated={loadReservations} />
+          <Typography variant="h6" gutterBottom>{editing ? 'Edit Reservation' : 'New Reservation'}</Typography>
+          <ReservationBookingForm reservation={editing} onCreated={async () => { await loadReservations(); setEditing(null); }} onSaved={async () => { await loadReservations(); setEditing(null); }} />
         </CardContent>
       </Card>
     </Box>

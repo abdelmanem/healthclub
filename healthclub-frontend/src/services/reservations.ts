@@ -101,6 +101,31 @@ export const reservationsService = {
     const response = await api.post('/reservations/', body);
     return response.data;
   },
+  async update(id: number, payload: Partial<CreateReservationInput>): Promise<Reservation> {
+    const body: any = {};
+    if (payload.guest !== undefined) body.guest = payload.guest;
+    if (payload.location !== undefined) body.location = payload.location;
+    if (payload.start_time !== undefined) body.start_time = payload.start_time;
+    if (payload.end_time !== undefined) body.end_time = payload.end_time;
+    if (payload.notes !== undefined) body.notes = payload.notes;
+
+    const servicesList: Array<{ service: number; quantity?: number }> = [];
+    if (Array.isArray(payload.reservation_services)) {
+      for (const s of payload.reservation_services) {
+        if (s && typeof s.service === 'number') servicesList.push({ service: s.service, quantity: s.quantity ?? 1 });
+      }
+    } else if (Array.isArray(payload.services)) {
+      for (const s of payload.services) {
+        if (s && typeof s.service === 'number') servicesList.push({ service: s.service, quantity: s.quantity ?? 1 });
+      }
+    } else if (payload.service) {
+      servicesList.push({ service: payload.service, quantity: 1 });
+    }
+    if (servicesList.length > 0) body.reservation_services = servicesList;
+
+    const response = await api.patch(`/reservations/${id}/`, body);
+    return response.data;
+  },
   async availability(params: { service?: number; employee?: number; location?: number; start: string }): Promise<{ available: boolean }> {
     const response = await api.get('/reservations/availability/', { params });
     return response.data;

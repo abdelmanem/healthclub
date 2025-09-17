@@ -3,7 +3,7 @@ import { Box, TextField, MenuItem, Button, Typography, Alert, Chip, Card, CardCo
 import { Add, Delete } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
-import { reservationsService } from '../../services/reservations';
+import { reservationsService, Reservation } from '../../services/reservations';
 import { RecurringBookingManager } from './advanced/RecurringBookingManager';
 import { WaitlistManager } from './advanced/WaitlistManager';
 import { BookingRuleManager } from './advanced/BookingRuleManager';
@@ -13,7 +13,7 @@ import { CreateGuestDialog } from '../guest/CreateGuestDialog';
 import { guestsService } from '../../services/guests';
 import { useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ onCreated }) => {
+export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void }> = ({ reservation, onCreated, onSaved }) => {
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
@@ -48,6 +48,29 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
       setLocations((loc.data.results ?? loc.data ?? []));
     })();
   }, []);
+
+  // Prefill fields in edit mode
+  React.useEffect(() => {
+    if (reservation) {
+      setGuestId(reservation.guest);
+      setGuestName(reservation.guest_name ?? '');
+      setLocationId((reservation.location ?? '') as any);
+      if (reservation.employee !== undefined && reservation.employee !== null) {
+        setEmployeeId(reservation.employee as any);
+      }
+      setStart(reservation.start_time);
+      // Prefill services
+      if (Array.isArray(reservation.reservation_services) && reservation.reservation_services.length > 0) {
+        const svcs = reservation.reservation_services.map((rs: any) => ({
+          id: rs.service,
+          name: rs.service_details?.name || `Service #${rs.service}`,
+          duration: rs.service_details?.duration_minutes || rs.service_duration_minutes || 60,
+          price: parseFloat(rs.service_details?.price ?? rs.unit_price ?? 0),
+        }));
+        setSelectedServices(svcs);
+      }
+    }
+  }, [reservation]);
 
   React.useEffect(() => {
     const gid = searchParams.get('guest');
@@ -157,7 +180,7 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
     if (!noConflicts) { setError('Conflicts detected. Adjust time or override.'); return; }
 
     try {
-      // Create reservation with multiple services
+      // Create or update reservation with multiple services
       const reservationData: any = {
         guest: Number(guestId),
         //employee: employeeId ? Number(employeeId) : null,
@@ -177,21 +200,27 @@ export const ReservationBookingForm: React.FC<{ onCreated?: () => void }> = ({ o
         }));
       }
 
-      const created = await reservationsService.create(reservationData);
-      // Assign employee if selected
-      if (employeeId) {
-        try {
-          await api.post('/reservation-assignments/', {
-            reservation: created.id,
-            employee: Number(employeeId),
-            role_in_service: 'Primary',
-          });
-        } catch (assignErr) {
-          console.warn('Employee assignment failed:', assignErr);
+      if (reservation && reservation.id) {
+        await reservationsService.update(reservation.id, reservationData);
+        setSuccess('Reservation updated');
+        if (onSaved) onSaved();
+      } else {
+        const created = await reservationsService.create(reservationData);
+        // Assign employee if selected
+        if (employeeId) {
+          try {
+            await api.post('/reservation-assignments/', {
+              reservation: created.id,
+              employee: Number(employeeId),
+              role_in_service: 'Primary',
+            });
+          } catch (assignErr) {
+            console.warn('Employee assignment failed:', assignErr);
+          }
         }
+        setSuccess('Reservation created');
+        if (onCreated) onCreated();
       }
-      setSuccess('Reservation created');
-      if (onCreated) onCreated();
       // Reset form
       setSelectedServices([]);
       setTotalPrice(0);
