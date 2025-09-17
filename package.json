@@ -1,5 +1,13 @@
 {
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/react": "^6.1.19",
+    "@fullcalendar/resource-timeline": "^6.1.19",
+    "@fullcalendar/timegrid": "^6.1.19",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/material": "^7.3.2",
+    "dayjs": "^1.11.18",
     "react-router-dom": "^6.30.1"
   }
 }
