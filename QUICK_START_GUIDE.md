@@ -18,7 +18,10 @@ npm install @types/react-router-dom
 npm install dayjs
 npm install react-hook-form
 npm install @hookform/resolvers yup
-npm install @fullcalendar/react @fullcalendar/timegrid @fullcalendar/daygrid @fullcalendar/interaction
+npm install @fullcalendar/react
+npm install @fullcalendar/timegrid
+npm install @fullcalendar/daygrid
+npm install @fullcalendar/interaction
 ```
 
 ### **2. Project Structure Setup**
