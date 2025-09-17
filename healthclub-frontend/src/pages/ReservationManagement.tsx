@@ -10,6 +10,7 @@ export const ReservationManagement: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [editing, setEditing] = useState<Reservation | null>(null);
+  const [formVersion, setFormVersion] = useState<number>(0);
 
   const startOfDay = useMemo(() => dayjs().startOf('day').toISOString(), []);
   const endOfDay = useMemo(() => dayjs().endOf('day').toISOString(), []);
@@ -182,7 +183,20 @@ export const ReservationManagement: React.FC = () => {
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>{editing ? 'Edit Reservation' : 'New Reservation'}</Typography>
-          <ReservationBookingForm reservation={editing} onCreated={async () => { await loadReservations(); setEditing(null); }} onSaved={async () => { await loadReservations(); setEditing(null); }} />
+          <ReservationBookingForm
+            key={`rv-${formVersion}-${editing ? editing.id : 'new'}`}
+            reservation={editing}
+            onCreated={async () => {
+              await loadReservations();
+              setEditing(null);
+              setFormVersion(v => v + 1);
+            }}
+            onSaved={async () => {
+              await loadReservations();
+              setEditing(null);
+              setFormVersion(v => v + 1);
+            }}
+          />
         </CardContent>
       </Card>
     </Box>
