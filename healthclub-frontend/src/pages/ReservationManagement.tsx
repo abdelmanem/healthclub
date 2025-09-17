@@ -179,8 +179,23 @@ export const ReservationManagement: React.FC = () => {
   const renderEventContent = (arg:any) => {
     const ev:any = arg.event;
     const props = ev.extendedProps || {};
+    const reservation = props.reservation;
     const status = props.status;
     const start = ev.start ? ev.start.getTime() : null;
+    
+    // Calculate duration from services
+    let durationText = '';
+    if (reservation) {
+      if (reservation.total_duration_minutes) {
+        durationText = `${reservation.total_duration_minutes}min`;
+      } else if (reservation.reservation_services && reservation.reservation_services.length > 0) {
+        const totalDuration = reservation.reservation_services.reduce((total: number, service: any) => {
+          return total + (service.service_duration_minutes || service.service_details?.duration_minutes || 0);
+        }, 0);
+        durationText = `${totalDuration}min`;
+      }
+    }
+    
     let timerNode = null;
     if (showTimers && status === 'in_service' && start) {
       const diffSec = Math.max(0, Math.floor((now - start) / 1000));
@@ -189,9 +204,11 @@ export const ReservationManagement: React.FC = () => {
       const ss = String(diffSec % 60).padStart(2, '0');
       timerNode = (<div style={{ fontSize: 11, marginTop: 4 }}>{`⏱ ${hh}:${mm}:${ss}`}</div>);
     }
+    
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div style={{ fontSize: 12, fontWeight: 600 }}>{ev.title}</div>
+        {durationText && <div style={{ fontSize: 10, opacity: 0.8 }}>{durationText}</div>}
         {timerNode}
       </div>
     );
@@ -214,13 +231,26 @@ export const ReservationManagement: React.FC = () => {
     setIsDragging(true);
     
     try {
-      // Calculate new end time based on original duration
-      const originalStart = dayjs(reservation.start_time);
-      const originalEnd = dayjs(reservation.end_time);
-      const duration = originalEnd.diff(originalStart, 'minutes');
+      // Calculate duration based on service duration, not original end time
+      let totalDurationMinutes = 0;
+      
+      if (reservation.total_duration_minutes) {
+        // Use the total duration from the reservation
+        totalDurationMinutes = reservation.total_duration_minutes;
+      } else if (reservation.reservation_services && reservation.reservation_services.length > 0) {
+        // Calculate from individual services
+        totalDurationMinutes = reservation.reservation_services.reduce((total: number, service: any) => {
+          return total + (service.service_duration_minutes || service.service_details?.duration_minutes || 0);
+        }, 0);
+      } else {
+        // Fallback to original duration if no service info available
+        const originalStart = dayjs(reservation.start_time);
+        const originalEnd = dayjs(reservation.end_time);
+        totalDurationMinutes = originalEnd.diff(originalStart, 'minutes');
+      }
       
       const newStart = dayjs(event.start);
-      const newEnd = newStart.add(duration, 'minutes');
+      const newEnd = newStart.add(totalDurationMinutes, 'minutes');
 
       // Update the reservation
       await reservationsService.update(reservation.id, {
@@ -232,7 +262,7 @@ export const ReservationManagement: React.FC = () => {
       await loadReservations();
       
       // Show success feedback
-      console.log(`Reservation for ${reservation.guest_name} moved to ${newStart.format('MMM D, h:mm A')}`);
+      console.log(`Reservation for ${reservation.guest_name} moved to ${newStart.format('MMM D, h:mm A')} (${totalDurationMinutes} min duration)`);
     } catch (error) {
       console.error('Failed to update reservation time:', error);
       
@@ -249,42 +279,11 @@ export const ReservationManagement: React.FC = () => {
     }
   };
 
-  const onEventResize = async (resizeInfo: any) => {
-    const event = resizeInfo.event;
-    const reservation = event.extendedProps?.reservation;
-    
-    if (!reservation) return;
-
-    setIsDragging(true);
-    
-    try {
-      const newStart = dayjs(event.start);
-      const newEnd = dayjs(event.end);
-
-      // Update the reservation
-      await reservationsService.update(reservation.id, {
-        start_time: newStart.toISOString(),
-        end_time: newEnd.toISOString(),
-      });
-
-      // Reload reservations to reflect changes
-      await loadReservations();
-      
-      console.log(`Reservation for ${reservation.guest_name} duration updated to ${newEnd.diff(newStart, 'minutes')} minutes`);
-    } catch (error) {
-      console.error('Failed to update reservation duration:', error);
-      
-      // Revert the event size on error
-      event.setStart(reservation.start_time);
-      if (reservation.end_time) {
-        event.setEnd(reservation.end_time);
-      }
-      
-      alert('Failed to update reservation duration. Please try again.');
-    } finally {
-      setIsDragging(false);
-    }
-  };
+  // Note: onEventResize is disabled since duration should be fixed based on service time
+  // const onEventResize = async (resizeInfo: any) => {
+  //   // Duration changes are not allowed - duration is fixed by service requirements
+  //   console.log('Duration changes are not allowed - duration is fixed by service requirements');
+  // };
 
   const performAction = async (action:'check_in'|'in_service'|'complete'|'check_out', reservation?: Reservation) => {
     const targetReservation = reservation || selectedReservation;
@@ -504,10 +503,9 @@ export const ReservationManagement: React.FC = () => {
               selectable={true}
               editable={true}
               eventStartEditable={true}
-              eventDurationEditable={true}
+              eventDurationEditable={false}
               eventClick={onEventClick}
               eventDrop={onEventDrop}
-              eventResize={onEventResize}
               eventContent={renderEventContent}
               height="auto"
             />
