@@ -175,9 +175,16 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       setError('Guest, at least one service, and start time are required.');
       return;
     }
-    const avail = await checkAvailability();
-    const noConflicts = await detectConflicts();
-    if (!noConflicts) { setError('Conflicts detected. Adjust time or override.'); return; }
+    const isEditing = !!(reservation && reservation.id);
+    const timeUnchanged = isEditing ? reservation!.start_time === start : false;
+
+    let proceed = true;
+    if (!(isEditing && timeUnchanged)) {
+      const avail = await checkAvailability();
+      const noConflicts = await detectConflicts();
+      proceed = avail && noConflicts;
+    }
+    if (!proceed) { setError('Conflicts detected or unavailable. Adjust time or override.'); return; }
 
     try {
       // Create or update reservation with multiple services
