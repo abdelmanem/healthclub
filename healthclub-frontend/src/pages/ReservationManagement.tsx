@@ -3,7 +3,7 @@ import { Box, Typography, Card, CardContent, Chip, IconButton, Table, TableHead,
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation, ReservationService } from '../services/reservations';
 import dayjs from 'dayjs';
-import { Check, DirectionsRun, DoneAll, Logout, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Check, DirectionsRun, DoneAll, Logout, ExpandMore, ExpandLess, Edit } from '@mui/icons-material';
 
 export const ReservationManagement: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -54,6 +54,7 @@ export const ReservationManagement: React.FC = () => {
 
   const statusColor = (status?: string) => {
     switch (status) {
+      case 'booked':
       case 'confirmed':
         return 'primary';
       case 'checked_in':
@@ -120,16 +121,50 @@ export const ReservationManagement: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Edit">
-                              <span>
+                              <span style={{ display: 'inline-flex' }}>
                                 <IconButton size="small" onClick={() => setEditing(r)}>
-                                  <span className="material-icons">edit</span>
+                                  <Edit />
                                 </IconButton>
                               </span>
                             </Tooltip>
-                            <Tooltip title="Check-in"><span><IconButton size="small" onClick={() => handleAction(r.id, 'check_in')} disabled={r.status !== 'confirmed' && r.status !== 'pending'}><Check /></IconButton></span></Tooltip>
-                            <Tooltip title="In service"><span><IconButton size="small" onClick={() => handleAction(r.id, 'in_service')} disabled={r.status !== 'checked_in'}><DirectionsRun /></IconButton></span></Tooltip>
-                            <Tooltip title="Complete"><span><IconButton size="small" onClick={() => handleAction(r.id, 'complete')} disabled={r.status !== 'in_service'}><DoneAll /></IconButton></span></Tooltip>
-                            <Tooltip title="Check-out"><span><IconButton size="small" onClick={() => handleAction(r.id, 'check_out')} disabled={r.status !== 'completed'}><Logout /></IconButton></span></Tooltip>
+                            {(() => {
+                              const canCheckIn = !!(r.status === 'confirmed' || r.status === 'pending' || r.status === 'checked_in' || r.status === undefined);
+                              const canInService = r.status === 'checked_in';
+                              const canComplete = r.status === 'in_service';
+                              const canCheckOut = r.status === 'completed';
+                              return (
+                                <>
+                                  <Tooltip title="Check-in">
+                                    <span style={{ display: 'inline-flex' }}>
+                                      <IconButton size="small" onClick={() => handleAction(r.id, 'check_in')}>
+                                        <Check />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                  <Tooltip title="In service">
+                                    <span style={{ display: 'inline-flex' }}>
+                                      <IconButton size="small" onClick={() => handleAction(r.id, 'in_service')}>
+                                        <DirectionsRun />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                  <Tooltip title="Complete">
+                                    <span style={{ display: 'inline-flex' }}>
+                                      <IconButton size="small" onClick={() => handleAction(r.id, 'complete')}>
+                                        <DoneAll />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                  <Tooltip title="Check-out">
+                                    <span style={{ display: 'inline-flex' }}>
+                                      <IconButton size="small" onClick={() => handleAction(r.id, 'check_out')}>
+                                        <Logout />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                </>
+                              );
+                            })()}
                           </TableCell>
                         </TableRow>
                         <TableRow>
