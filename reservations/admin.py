@@ -6,7 +6,7 @@ from django.utils.safestring import mark_safe
 from django.http import JsonResponse
 from django.urls import path
 
-from .models import Location, Reservation, ReservationService
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus
 from services.models import Service
 from pos import create_invoice_for_reservation
 
@@ -82,7 +82,21 @@ class ReservationServiceInline(admin.TabularInline):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ("name", "description", "capacity", "is_active")
+    list_display = ("name", "description", "capacity", "type", "status", "is_active")
+    search_fields = ("name", "description")
+    list_filter = ("is_active", "type", "status")
+
+
+@admin.register(LocationType)
+class LocationTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "description", "is_active")
+    search_fields = ("name", "description")
+    list_filter = ("is_active",)
+
+
+@admin.register(LocationStatus)
+class LocationStatusAdmin(admin.ModelAdmin):
+    list_display = ("name", "description", "is_active")
     search_fields = ("name", "description")
     list_filter = ("is_active",)
 

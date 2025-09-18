@@ -6,11 +6,51 @@ from django.utils import timezone
 from datetime import timedelta
 
 
+class LocationType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class LocationStatus(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Location(models.Model):
     name = models.CharField(max_length=150, unique=True)
     description = models.TextField(blank=True)
     capacity = models.PositiveIntegerField(default=1, help_text="Maximum number of people")
     is_active = models.BooleanField(default=True)
+    type = models.ForeignKey(
+        'reservations.LocationType',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locations'
+    )
+    status = models.ForeignKey(
+        'reservations.LocationStatus',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locations'
+    )
     history = HistoricalRecords()
 
     class Meta:

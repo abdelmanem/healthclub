@@ -1,13 +1,29 @@
 from rest_framework import serializers
-from .models import Location, Reservation, ReservationService
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus
 from datetime import timedelta
 from config.models import SystemConfiguration
 
 
+class LocationTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocationType
+        fields = ["id", "name", "description", "is_active"]
+
+
+class LocationStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocationStatus
+        fields = ["id", "name", "description", "is_active"]
+
+
 class LocationSerializer(serializers.ModelSerializer):
+    type = LocationTypeSerializer(read_only=True)
+    status = LocationStatusSerializer(read_only=True)
+    type_id = serializers.PrimaryKeyRelatedField(queryset=LocationType.objects.all(), source='type', write_only=True, required=False, allow_null=True)
+    status_id = serializers.PrimaryKeyRelatedField(queryset=LocationStatus.objects.all(), source='status', write_only=True, required=False, allow_null=True)
     class Meta:
         model = Location
-        fields = ["id", "name", "description", "capacity", "is_active"]
+        fields = ["id", "name", "description", "capacity", "is_active", "type", "status", "type_id", "status_id"]
 
 
 class ServiceDetailSerializer(serializers.Serializer):
