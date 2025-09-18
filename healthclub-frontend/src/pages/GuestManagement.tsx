@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
-  Button
+  Button,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { GuestSearch } from '../components/guest/GuestSearch';
@@ -18,7 +20,7 @@ import { AddressList } from '../components/guest/AddressList';
 import { EmergencyContactList } from '../components/guest/EmergencyContactList';
 import { CreateAddressDialog } from '../components/guest/CreateAddressDialog';
 import { CreateEmergencyContactDialog } from '../components/guest/CreateEmergencyContactDialog';
-import { guestsService, Guest as GuestType } from '../services/guests';
+import { guestsService, Guest as GuestType, HistoricalReservation } from '../services/guests';
 import { guestPreferencesService } from '../services/guestPreferences';
 import { guestCommunicationsService } from '../services/guestCommunications';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +31,8 @@ type Guest = GuestType;
 
 export const GuestManagement: React.FC = () => {
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [reservationHistory, setReservationHistory] = useState<HistoricalReservation[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
@@ -36,11 +40,29 @@ export const GuestManagement: React.FC = () => {
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<any | null>(null);
   const [isQuickResOpen, setIsQuickResOpen] = useState(false);
+  const [leftTab, setLeftTab] = useState(0);
   const navigate = useNavigate();
 
   const handleGuestSelect = (guest: Guest) => {
     setSelectedGuest(guest);
   };
+
+  useEffect(() => {
+    const run = async () => {
+      if (!selectedGuest) { setReservationHistory([]); return; }
+      setLoadingHistory(true);
+      try {
+        const data = await guestsService.reservationHistory(selectedGuest.id);
+        setReservationHistory(data);
+      } catch (e) {
+        console.error(e);
+        setReservationHistory([]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    run();
+  }, [selectedGuest]);
 
   const addresses = useMemo(() => (selectedGuest as any)?.addresses ?? [], [selectedGuest]);
   const contacts = useMemo(() => (selectedGuest as any)?.emergency_contacts ?? [], [selectedGuest]);
@@ -150,6 +172,46 @@ export const GuestManagement: React.FC = () => {
               <GuestSearch onGuestSelect={handleGuestSelect} />
             </CardContent>
           </Card>
+          <Box mt={2}>
+            <Card>
+              <CardContent>
+                <Tabs value={leftTab} onChange={(_, v) => setLeftTab(v)} aria-label="guest-left-tabs" variant="scrollable" scrollButtons allowScrollButtonsMobile>
+                  <Tab label="Reservation History" />
+                </Tabs>
+                {leftTab === 0 && (
+                  <Box mt={2}>
+                    {!selectedGuest ? (
+                      <Typography variant="body2" color="text.secondary">Select a guest to view reservation history.</Typography>
+                    ) : (
+                      <>
+                        {loadingHistory ? (
+                          <Typography variant="body2" color="text.secondary">Loading...</Typography>
+                        ) : reservationHistory.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">No historical reservations found.</Typography>
+                        ) : (
+                          <Box display="grid" gap={1}>
+                            {reservationHistory.map((h) => (
+                              <Box key={`${h.history_id}`} sx={{ border: '1px solid #eee', borderRadius: 1, p: 1 }}>
+                                <Typography variant="subtitle2">
+                                  {h.history_date} — {h.history_type === '+' ? 'Created' : h.history_type === '~' ? 'Changed' : 'Deleted'}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {h.start_time ?? '-'} → {h.end_time ?? '-'} | Status: {h.status ?? '-'} | Location: {h.location_name ?? '-'}
+                                </Typography>
+                                {h.notes ? (
+                                  <Typography variant="body2" sx={{ mt: 0.5 }}>{h.notes}</Typography>
+                                ) : null}
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
         </Box>
         <Box>
           <Card>

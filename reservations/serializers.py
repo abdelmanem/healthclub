@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Reservation, ReservationService, LocationType, LocationStatus
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HistoricalReservation
 from datetime import timedelta
 from config.models import SystemConfiguration
 
@@ -192,3 +192,37 @@ class ReservationSerializer(serializers.ModelSerializer):
                 ReservationService.objects.create(reservation=instance, **srv)
         return instance
 
+
+class HistoricalReservationSerializer(serializers.ModelSerializer):
+    guest_name = serializers.CharField(source='guest.full_name', read_only=True)
+    location_name = serializers.CharField(source='location.name', read_only=True)
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HistoricalReservation
+        fields = [
+            "id",
+            "guest",
+            "guest_name",
+            "location",
+            "location_name",
+            "employee",
+            "employee_name",
+            "start_time",
+            "end_time",
+            "status",
+            "notes",
+            "history_id",
+            "history_date",
+            "history_type",
+        ]
+        read_only_fields = fields
+
+    def get_employee_name(self, obj):
+        try:
+            employee = obj.employee
+            if not employee:
+                return None
+            return f"{employee.user.first_name} {employee.user.last_name}".strip()
+        except Exception:
+            return None
