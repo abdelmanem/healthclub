@@ -14,6 +14,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Home } from './pages/Home';
 import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
+import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
 
 // Lazy load ConfigurationPage to avoid circular dependency
@@ -107,7 +108,7 @@ function App() {
               <Route path="/services" element={
                 <ProtectedRoute requiredPermission="view" requiredModel="services">
                   <Layout>
-                    <div>Service Management - Coming Soon</div>
+                    <ServicesPage />
                   </Layout>
                 </ProtectedRoute>
               } />
