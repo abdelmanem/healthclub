@@ -104,10 +104,31 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Enforce room clean and not occupied before check-in
         if getattr(reservation, 'location_id', None):
             loc = reservation.location
+            # If room is dirty, require explicit confirmation from frontend
             if not getattr(loc, 'is_clean', True):
-                return response.Response({"error": "Room is not clean"}, status=status.HTTP_400_BAD_REQUEST)
+                allow_dirty = False
+                # support both JSON body and query param for convenience
+                allow_dirty = allow_dirty or str(request.data.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
+                allow_dirty = allow_dirty or str(request.query_params.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
+                if not allow_dirty:
+                    return response.Response(
+                        {
+                            "error": "Room is dirty",
+                            "reason_code": "room_dirty",
+                            "requires_confirmation": True,
+                            "message": "Room is marked dirty. Confirm to proceed with check-in.",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
             if getattr(loc, 'is_occupied', False):
-                return response.Response({"error": "Room is currently occupied"}, status=status.HTTP_400_BAD_REQUEST)
+                return response.Response(
+                    {
+                        "error": "Room is occupied",
+                        "reason_code": "room_occupied",
+                        "message": "Selected room is currently occupied. Choose another room.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         reservation.status = Reservation.STATUS_CHECKED_IN
         reservation.save(update_fields=["status"])
         return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
