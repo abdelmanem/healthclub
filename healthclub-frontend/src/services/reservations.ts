@@ -150,6 +150,10 @@ export const reservationsService = {
     const response = await api.post(`/reservations/${id}/check-out/`, {});
     return response.data;
   },
+  async createInvoice(id: number): Promise<{ invoice_id: number; invoice_number: string }> {
+    const response = await api.post(`/reservations/${id}/create-invoice/`, {});
+    return response.data;
+  },
 };
 
 

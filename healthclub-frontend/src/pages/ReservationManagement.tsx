@@ -317,7 +317,11 @@ export const ReservationManagement: React.FC = () => {
       if (action === 'check_in') await reservationsService.checkIn(targetReservation.id);
       if (action === 'in_service') await reservationsService.inService(targetReservation.id);
       if (action === 'complete') await reservationsService.complete(targetReservation.id);
-      if (action === 'check_out') await reservationsService.checkOut(targetReservation.id);
+      if (action === 'check_out') {
+        await reservationsService.checkOut(targetReservation.id);
+        // Auto-create invoice on checkout (non-blocking UI)
+        try { await reservationsService.createInvoice(targetReservation.id); } catch (e) { console.warn('Invoice creation failed:', e); }
+      }
       await loadReservations();
       if (!reservation) setDrawerOpen(false);
     } catch (e) {
@@ -364,18 +368,18 @@ export const ReservationManagement: React.FC = () => {
                   }}>
                     <Edit fontSize="small" />
                   </IconButton>
-                  {r.status === 'confirmed' && (
-                    <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary">
+                  {(!r.status || r.status === 'booked' || r.status === 'confirmed') && (
+                    <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary" title="Check-in">
                       <Check fontSize="small" />
                     </IconButton>
                   )}
                   {r.status === 'checked_in' && (
-                    <IconButton size="small" onClick={() => performAction('in_service', r)} color="warning">
+                    <IconButton size="small" onClick={() => performAction('in_service', r)} color="warning" title="Start Service">
                       <DirectionsRun fontSize="small" />
                     </IconButton>
                   )}
                   {r.status === 'in_service' && (
-                    <IconButton size="small" onClick={() => performAction('complete', r)} color="success">
+                    <IconButton size="small" onClick={() => performAction('complete', r)} color="success" title="Complete Service">
                       <DoneAll fontSize="small" />
                     </IconButton>
                   )}
@@ -566,10 +570,18 @@ export const ReservationManagement: React.FC = () => {
               </Box>
 
               <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />} disabled={!(selectedReservation.status === 'confirmed' || !selectedReservation.status)}>Check-in</Button>
-                <Button variant="contained" color="warning" onClick={()=> performAction('in_service')} startIcon={<DirectionsRun />} disabled={!(selectedReservation.status === 'checked_in')}>In Service</Button>
-                <Button variant="contained" color="success" onClick={()=> performAction('complete')} startIcon={<DoneAll />} disabled={!(selectedReservation.status === 'in_service')}>Complete</Button>
-                <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />} disabled={!(selectedReservation.status === 'completed')}>Check-out</Button>
+                {(!selectedReservation.status || selectedReservation.status === 'booked' || selectedReservation.status === 'confirmed') && (
+                  <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />}>Check-in</Button>
+                )}
+                {selectedReservation.status === 'checked_in' && (
+                  <Button variant="contained" color="warning" onClick={()=> performAction('in_service')} startIcon={<DirectionsRun />}>In Service</Button>
+                )}
+                {selectedReservation.status === 'in_service' && (
+                  <Button variant="contained" color="success" onClick={()=> performAction('complete')} startIcon={<DoneAll />}>Complete</Button>
+                )}
+                {selectedReservation.status === 'completed' && (
+                  <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />}>Check-out</Button>
+                )}
                 <Button variant="text" onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}>Edit</Button>
               </Box>
 
