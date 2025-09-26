@@ -340,6 +340,8 @@ export const ReservationManagement: React.FC = () => {
         await reservationsService.checkOut(targetReservation.id);
         // Auto-create invoice on checkout (non-blocking UI)
         try { await reservationsService.createInvoice(targetReservation.id); } catch (e) { console.warn('Invoice creation failed:', e); }
+        // Notify user about room status change and HK task creation
+        setSnackbar({ open: true, message: 'Checked out. Room marked dirty and housekeeping task created.', severity: 'success' });
       }
       await loadReservations();
       if (!reservation) setDrawerOpen(false);
