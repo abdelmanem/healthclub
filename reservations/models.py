@@ -343,3 +343,50 @@ class BookingRule(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class HousekeepingTask(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_IN_PROGRESS = 'in_progress'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_IN_PROGRESS, 'In Progress'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    )
+
+    location = models.ForeignKey(
+        'reservations.Location',
+        on_delete=models.CASCADE,
+        related_name='housekeeping_tasks'
+    )
+    reservation = models.ForeignKey(
+        'reservations.Reservation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='housekeeping_tasks'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    assigned_to = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_housekeeping_tasks'
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self) -> str:
+        return f"HK Task for {self.location.name} ({self.status})"

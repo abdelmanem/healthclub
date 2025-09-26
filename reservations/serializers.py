@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Reservation, ReservationService, LocationType, LocationStatus
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HousekeepingTask
 from datetime import timedelta
 from config.models import SystemConfiguration
 
@@ -207,3 +207,16 @@ class ReservationSerializer(serializers.ModelSerializer):
                 ReservationService.objects.create(reservation=instance, **srv)
         return instance
 
+
+class HousekeepingTaskSerializer(serializers.ModelSerializer):
+    location_name = serializers.CharField(source='location.name', read_only=True)
+    reservation_id = serializers.IntegerField(source='reservation.id', read_only=True)
+
+    class Meta:
+        model = HousekeepingTask
+        fields = [
+            'id', 'location', 'location_name', 'reservation', 'reservation_id',
+            'status', 'assigned_to', 'notes', 'created_at', 'started_at',
+            'completed_at', 'cancelled_at'
+        ]
+        read_only_fields = ['created_at', 'started_at', 'completed_at', 'cancelled_at']

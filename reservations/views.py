@@ -1,7 +1,7 @@
 from rest_framework import viewsets, decorators, response, status, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Location, Reservation, ReservationService
-from .serializers import LocationSerializer, ReservationSerializer
+from .models import Location, Reservation, ReservationService, HousekeepingTask
+from .serializers import LocationSerializer, ReservationSerializer, HousekeepingTaskSerializer
 from pos import create_invoice_for_reservation
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 from rest_framework.decorators import api_view
@@ -62,6 +62,59 @@ class LocationViewSet(viewsets.ModelViewSet):
         obj.is_occupied = True
         obj.save(update_fields=["is_occupied"])
         return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
+
+
+class HousekeepingTaskViewSet(viewsets.ModelViewSet):
+    queryset = HousekeepingTask.objects.all().select_related('location', 'reservation', 'assigned_to')
+    serializer_class = HousekeepingTaskSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['location__name', 'notes']
+    ordering_fields = ['created_at', 'status']
+    filterset_fields = {
+        'status': ['exact', 'in'],
+        'location': ['exact', 'in'],
+        'assigned_to': ['exact', 'in'],
+    }
+
+    @decorators.action(detail=True, methods=["post"], url_path="start")
+    def start(self, request, pk=None):
+        task = self.get_object()
+        if task.status not in [HousekeepingTask.STATUS_PENDING, HousekeepingTask.STATUS_CANCELLED]:
+            return response.Response({"error": "Task already started or completed"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_IN_PROGRESS
+        task.started_at = timezone.now()
+        task.save(update_fields=["status", "started_at"])
+        return response.Response({"status": task.status, "started_at": task.started_at})
+
+    @decorators.action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        if task.status == HousekeepingTask.STATUS_COMPLETED:
+            return response.Response({"error": "Task already completed"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_COMPLETED
+        task.completed_at = timezone.now()
+        task.save(update_fields=["status", "completed_at"])
+        # Mark room clean when housekeeping completes
+        try:
+            task.location.is_clean = True
+            task.location.save(update_fields=["is_clean"])
+        except Exception:
+            pass
+        return response.Response({"status": task.status, "completed_at": task.completed_at, "location_is_clean": task.location.is_clean})
+
+    @decorators.action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        task = self.get_object()
+        if task.status == HousekeepingTask.STATUS_COMPLETED:
+            return response.Response({"error": "Cannot cancel a completed task"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_CANCELLED
+        task.cancelled_at = timezone.now()
+        task.save(update_fields=["status", "cancelled_at"])
+        return response.Response({"status": task.status, "cancelled_at": task.cancelled_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="mark-vacant")
     def mark_vacant(self, request, pk=None):
