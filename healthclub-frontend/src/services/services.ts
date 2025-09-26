@@ -15,7 +15,8 @@ export interface ServiceRecord extends ServiceInput {
 export const servicesApi = {
   list: async (params?: Record<string, any>): Promise<ServiceRecord[]> => {
     const res = await api.get('/services/', { params });
-    return res.data as ServiceRecord[];
+    const data = res.data as any;
+    return Array.isArray(data) ? (data as ServiceRecord[]) : (data?.results ?? []);
   },
   create: async (payload: ServiceInput): Promise<ServiceRecord> => {
     const res = await api.post('/services/', payload);
@@ -36,7 +37,8 @@ export interface ServiceCategoryRecord extends ServiceCategoryInput { id: number
 export const serviceCategoriesApi = {
   list: async (): Promise<ServiceCategoryRecord[]> => {
     const res = await api.get('/service-categories/');
-    return res.data as ServiceCategoryRecord[];
+    const data = res.data as any;
+    return Array.isArray(data) ? (data as ServiceCategoryRecord[]) : (data?.results ?? []);
   },
   create: async (payload: ServiceCategoryInput): Promise<ServiceCategoryRecord> => {
     const res = await api.post('/service-categories/', payload);

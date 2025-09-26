@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete } from '@mui/material';
+import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete, CircularProgress } from '@mui/material';
 import { servicesApi, ServiceInput, ServiceRecord, serviceCategoriesApi, ServiceCategoryRecord } from '../services/services';
 import { locationsApi, Location } from '../services/locations';
 
@@ -12,16 +12,47 @@ export const ServicesPage: React.FC = () => {
   const [editing, setEditing] = useState<ServiceRecord | null>(null);
   const [catForm, setCatForm] = useState<{ name: string; description?: string }>({ name: '', description: '' });
   const [selectedLocations, setSelectedLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const load = async () => {
-    const [svc, loc, cat] = await Promise.all([
-      servicesApi.list(),
-      locationsApi.list({ is_active: true }),
-      serviceCategoriesApi.list(),
-    ]);
-    setServices(svc);
-    setLocations(loc);
-    setCategories(cat);
+    setLoading(true);
+    try {
+      console.log('Loading services data...');
+      const [svc, loc, cat] = await Promise.all([
+        servicesApi.list(),
+        locationsApi.list({ is_active: true }),
+        serviceCategoriesApi.list(),
+      ]);
+      console.log('Services loaded:', svc);
+      console.log('Locations loaded:', loc);
+      console.log('Categories loaded:', cat);
+      console.log('Categories type:', typeof cat, 'Is array:', Array.isArray(cat));
+      
+      // Extract results from paginated API responses
+      const servicesData = (svc as any)?.results || (Array.isArray(svc) ? svc : []);
+      const locationsData = (loc as any)?.results || (Array.isArray(loc) ? loc : []);
+      const categoriesData = (cat as any)?.results || (Array.isArray(cat) ? cat : []);
+      
+      console.log('Extracted services:', servicesData);
+      console.log('Extracted locations:', locationsData);
+      console.log('Extracted categories:', categoriesData);
+      
+      setServices(servicesData);
+      setLocations(locationsData);
+      setCategories(categoriesData);
+    } catch (error: any) {
+      console.error('Failed to load data:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Set empty arrays as fallback
+      setServices([]);
+      setLocations([]);
+      setCategories([]);
+      
+      // Show user-friendly error message
+      alert(`Failed to load services data: ${error.response?.data?.detail || error.message}. Please check your connection and try again.`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -46,6 +77,14 @@ export const ServicesPage: React.FC = () => {
     setEditing(null);
     await load();
   };
+
+  if (loading) {
+    return (
+      <Box p={2} display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box p={2}>
@@ -161,7 +200,7 @@ export const ServicesPage: React.FC = () => {
         </Box>
       </Paper>
       <Stack spacing={1}>
-        {categories.map(c => (
+        {(categories || []).map(c => (
           <Paper key={c.id} sx={{ p: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>

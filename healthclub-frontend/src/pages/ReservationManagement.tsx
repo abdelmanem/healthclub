@@ -161,7 +161,7 @@ export const ReservationManagement: React.FC = () => {
 
   // keep ticking for timers
   useEffect(() => {
-    if (tab !== 4 || !showTimers) return;
+    if (tab !== 5 || !showTimers) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [tab, showTimers]);
@@ -561,7 +561,8 @@ export const ReservationManagement: React.FC = () => {
           <Tab label="Arrivals" value={1} />
           <Tab label="In Service" value={2} />
           <Tab label="Completed" value={3} />
-          <Tab label="Calendar" value={4} />
+          <Tab label="Housekeeping" value={4} />
+          <Tab label="Calendar" value={5} />
         </Tabs>
         <Box flex={1} />
         <Button variant="contained" startIcon={<Add />} onClick={() => setEditing(null)}>New Reservation</Button>
@@ -572,9 +573,25 @@ export const ReservationManagement: React.FC = () => {
       {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'confirmed'))}
       {tab === 2 && renderTable(getFilteredReservations().filter(r => r.status === 'in_service'))}
       {tab === 3 && renderTable(getFilteredReservations().filter(r => r.status === 'completed'))}
+      {tab === 4 && (
+        <Box>
+          <Typography variant="h6" gutterBottom>Housekeeping Tasks</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Housekeeping tasks are automatically created when guests check out. 
+            Use the dedicated Housekeeping page for task management.
+          </Typography>
+          <Button 
+            variant="outlined" 
+            onClick={() => window.location.href = '/housekeeping'}
+            sx={{ mt: 2 }}
+          >
+            Go to Housekeeping Management
+          </Button>
+        </Box>
+      )}
 
       {/* Calendar */}
-      {tab === 4 && (
+      {tab === 5 && (
         <Card>
           <CardContent sx={{ position: 'relative' }}>
             {isDragging && (
