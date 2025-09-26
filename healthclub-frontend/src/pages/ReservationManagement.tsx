@@ -251,6 +251,18 @@ export const ReservationManagement: React.FC = () => {
       if (r.guest) {
         await loadHistoricalReservations(r.guest);
       }
+      // Auto-suggest reassignment if room is out of service
+      if ((r as any).location_is_out_of_service) {
+        try {
+          const gender = (r as any).guest_gender || undefined;
+          const params: any = { is_clean: 'true', is_occupied: 'false' };
+          if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+          const rooms = await locationsApi.list(params);
+          setAssignRoom({ open: true, reservation: r, options: rooms });
+        } catch {
+          setAssignRoom({ open: true, reservation: r, options: [] });
+        }
+      }
     }
   };
 
@@ -331,6 +343,18 @@ export const ReservationManagement: React.FC = () => {
             return;
           } else if (data?.reason_code === 'room_occupied') {
             setSnackbar({ open: true, message: 'Room is occupied. Choose another room.', severity: 'warning' });
+            return;
+          } else if ((data?.error || '').toLowerCase().includes('out of service')) {
+            setSnackbar({ open: true, message: 'Room is out of service. Please reassign.', severity: 'warning' });
+            try {
+              const gender = (targetReservation as any).guest_gender || undefined;
+              const params: any = { is_clean: 'true', is_occupied: 'false' };
+              if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+              const rooms = await locationsApi.list(params);
+              setAssignRoom({ open: true, reservation: targetReservation, options: rooms });
+            } catch {
+              setAssignRoom({ open: true, reservation: targetReservation, options: [] });
+            }
             return;
           } else {
             throw err;
