@@ -14,6 +14,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Home } from './pages/Home';
 import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
+import Housekeeping from './pages/Housekeeping';
 
 // Lazy load ConfigurationPage to avoid circular dependency
 const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
@@ -115,6 +116,14 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="analytics">
                   <Layout>
                     <div>Analytics - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/housekeeping" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <Housekeeping />
                   </Layout>
                 </ProtectedRoute>
               } />
