@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box, Card, CardContent, CircularProgress, Alert } from '@mui/material';
+import { Container, Typography, Box, Card, CardContent, CircularProgress, Alert, Chip } from '@mui/material';
 import { 
   People, 
   Event, 
@@ -10,12 +10,14 @@ import {
 } from '@mui/icons-material';
 import { usePermissions } from '../contexts/PermissionContext';
 import { dashboardService, DashboardStats } from '../services/dashboard';
+import { api } from '../services/api';
 
 export const Dashboard: React.FC = () => {
   const { user } = usePermissions();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [hkAnalytics, setHkAnalytics] = useState<{ counts: Array<{status:string; count:number}>; avg_completion_duration_seconds: number | null } | null>(null);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -31,6 +33,17 @@ export const Dashboard: React.FC = () => {
     };
 
     loadStats();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/housekeeping-tasks/analytics/');
+        setHkAnalytics(res.data);
+      } catch (e) {
+        setHkAnalytics(null);
+      }
+    })();
   }, []);
 
   const formatStats = (data: DashboardStats) => [
@@ -104,6 +117,30 @@ export const Dashboard: React.FC = () => {
           ))}
         </Box>
       )}
+
+      {/* HK Analytics */}
+      <Box sx={{ mt: 4 }}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Housekeeping Overview
+            </Typography>
+            {hkAnalytics ? (
+              <Box display="flex" gap={1} flexWrap="wrap">
+                {hkAnalytics.counts.map((c) => (
+                  <Chip key={c.status} label={`${c.status.replace('_',' ')}: ${c.count}`} />
+                ))}
+                <Box width="100%" />
+                <Typography variant="body2" color="text.secondary">
+                  Avg completion time: {hkAnalytics.avg_completion_duration_seconds ? `${Math.round(hkAnalytics.avg_completion_duration_seconds/60)} min` : 'n/a'}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">No data</Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
 
       {stats && (
         <Box sx={{ mt: 4 }}>

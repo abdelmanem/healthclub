@@ -374,7 +374,14 @@ export const ReservationManagement: React.FC = () => {
           {rows.map((r) => (
             <TableRow key={r.id}>
               <TableCell>{r.guest_name}</TableCell>
-              <TableCell>{r.location_name}</TableCell>
+              <TableCell>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <span>{r.location_name}</span>
+                  {(r as any).location_is_out_of_service && (
+                    <Chip label="OOS" color="error" size="small" />
+                  )}
+                </Stack>
+              </TableCell>
               <TableCell>{r.employee_name}</TableCell>
               <TableCell>
                 <Chip label={r.status} sx={{ bgcolor: statusColor(r.status), color: '#fff' }} />
@@ -392,6 +399,19 @@ export const ReservationManagement: React.FC = () => {
                     }
                   }}>
                     <Edit fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={async () => {
+                    try {
+                      const gender = (r as any).guest_gender || undefined;
+                      const params: any = { is_clean: 'true', is_occupied: 'false' };
+                      if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                      const rooms = await locationsApi.list(params);
+                      setAssignRoom({ open: true, reservation: r, options: rooms });
+                    } catch {
+                      setAssignRoom({ open: true, reservation: r, options: [] });
+                    }
+                  }} title="Assign Room">
+                    <DirectionsRun fontSize="small" />
                   </IconButton>
                   {(!r.status || r.status === 'booked' || r.status === 'confirmed') && (
                     <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary" title="Check-in">
@@ -592,6 +612,11 @@ export const ReservationManagement: React.FC = () => {
                 <Typography>{dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : '-'}</Typography>
                 <Typography mt={1} variant="subtitle2">Total Price</Typography>
                 <Typography>${Number(selectedReservation.total_price || 0).toFixed(2)}</Typography>
+                {((selectedReservation as any).location_is_out_of_service) && (
+                  <Box mt={1}>
+                    <Chip label="Room Out of Service" color="error" size="small" />
+                  </Box>
+                )}
               </Box>
 
               <Box mt={2} display="flex" gap={1} flexWrap="wrap">

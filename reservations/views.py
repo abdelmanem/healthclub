@@ -379,6 +379,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         service_id = request.query_params.get("service")
         employee_id = request.query_params.get("employee")
         start_time = request.query_params.get("start")
+        location_id = request.query_params.get("location")
 
         if not (service_id and start_time):
             return response.Response(
@@ -411,6 +412,17 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         if employee_id:
             conflicts = conflicts.filter(reservation_services__employee_id=employee_id)
+        if location_id:
+            conflicts = conflicts.filter(location_id=location_id)
+
+        # Block out-of-service locations
+        if location_id:
+            try:
+                loc = Location.objects.get(pk=location_id)
+                if getattr(loc, 'is_out_of_service', False):
+                    return response.Response({"available": False, "reason": "out_of_service"})
+            except Location.DoesNotExist:
+                pass
 
         return response.Response({"available": not conflicts.exists()})
 
@@ -440,5 +452,12 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 Reservation.STATUS_IN_SERVICE,
             ],
         )
+        # Block out-of-service locations here too
+        try:
+            loc = Location.objects.get(pk=location_id)
+            if getattr(loc, 'is_out_of_service', False):
+                return response.Response({"conflict": True, "reason": "out_of_service"})
+        except Location.DoesNotExist:
+            pass
 
         return response.Response({"conflict": conflicts.exists()})

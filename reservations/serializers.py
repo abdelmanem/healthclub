@@ -74,6 +74,7 @@ class ReservationSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
     total_duration_minutes = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
+    location_is_out_of_service = serializers.BooleanField(source='location.is_out_of_service', read_only=True)
 
     class Meta:
         model = Reservation
@@ -98,6 +99,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "checked_out_at",
             "cancelled_at",
             "no_show_recorded_at",
+            "location_is_out_of_service",
         ]
         read_only_fields = [
             "checked_in_at",
@@ -148,6 +150,12 @@ class ReservationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "end_time": "end_time must be after start_time. Omit end_time to auto-calculate."
                 })
+
+        # Enforce room out-of-service block
+        if location and getattr(location, 'is_out_of_service', False):
+            raise serializers.ValidationError({
+                "location": "Selected room is out of service and cannot be reserved."
+            })
 
         # Enforce gender constraint if both available
         if guest and location:
