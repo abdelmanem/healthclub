@@ -134,8 +134,10 @@ export const reservationsService = {
     const response = await api.post('/reservations/conflict-check/', payload);
     return response.data;
   },
-  async checkIn(id: number): Promise<Reservation> {
-    const response = await api.post(`/reservations/${id}/check-in/`, {});
+  async checkIn(id: number, opts?: { allow_dirty?: boolean }): Promise<Reservation> {
+    const body: any = {};
+    if (opts?.allow_dirty) body.allow_dirty = true;
+    const response = await api.post(`/reservations/${id}/check-in/`, body);
     return response.data;
   },
   async inService(id: number): Promise<Reservation> {
@@ -148,6 +150,10 @@ export const reservationsService = {
   },
   async checkOut(id: number): Promise<Reservation> {
     const response = await api.post(`/reservations/${id}/check-out/`, {});
+    return response.data;
+  },
+  async createInvoice(id: number): Promise<{ invoice_id: number; invoice_number: string }> {
+    const response = await api.post(`/reservations/${id}/create-invoice/`, {});
     return response.data;
   },
 };

@@ -6,7 +6,7 @@ from django.utils.safestring import mark_safe
 from django.http import JsonResponse
 from django.urls import path
 
-from .models import Location, Reservation, ReservationService, LocationType, LocationStatus
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HousekeepingTask
 from services.models import Service
 from pos import create_invoice_for_reservation
 
@@ -207,3 +207,10 @@ class ReservationServiceAdmin(admin.ModelAdmin):
             return f"${total:.2f}"
         return "-"
     total_price.short_description = "Total Price"
+
+
+@admin.register(HousekeepingTask)
+class HousekeepingTaskAdmin(admin.ModelAdmin):
+    list_display = ("id", "location", "reservation", "status", "assigned_to", "created_at", "started_at", "completed_at")
+    list_filter = ("status", "assigned_to")
+    search_fields = ("location__name", "notes")

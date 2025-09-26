@@ -1,7 +1,7 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
-from .models import Reservation, mark_guest_checked_out, mark_guest_in_house
+from .models import Reservation, mark_guest_checked_out, mark_guest_in_house, HousekeepingTask
 
 
 @receiver(pre_save, sender=Reservation)
@@ -28,6 +28,13 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
                     pass
         elif instance.status == Reservation.STATUS_IN_SERVICE:
             instance.in_service_at = now
+            # Ensure location is marked occupied during service
+            if getattr(instance, 'location_id', None):
+                try:
+                    instance.location.is_occupied = True
+                    instance.location.save(update_fields=["is_occupied"])
+                except Exception:
+                    pass
         elif instance.status == Reservation.STATUS_COMPLETED:
             instance.completed_at = now
         elif instance.status == Reservation.STATUS_CHECKED_OUT:
@@ -39,6 +46,8 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
                     instance.location.is_occupied = False
                     instance.location.is_clean = False
                     instance.location.save(update_fields=["is_occupied", "is_clean"])
+                    # Create housekeeping task automatically
+                    HousekeepingTask.objects.create(location=instance.location, reservation=instance)
                 except Exception:
                     pass
         elif instance.status == Reservation.STATUS_CANCELLED:

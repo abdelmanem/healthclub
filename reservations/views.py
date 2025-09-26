@@ -1,7 +1,7 @@
 from rest_framework import viewsets, decorators, response, status, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Location, Reservation, ReservationService
-from .serializers import LocationSerializer, ReservationSerializer
+from .models import Location, Reservation, ReservationService, HousekeepingTask
+from .serializers import LocationSerializer, ReservationSerializer, HousekeepingTaskSerializer
 from pos import create_invoice_for_reservation
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 from rest_framework.decorators import api_view
@@ -24,6 +24,7 @@ class LocationViewSet(viewsets.ModelViewSet):
         'type': ['exact', 'in'],
         'status': ['exact', 'in'],
         'is_active': ['exact'],
+        'is_out_of_service': ['exact'],
     }
 
     def get_queryset(self):
@@ -63,12 +64,95 @@ class LocationViewSet(viewsets.ModelViewSet):
         obj.save(update_fields=["is_occupied"])
         return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
 
+
+class HousekeepingTaskViewSet(viewsets.ModelViewSet):
+    queryset = HousekeepingTask.objects.all().select_related('location', 'reservation', 'assigned_to')
+    serializer_class = HousekeepingTaskSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['location__name', 'notes']
+    ordering_fields = ['created_at', 'status']
+    filterset_fields = {
+        'status': ['exact', 'in'],
+        'location': ['exact', 'in'],
+        'assigned_to': ['exact', 'in'],
+        'priority': ['exact', 'in'],
+    }
+
+    @decorators.action(detail=True, methods=["post"], url_path="start")
+    def start(self, request, pk=None):
+        task = self.get_object()
+        if task.status not in [HousekeepingTask.STATUS_PENDING, HousekeepingTask.STATUS_CANCELLED]:
+            return response.Response({"error": "Task already started or completed"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_IN_PROGRESS
+        task.started_at = timezone.now()
+        task.save(update_fields=["status", "started_at"])
+        return response.Response({"status": task.status, "started_at": task.started_at})
+
+    @decorators.action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        if task.status == HousekeepingTask.STATUS_COMPLETED:
+            return response.Response({"error": "Task already completed"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_COMPLETED
+        task.completed_at = timezone.now()
+        task.save(update_fields=["status", "completed_at"])
+        # Mark room clean when housekeeping completes
+        try:
+            task.location.is_clean = True
+            task.location.save(update_fields=["is_clean"])
+        except Exception:
+            pass
+        return response.Response({"status": task.status, "completed_at": task.completed_at, "location_is_clean": task.location.is_clean})
+
+    @decorators.action(detail=False, methods=["get"], url_path="analytics")
+    def analytics(self, request):
+        from django.db.models import Count, Avg, DurationField, ExpressionWrapper, F
+        qs = self.get_queryset()
+        counts = qs.values('status').annotate(count=Count('id'))
+        # average completion time (completed_at - created_at)
+        completed = qs.filter(status=HousekeepingTask.STATUS_COMPLETED, completed_at__isnull=False)
+        from django.db.models.functions import Now
+        duration_expr = ExpressionWrapper(F('completed_at') - F('created_at'), output_field=DurationField())
+        avg_duration = completed.aggregate(avg=Avg(duration_expr)).get('avg')
+        return response.Response({
+            'counts': list(counts),
+            'avg_completion_duration_seconds': int(avg_duration.total_seconds()) if avg_duration else None,
+        })
+
+    @decorators.action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        task = self.get_object()
+        if task.status == HousekeepingTask.STATUS_COMPLETED:
+            return response.Response({"error": "Cannot cancel a completed task"}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone
+        task.status = HousekeepingTask.STATUS_CANCELLED
+        task.cancelled_at = timezone.now()
+        task.save(update_fields=["status", "cancelled_at"])
+        return response.Response({"status": task.status, "cancelled_at": task.cancelled_at})
+
     @decorators.action(detail=True, methods=["post"], url_path="mark-vacant")
     def mark_vacant(self, request, pk=None):
         obj = self.get_object()
         obj.is_occupied = False
         obj.save(update_fields=["is_occupied"])
         return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
+
+    @decorators.action(detail=True, methods=["post"], url_path="out-of-service")
+    def out_of_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = True
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
+
+    @decorators.action(detail=True, methods=["post"], url_path="back-in-service")
+    def back_in_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = False
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -104,10 +188,33 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Enforce room clean and not occupied before check-in
         if getattr(reservation, 'location_id', None):
             loc = reservation.location
+            if getattr(loc, 'is_out_of_service', False):
+                return response.Response({"error": "Room is out of service"}, status=status.HTTP_400_BAD_REQUEST)
+            # If room is dirty, require explicit confirmation from frontend
             if not getattr(loc, 'is_clean', True):
-                return response.Response({"error": "Room is not clean"}, status=status.HTTP_400_BAD_REQUEST)
+                allow_dirty = False
+                # support both JSON body and query param for convenience
+                allow_dirty = allow_dirty or str(request.data.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
+                allow_dirty = allow_dirty or str(request.query_params.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
+                if not allow_dirty:
+                    return response.Response(
+                        {
+                            "error": "Room is dirty",
+                            "reason_code": "room_dirty",
+                            "requires_confirmation": True,
+                            "message": "Room is marked dirty. Confirm to proceed with check-in.",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
             if getattr(loc, 'is_occupied', False):
-                return response.Response({"error": "Room is currently occupied"}, status=status.HTTP_400_BAD_REQUEST)
+                return response.Response(
+                    {
+                        "error": "Room is occupied",
+                        "reason_code": "room_occupied",
+                        "message": "Selected room is currently occupied. Choose another room.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         reservation.status = Reservation.STATUS_CHECKED_IN
         reservation.save(update_fields=["status"])
         return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
@@ -272,6 +379,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         service_id = request.query_params.get("service")
         employee_id = request.query_params.get("employee")
         start_time = request.query_params.get("start")
+        location_id = request.query_params.get("location")
 
         if not (service_id and start_time):
             return response.Response(
@@ -304,6 +412,17 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         if employee_id:
             conflicts = conflicts.filter(reservation_services__employee_id=employee_id)
+        if location_id:
+            conflicts = conflicts.filter(location_id=location_id)
+
+        # Block out-of-service locations
+        if location_id:
+            try:
+                loc = Location.objects.get(pk=location_id)
+                if getattr(loc, 'is_out_of_service', False):
+                    return response.Response({"available": False, "reason": "out_of_service"})
+            except Location.DoesNotExist:
+                pass
 
         return response.Response({"available": not conflicts.exists()})
 
@@ -333,5 +452,12 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 Reservation.STATUS_IN_SERVICE,
             ],
         )
+        # Block out-of-service locations here too
+        try:
+            loc = Location.objects.get(pk=location_id)
+            if getattr(loc, 'is_out_of_service', False):
+                return response.Response({"conflict": True, "reason": "out_of_service"})
+        except Location.DoesNotExist:
+            pass
 
         return response.Response({"conflict": conflicts.exists()})

@@ -30,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     { text: 'Dashboard', icon: <Dashboard />, path: '/', permission: 'view', model: 'dashboard' },
     { text: 'Guests', icon: <People />, path: '/guests', permission: 'view', model: 'guests' },
     { text: 'Reservations', icon: <Event />, path: '/reservations', permission: 'view', model: 'reservations' },
+    { text: 'Housekeeping', icon: <Event />, path: '/housekeeping', permission: 'view', model: 'reservations' },
     { text: 'Services', icon: <Business />, path: '/services', permission: 'view', model: 'services' },
     { text: 'Employees', icon: <People />, path: '/employees', permission: 'view', model: 'employees' },
     { text: 'Inventory', icon: <Inventory />, path: '/inventory', permission: 'view', model: 'inventory' },
