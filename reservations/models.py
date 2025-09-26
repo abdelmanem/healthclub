@@ -37,6 +37,14 @@ class Location(models.Model):
     description = models.TextField(blank=True)
     capacity = models.PositiveIntegerField(default=1, help_text="Maximum number of people")
     is_active = models.BooleanField(default=True)
+    GENDER_CHOICES = (
+        ("male", "Male"),
+        ("female", "Female"),
+        ("unisex", "Unisex"),
+    )
+    gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unisex")
+    is_clean = models.BooleanField(default=True)
+    is_occupied = models.BooleanField(default=False)
     type = models.ForeignKey(
         'reservations.LocationType',
         on_delete=models.SET_NULL,
@@ -190,6 +198,15 @@ class Reservation(models.Model):
                 qs = qs.exclude(pk=self.pk)
             if qs.exists():
                 raise ValidationError("This time slot conflicts with an existing reservation")
+        
+        # Gender separation validation
+        if self.location_id and getattr(self, 'guest_id', None):
+            location_gender = getattr(self.location, 'gender', 'unisex')
+            guest_gender = getattr(self.guest, 'gender', '') or ''
+            # Enforce: specific-gender rooms require matching guest gender; non-binary/unspecified must use unisex
+            if location_gender in ["male", "female"]:
+                if guest_gender not in ["male", "female"] or guest_gender != location_gender:
+                    raise ValidationError("Guest gender does not match the location's gender policy.")
         
 def save(self, *args, **kwargs):
     # Auto-set end_time if missing or mismatched

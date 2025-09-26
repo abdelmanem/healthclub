@@ -82,9 +82,9 @@ class ReservationServiceInline(admin.TabularInline):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ("name", "description", "capacity", "type", "status", "is_active")
+    list_display = ("name", "description", "capacity", "gender", "is_clean", "is_occupied", "type", "status", "is_active")
     search_fields = ("name", "description")
-    list_filter = ("is_active", "type", "status")
+    list_filter = ("is_active", "type", "status", "gender", "is_clean", "is_occupied")
 
 
 @admin.register(LocationType)

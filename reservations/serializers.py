@@ -21,9 +21,12 @@ class LocationSerializer(serializers.ModelSerializer):
     status = LocationStatusSerializer(read_only=True)
     type_id = serializers.PrimaryKeyRelatedField(queryset=LocationType.objects.all(), source='type', write_only=True, required=False, allow_null=True)
     status_id = serializers.PrimaryKeyRelatedField(queryset=LocationStatus.objects.all(), source='status', write_only=True, required=False, allow_null=True)
+    gender = serializers.CharField()
+    is_clean = serializers.BooleanField()
+    is_occupied = serializers.BooleanField(read_only=True)
     class Meta:
         model = Location
-        fields = ["id", "name", "description", "capacity", "is_active", "type", "status", "type_id", "status_id"]
+        fields = ["id", "name", "description", "capacity", "is_active", "gender", "is_clean", "is_occupied", "type", "status", "type_id", "status_id"]
 
 
 class ServiceDetailSerializer(serializers.Serializer):
@@ -129,6 +132,8 @@ class ReservationSerializer(serializers.ModelSerializer):
         start_time = attrs.get('start_time')
         end_time = attrs.get('end_time')
         services_data = attrs.get('reservation_services', [])
+        guest = attrs.get('guest') or getattr(self.instance, 'guest', None)
+        location = attrs.get('location') or getattr(self.instance, 'location', None)
 
         if not start_time:
             raise serializers.ValidationError({"start_time": "This field is required."})
@@ -142,6 +147,16 @@ class ReservationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "end_time": "end_time must be after start_time. Omit end_time to auto-calculate."
                 })
+
+        # Enforce gender constraint if both available
+        if guest and location:
+            location_gender = getattr(location, 'gender', 'unisex')
+            guest_gender = getattr(guest, 'gender', '') or ''
+            if location_gender in ['male', 'female']:
+                if guest_gender not in ['male', 'female'] or guest_gender != location_gender:
+                    raise serializers.ValidationError({
+                        "location": "Guest gender does not match the location's gender policy."
+                    })
 
         return attrs
 

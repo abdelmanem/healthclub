@@ -16,7 +16,15 @@ class LocationViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
     ordering_fields = ["name"]
-    filterset_fields = { 'name': ['exact', 'icontains'] }
+    filterset_fields = {
+        'name': ['exact', 'icontains'],
+        'gender': ['exact', 'in'],
+        'is_clean': ['exact'],
+        'is_occupied': ['exact'],
+        'type': ['exact', 'in'],
+        'status': ['exact', 'in'],
+        'is_active': ['exact'],
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -33,6 +41,34 @@ class LocationViewSet(viewsets.ModelViewSet):
         users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
         result = {u.username: perms for u, perms in users.items()}
         return response.Response(result)
+
+    @decorators.action(detail=True, methods=["post"], url_path="mark-clean")
+    def mark_clean(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_clean = True
+        obj.save(update_fields=["is_clean"])
+        return response.Response({"id": obj.id, "is_clean": obj.is_clean})
+
+    @decorators.action(detail=True, methods=["post"], url_path="mark-dirty")
+    def mark_dirty(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_clean = False
+        obj.save(update_fields=["is_clean"])
+        return response.Response({"id": obj.id, "is_clean": obj.is_clean})
+
+    @decorators.action(detail=True, methods=["post"], url_path="mark-occupied")
+    def mark_occupied(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_occupied = True
+        obj.save(update_fields=["is_occupied"])
+        return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
+
+    @decorators.action(detail=True, methods=["post"], url_path="mark-vacant")
+    def mark_vacant(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_occupied = False
+        obj.save(update_fields=["is_occupied"])
+        return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -65,6 +101,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
         reservation = self.get_object()
+        # Enforce room clean and not occupied before check-in
+        if getattr(reservation, 'location_id', None):
+            loc = reservation.location
+            if not getattr(loc, 'is_clean', True):
+                return response.Response({"error": "Room is not clean"}, status=status.HTTP_400_BAD_REQUEST)
+            if getattr(loc, 'is_occupied', False):
+                return response.Response({"error": "Room is currently occupied"}, status=status.HTTP_400_BAD_REQUEST)
         reservation.status = Reservation.STATUS_CHECKED_IN
         reservation.save(update_fields=["status"])
         return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
@@ -202,6 +245,26 @@ class ReservationViewSet(viewsets.ModelViewSet):
             return response.Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
         remove_perm(perm, user, reservation)
         return response.Response({"revoked": perm, "from": username})
+    
+    @decorators.action(detail=True, methods=["post"], url_path="mark-clean")
+    def mark_clean(self, request, pk=None):
+        reservation = self.get_object()
+        if not getattr(reservation, 'location_id', None):
+            return response.Response({"error": "Reservation has no location"}, status=status.HTTP_400_BAD_REQUEST)
+        loc = reservation.location
+        loc.is_clean = True
+        loc.save(update_fields=["is_clean"])
+        return response.Response({"location_id": loc.id, "is_clean": loc.is_clean})
+
+    @decorators.action(detail=True, methods=["post"], url_path="mark-dirty")
+    def mark_dirty(self, request, pk=None):
+        reservation = self.get_object()
+        if not getattr(reservation, 'location_id', None):
+            return response.Response({"error": "Reservation has no location"}, status=status.HTTP_400_BAD_REQUEST)
+        loc = reservation.location
+        loc.is_clean = False
+        loc.save(update_fields=["is_clean"])
+        return response.Response({"location_id": loc.id, "is_clean": loc.is_clean})
         
     @decorators.action(detail=False, methods=["get"], url_path="availability")
     def availability(self, request):
