@@ -13,6 +13,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Snackbar,
+  Alert,
   FormControl,
   InputLabel,
   Select,
@@ -81,6 +83,8 @@ export const ReservationManagement: React.FC = () => {
 
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success'|'info'|'warning'|'error' }>({ open: false, message: '', severity: 'info' });
+  const [dirtyConfirm, setDirtyConfirm] = useState<{ open: boolean; reservation?: Reservation }>(() => ({ open: false }));
 
   // KPI
   const [kpi, setKpi] = useState({ arrivalsToday: 0, checkedInNow: 0, inServiceNow: 0, revenueToday: 0 });
@@ -320,14 +324,10 @@ export const ReservationManagement: React.FC = () => {
         } catch (err: any) {
           const data = err?.response?.data || {};
           if (data?.reason_code === 'room_dirty' && data?.requires_confirmation) {
-            const confirmProceed = window.confirm('Room is marked dirty. Proceed with check-in anyway?');
-            if (confirmProceed) {
-              await reservationsService.checkIn(targetReservation.id, { allow_dirty: true });
-            } else {
-              return;
-            }
+            setDirtyConfirm({ open: true, reservation: targetReservation });
+            return;
           } else if (data?.reason_code === 'room_occupied') {
-            alert('Selected room is currently occupied. Please choose another room.');
+            setSnackbar({ open: true, message: 'Room is occupied. Choose another room.', severity: 'warning' });
             return;
           } else {
             throw err;
@@ -343,8 +343,9 @@ export const ReservationManagement: React.FC = () => {
       }
       await loadReservations();
       if (!reservation) setDrawerOpen(false);
-    } catch (e) {
+    } catch (e:any) {
       console.error('Action failed', e);
+      setSnackbar({ open: true, message: e?.response?.data?.detail || 'Action failed', severity: 'error' });
     }
   };
 
@@ -674,6 +675,46 @@ export const ReservationManagement: React.FC = () => {
           <Button onClick={() => setPendingMove(null)} variant="contained">Save</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dirty room confirmation */}
+      <Dialog open={dirtyConfirm.open} onClose={() => setDirtyConfirm({ open: false })}>
+        <DialogTitle>Room is Dirty</DialogTitle>
+        <DialogContent>
+          <Typography>The selected room is marked dirty. Do you want to proceed with check-in anyway?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDirtyConfirm({ open: false })}>Cancel</Button>
+          <Button 
+            onClick={async () => {
+              const r = dirtyConfirm.reservation || selectedReservation;
+              setDirtyConfirm({ open: false });
+              if (!r) return;
+              try {
+                await reservationsService.checkIn(r.id, { allow_dirty: true });
+                await loadReservations();
+                setSnackbar({ open: true, message: 'Checked in (room dirty acknowledged)', severity: 'success' });
+              } catch (e:any) {
+                setSnackbar({ open: true, message: e?.response?.data?.detail || 'Check-in failed', severity: 'error' });
+              }
+            }}
+            variant="contained"
+          >
+            Proceed
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={3000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       {/* New/Edit form dialog */}
       <Dialog 
