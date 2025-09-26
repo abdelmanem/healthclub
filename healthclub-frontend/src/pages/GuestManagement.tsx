@@ -18,6 +18,12 @@ import { AddressList } from '../components/guest/AddressList';
 import { EmergencyContactList } from '../components/guest/EmergencyContactList';
 import { CreateAddressDialog } from '../components/guest/CreateAddressDialog';
 import { CreateEmergencyContactDialog } from '../components/guest/CreateEmergencyContactDialog';
+import { GuestJourneyTracker } from '../components/guest/advanced/GuestJourneyTracker';
+import { GuestRetentionTracker } from '../components/guest/advanced/GuestRetentionTracker';
+import { GuestSegmentation } from '../components/guest/advanced/GuestSegmentation';
+import { LoyaltyProgramManager } from '../components/guest/advanced/LoyaltyProgramManager';
+import { GuestAnalytics } from '../components/guest/advanced/GuestAnalytics';
+import { GuestFeedbackManager } from '../components/guest/advanced/GuestFeedbackManager';
 import { guestsService, Guest as GuestType } from '../services/guests';
 import { guestPreferencesService } from '../services/guestPreferences';
 import { guestCommunicationsService } from '../services/guestCommunications';
@@ -199,6 +205,20 @@ export const GuestManagement: React.FC = () => {
                   } catch (e) { console.error(e); }
                 }}
               />
+              <GuestJourneyTracker events={(selectedGuest as any)?.journey_events ?? []} />
+              <GuestRetentionTracker last_visit={(selectedGuest as any)?.last_visit ?? null} />
+              <GuestSegmentation groups={(selectedGuest as any)?.segments ?? []} />
+              <LoyaltyProgramManager
+                loyalty_points={(selectedGuest as any)?.loyalty_points ?? 0}
+                membership_tier={(selectedGuest as any)?.membership_tier ?? undefined}
+                benefits={(selectedGuest as any)?.loyalty_benefits ?? undefined}
+              />
+              <GuestAnalytics
+                total_spent={(selectedGuest as any)?.total_spent ?? 0}
+                visit_count={(selectedGuest as any)?.visit_count ?? 0}
+                last_visit={(selectedGuest as any)?.last_visit ?? null}
+              />
+              <GuestFeedbackManager onSubmit={(text) => { try { console.log('Feedback submitted', { guestId: (selectedGuest as any)?.id, text }); } catch(e) { console.error(e); } }} />
               <AddressList
                 addresses={addresses}
                 onAdd={handleAddAddress}
