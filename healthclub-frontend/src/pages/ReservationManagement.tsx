@@ -437,7 +437,7 @@ export const ReservationManagement: React.FC = () => {
                   }} title="Assign Room">
                     <DirectionsRun fontSize="small" />
                   </IconButton>
-                  {(!r.status || r.status === 'booked' || r.status === 'confirmed') && (
+                  {(!r.status || r.status === 'confirmed') && (
                     <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary" title="Check-in">
                       <Check fontSize="small" />
                     </IconButton>
@@ -644,7 +644,7 @@ export const ReservationManagement: React.FC = () => {
               </Box>
 
               <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                {(!selectedReservation.status || selectedReservation.status === 'booked' || selectedReservation.status === 'confirmed') && (
+                {(!selectedReservation.status || selectedReservation.status === 'confirmed') && (
                   <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />}>Check-in</Button>
                 )}
                 {selectedReservation.status === 'checked_in' && (

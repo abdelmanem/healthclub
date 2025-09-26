@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Paper, Stack, TextField, Typography, Grid, Chip, Autocomplete } from '@mui/material';
+import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete } from '@mui/material';
 import { servicesApi, ServiceInput, ServiceRecord, serviceCategoriesApi, ServiceCategoryRecord } from '../services/services';
 import { locationsApi, Location } from '../services/locations';
 
@@ -52,42 +52,60 @@ export const ServicesPage: React.FC = () => {
       <Typography variant="h5" gutterBottom>{editing ? 'Edit Service' : 'Create Service'}</Typography>
       <Paper sx={{ p: 2, mb: 3 }}>
         <form onSubmit={submit}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth required />
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <TextField type="number" label="Duration (min)" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} fullWidth required />
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <TextField type="number" label="Price" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} fullWidth required />
-            </Grid>
-            <Grid item xs={12} md={6}>
+          <Stack spacing={2}>
+            <Box display="flex" gap={2} flexWrap="wrap">
+              <TextField 
+                label="Name" 
+                value={form.name} 
+                onChange={(e) => setForm({ ...form, name: e.target.value })} 
+                sx={{ flex: '1 1 300px', minWidth: 200 }} 
+                required 
+              />
+              <TextField 
+                type="number" 
+                label="Duration (min)" 
+                value={form.duration_minutes} 
+                onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} 
+                sx={{ flex: '0 0 150px' }} 
+                required 
+              />
+              <TextField 
+                type="number" 
+                label="Price" 
+                value={form.price} 
+                onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} 
+                sx={{ flex: '0 0 150px' }} 
+                required 
+              />
+            </Box>
+            <Box display="flex" gap={2} flexWrap="wrap">
               <Autocomplete
                 options={categories}
                 value={categories.find(c => c.id === categoryId) || null}
                 onChange={(_, val) => setCategoryId(val ? val.id : null)}
                 getOptionLabel={(o) => o.name}
                 renderInput={(params) => <TextField {...params} label="Category (optional)" />}
+                sx={{ flex: '1 1 300px', minWidth: 200 }}
               />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth multiline minRows={2} />
-            </Grid>
-            <Grid item xs={12}>
-              <Autocomplete
-                multiple
-                options={locations}
-                value={selectedLocations}
-                onChange={(_, val) => setSelectedLocations(val as Location[])}
-                getOptionLabel={(o) => `${o.name} ${o.is_out_of_service ? '(OOS)' : ''}`.trim()}
-                renderInput={(params) => <TextField {...params} label="Link Rooms (optional)" />}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Button type="submit" variant="contained">Create Service</Button>
-            </Grid>
-          </Grid>
+            </Box>
+            <TextField 
+              label="Description" 
+              value={form.description} 
+              onChange={(e) => setForm({ ...form, description: e.target.value })} 
+              fullWidth 
+              multiline 
+              minRows={2} 
+            />
+            <Autocomplete
+              multiple
+              options={locations}
+              value={selectedLocations}
+              onChange={(_, val) => setSelectedLocations(val as Location[])}
+              getOptionLabel={(o) => `${o.name} ${o.is_out_of_service ? '(OOS)' : ''}`.trim()}
+              renderInput={(params) => <TextField {...params} label="Link Rooms (optional)" />}
+            />
+            <Button type="submit" variant="contained">Create Service</Button>
+          </Stack>
         </form>
       </Paper>
 
@@ -120,17 +138,27 @@ export const ServicesPage: React.FC = () => {
 
       <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>Service Categories</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <TextField label="Name" value={catForm.name} onChange={(e)=> setCatForm({ ...catForm, name: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField label="Description" value={catForm.description} onChange={(e)=> setCatForm({ ...catForm, description: e.target.value })} fullWidth />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <Button variant="contained" onClick={async ()=> { await serviceCategoriesApi.create(catForm); setCatForm({ name: '', description: '' }); await load(); }}>Add Category</Button>
-          </Grid>
-        </Grid>
+        <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+          <TextField 
+            label="Name" 
+            value={catForm.name} 
+            onChange={(e)=> setCatForm({ ...catForm, name: e.target.value })} 
+            sx={{ flex: '1 1 200px', minWidth: 150 }} 
+          />
+          <TextField 
+            label="Description" 
+            value={catForm.description} 
+            onChange={(e)=> setCatForm({ ...catForm, description: e.target.value })} 
+            sx={{ flex: '2 1 300px', minWidth: 200 }} 
+          />
+          <Button 
+            variant="contained" 
+            onClick={async ()=> { await serviceCategoriesApi.create(catForm); setCatForm({ name: '', description: '' }); await load(); }}
+            sx={{ flex: '0 0 auto' }}
+          >
+            Add Category
+          </Button>
+        </Box>
       </Paper>
       <Stack spacing={1}>
         {categories.map(c => (

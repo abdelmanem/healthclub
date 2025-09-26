@@ -99,7 +99,7 @@ export const Housekeeping: React.FC = () => {
               size="small"
               label="Status"
               value={filters.status || ''}
-              onChange={handleStatusFilterChange}
+              onChange={(e) => handleStatusFilterChange(e as SelectChangeEvent<string>)}
               sx={{ minWidth: 160 }}
             >
               <MenuItem value="">All</MenuItem>
@@ -129,7 +129,7 @@ export const Housekeeping: React.FC = () => {
                       size="small"
                       label="Assign"
                       value={t.assigned_to || ''}
-                      onChange={(e: SelectChangeEvent<string>) => handleAssignChange(t.id, e)}
+                      onChange={(e) => handleAssignChange(t.id, e as SelectChangeEvent<string>)}
                       sx={{ minWidth: 180 }}
                     >
                       <MenuItem value="">Unassigned</MenuItem>
@@ -162,7 +162,7 @@ export const Housekeeping: React.FC = () => {
         <>
           <Stack direction="row" spacing={2} mb={2}>
             <TextField select size="small" label="Gender" sx={{ minWidth: 160 }} value={roomFilters.gender || ''}
-              onChange={(e: SelectChangeEvent<string>) => setRoomFilters({ ...roomFilters, gender: e.target.value || undefined })}
+              onChange={(e) => setRoomFilters({ ...roomFilters, gender: (e.target as HTMLInputElement).value || undefined })}
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="male">Male</MenuItem>
@@ -170,21 +170,21 @@ export const Housekeeping: React.FC = () => {
               <MenuItem value="unisex">Unisex</MenuItem>
             </TextField>
             <TextField select size="small" label="Clean" sx={{ minWidth: 160 }} value={roomFilters.is_clean || ''}
-              onChange={(e: SelectChangeEvent<string>) => setRoomFilters({ ...roomFilters, is_clean: e.target.value || undefined })}
+              onChange={(e) => setRoomFilters({ ...roomFilters, is_clean: (e.target as HTMLInputElement).value || undefined })}
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="true">Clean</MenuItem>
               <MenuItem value="false">Dirty</MenuItem>
             </TextField>
             <TextField select size="small" label="Occupied" sx={{ minWidth: 160 }} value={roomFilters.is_occupied || ''}
-              onChange={(e: SelectChangeEvent<string>) => setRoomFilters({ ...roomFilters, is_occupied: e.target.value || undefined })}
+              onChange={(e) => setRoomFilters({ ...roomFilters, is_occupied: (e.target as HTMLInputElement).value || undefined })}
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="true">Occupied</MenuItem>
               <MenuItem value="false">Vacant</MenuItem>
             </TextField>
             <TextField select size="small" label="Out of Service" sx={{ minWidth: 180 }} value={roomFilters.is_out_of_service || ''}
-              onChange={(e: SelectChangeEvent<string>) => setRoomFilters({ ...roomFilters, is_out_of_service: e.target.value || undefined })}
+              onChange={(e) => setRoomFilters({ ...roomFilters, is_out_of_service: (e.target as HTMLInputElement).value || undefined })}
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="true">Out of Service</MenuItem>

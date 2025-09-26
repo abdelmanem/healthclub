@@ -9,6 +9,7 @@ export interface Location {
   gender: 'male' | 'female' | 'unisex';
   is_clean: boolean;
   is_occupied: boolean;
+  is_out_of_service?: boolean;
 }
 
 export const locationsApi = {
