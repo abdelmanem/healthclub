@@ -19,6 +19,13 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
         if instance.status == Reservation.STATUS_CHECKED_IN:
             instance.checked_in_at = now
             mark_guest_in_house(instance.guest)
+            # Mark location as occupied when guest checks in
+            if getattr(instance, 'location_id', None):
+                try:
+                    instance.location.is_occupied = True
+                    instance.location.save(update_fields=["is_occupied"])
+                except Exception:
+                    pass
         elif instance.status == Reservation.STATUS_IN_SERVICE:
             instance.in_service_at = now
         elif instance.status == Reservation.STATUS_COMPLETED:
@@ -26,6 +33,14 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
         elif instance.status == Reservation.STATUS_CHECKED_OUT:
             instance.checked_out_at = now
             mark_guest_checked_out(instance.guest)
+            # Free up the location and mark as dirty after checkout
+            if getattr(instance, 'location_id', None):
+                try:
+                    instance.location.is_occupied = False
+                    instance.location.is_clean = False
+                    instance.location.save(update_fields=["is_occupied", "is_clean"])
+                except Exception:
+                    pass
         elif instance.status == Reservation.STATUS_CANCELLED:
             instance.cancelled_at = now
         elif instance.status == Reservation.STATUS_NO_SHOW:
