@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -6,7 +6,11 @@ import {
   CardContent,
   Button,
   Tabs,
-  Tab
+  Tab,
+  List,
+  ListItem,
+  ListItemText,
+  Divider
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { GuestSearch } from '../components/guest/GuestSearch';
@@ -45,6 +49,8 @@ export const GuestManagement: React.FC = () => {
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<any | null>(null);
   const [isQuickResOpen, setIsQuickResOpen] = useState(false);
+  const [guestReservations, setGuestReservations] = useState<any[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleGuestSelect = (guest: Guest) => {
@@ -55,6 +61,32 @@ export const GuestManagement: React.FC = () => {
   const contacts = useMemo(() => (selectedGuest as any)?.emergency_contacts ?? [], [selectedGuest]);
   const preferences = useMemo(() => (selectedGuest as any)?.preferences ?? [], [selectedGuest]);
   const communications = useMemo(() => (selectedGuest as any)?.communications ?? [], [selectedGuest]);
+  const reservations = guestReservations;
+
+  useEffect(() => {
+    const guestId = (selectedGuest as any)?.id;
+    if (!guestId) {
+      setGuestReservations([]);
+      return;
+    }
+    let aborted = false;
+    (async () => {
+      try {
+        setReservationsLoading(true);
+        const resp = await fetch(`/api/reservations/?guest=${guestId}&ordering=-start_time`);
+        if (!resp.ok) throw new Error(`Failed to load reservations: ${resp.status}`);
+        const data = await resp.json();
+        const items = Array.isArray(data) ? data : (data?.results ?? []);
+        if (!aborted) setGuestReservations(items);
+      } catch (e) {
+        console.error(e);
+        if (!aborted) setGuestReservations([]);
+      } finally {
+        if (!aborted) setReservationsLoading(false);
+      }
+    })();
+    return () => { aborted = true; };
+  }, [selectedGuest]);
 
   const updateSelectedGuest = (updater: (prev: any) => any) => {
     setSelectedGuest((prev) => (prev ? updater(prev) : prev));
@@ -190,6 +222,7 @@ export const GuestManagement: React.FC = () => {
               >
                 <Tab label="Overview" />
                 <Tab label="Journey" />
+                <Tab label="Reservations" />
                 <Tab label="Preferences" />
                 <Tab label="Communications" />
                 <Tab label="Addresses & Contacts" />
@@ -220,6 +253,68 @@ export const GuestManagement: React.FC = () => {
               )}
 
               {activeTab === 2 && (
+                <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>Past Reservations</Typography>
+                      {reservationsLoading && (
+                        <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                      )}
+                      <List dense>
+                        {(() => {
+                          const now = Date.now();
+                          const past = reservations
+                            .filter((r: any) => new Date(r?.end_time ?? r?.start_time ?? 0).getTime() < now)
+                            .sort((a: any, b: any) => new Date(b?.end_time ?? b?.start_time ?? 0).getTime() - new Date(a?.end_time ?? a?.start_time ?? 0).getTime());
+                          if (past.length === 0) return <Typography variant="body2" color="text.secondary">No past reservations.</Typography>;
+                          return past.map((r: any, idx: number) => (
+                            <React.Fragment key={r.id ?? idx}>
+                              <ListItem disableGutters>
+                                <ListItemText
+                                  primary={r?.service_name ?? r?.reservation_services?.[0]?.service?.name ?? 'Reservation'}
+                                  secondary={new Date(r?.start_time ?? r?.end_time ?? Date.now()).toLocaleString()}
+                                />
+                              </ListItem>
+                              {idx < past.length - 1 && <Divider component="li" />}
+                            </React.Fragment>
+                          ));
+                        })()}
+                      </List>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>Upcoming Reservations</Typography>
+                      {reservationsLoading && (
+                        <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                      )}
+                      <List dense>
+                        {(() => {
+                          const now = Date.now();
+                          const upcoming = reservations
+                            .filter((r: any) => new Date(r?.end_time ?? r?.start_time ?? 0).getTime() >= now)
+                            .sort((a: any, b: any) => new Date(a?.start_time ?? a?.end_time ?? 0).getTime() - new Date(b?.start_time ?? b?.end_time ?? 0).getTime());
+                          if (upcoming.length === 0) return <Typography variant="body2" color="text.secondary">No upcoming reservations.</Typography>;
+                          return upcoming.map((r: any, idx: number) => (
+                            <React.Fragment key={r.id ?? idx}>
+                              <ListItem disableGutters>
+                                <ListItemText
+                                  primary={r?.service_name ?? r?.reservation_services?.[0]?.service?.name ?? 'Reservation'}
+                                  secondary={new Date(r?.start_time ?? r?.end_time ?? Date.now()).toLocaleString()}
+                                />
+                              </ListItem>
+                              {idx < upcoming.length - 1 && <Divider component="li" />}
+                            </React.Fragment>
+                          ));
+                        })()}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </Box>
+              )}
+
+              {activeTab === 3 && (
                 <Box mt={2}>
                   <PreferenceManager
                     preferences={preferences}
@@ -239,7 +334,7 @@ export const GuestManagement: React.FC = () => {
                 </Box>
               )}
 
-              {activeTab === 3 && (
+              {activeTab === 4 && (
                 <Box mt={2}>
                   <CommunicationHistory
                     communications={communications}
@@ -254,7 +349,7 @@ export const GuestManagement: React.FC = () => {
                 </Box>
               )}
 
-              {activeTab === 4 && (
+              {activeTab === 5 && (
                 <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
                   <AddressList
                     addresses={addresses}
@@ -271,7 +366,7 @@ export const GuestManagement: React.FC = () => {
                 </Box>
               )}
 
-              {activeTab === 5 && (
+              {activeTab === 6 && (
                 <Box mt={2}>
                   <GuestFeedbackManager onSubmit={(text) => { try { console.log('Feedback submitted', { guestId: (selectedGuest as any)?.id, text }); } catch(e) { console.error(e); } }} />
                 </Box>
