@@ -4,7 +4,9 @@ import {
   Typography,
   Card,
   CardContent,
-  Button
+  Button,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { GuestSearch } from '../components/guest/GuestSearch';
@@ -35,6 +37,7 @@ type Guest = GuestType;
 
 export const GuestManagement: React.FC = () => {
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
@@ -178,59 +181,101 @@ export const GuestManagement: React.FC = () => {
             </CardContent>
           </Card>
           {selectedGuest && (
-            <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
-              <PreferenceManager
-                preferences={preferences}
-                onAdd={async () => {
-                  if (!selectedGuest) return;
-                  // Simple demo: add first service if exists
-                  try {
-                    const created = await guestPreferencesService.create(selectedGuest.id, { service: (preferences[0]?.service ?? 1), rating: 5 });
-                    updateSelectedGuest((prev) => ({ ...prev, preferences: [...preferences, created] }));
-                  } catch (e) { console.error(e); }
-                }}
-                onRemove={async (pref) => {
-                  if (!selectedGuest) return;
-                  updateSelectedGuest((prev) => ({ ...prev, preferences: preferences.filter((p: any) => p.id !== pref.id) }));
-                  try { await guestPreferencesService.delete(selectedGuest.id, pref.id); } catch (e) { console.error(e); }
-                }}
-              />
-              <CommunicationHistory
-                communications={communications}
-                onAdd={async () => {
-                  if (!selectedGuest) return;
-                  try {
-                    const created = await guestCommunicationsService.create(selectedGuest.id, { communication_type: 'in_person', subject: 'Front Desk Note', message: 'Spoke with guest about preferences' });
-                    updateSelectedGuest((prev) => ({ ...prev, communications: [created, ...communications] }));
-                  } catch (e) { console.error(e); }
-                }}
-              />
-              <GuestJourneyTracker events={(selectedGuest as any)?.journey_events ?? []} />
-              <GuestRetentionTracker last_visit={(selectedGuest as any)?.last_visit ?? null} />
-              <GuestSegmentation groups={(selectedGuest as any)?.segments ?? []} />
-              <LoyaltyProgramManager
-                loyalty_points={(selectedGuest as any)?.loyalty_points ?? 0}
-                membership_tier={(selectedGuest as any)?.membership_tier ?? undefined}
-                benefits={(selectedGuest as any)?.loyalty_benefits ?? undefined}
-              />
-              <GuestAnalytics
-                total_spent={(selectedGuest as any)?.total_spent ?? 0}
-                visit_count={(selectedGuest as any)?.visit_count ?? 0}
-                last_visit={(selectedGuest as any)?.last_visit ?? null}
-              />
-              <GuestFeedbackManager onSubmit={(text) => { try { console.log('Feedback submitted', { guestId: (selectedGuest as any)?.id, text }); } catch(e) { console.error(e); } }} />
-              <AddressList
-                addresses={addresses}
-                onAdd={handleAddAddress}
-                onEdit={handleEditAddress}
-                onDelete={handleDeleteAddress}
-              />
-              <EmergencyContactList
-                contacts={contacts}
-                onAdd={handleAddContact}
-                onEdit={handleEditContact}
-                onDelete={handleDeleteContact}
-              />
+            <Box mt={2}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v) => setActiveTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab label="Overview" />
+                <Tab label="Journey" />
+                <Tab label="Preferences" />
+                <Tab label="Communications" />
+                <Tab label="Addresses & Contacts" />
+                <Tab label="Feedback" />
+              </Tabs>
+
+              {activeTab === 0 && (
+                <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
+                  <GuestAnalytics
+                    total_spent={(selectedGuest as any)?.total_spent ?? 0}
+                    visit_count={(selectedGuest as any)?.visit_count ?? 0}
+                    last_visit={(selectedGuest as any)?.last_visit ?? null}
+                  />
+                  <GuestRetentionTracker last_visit={(selectedGuest as any)?.last_visit ?? null} />
+                  <LoyaltyProgramManager
+                    loyalty_points={(selectedGuest as any)?.loyalty_points ?? 0}
+                    membership_tier={(selectedGuest as any)?.membership_tier ?? undefined}
+                    benefits={(selectedGuest as any)?.loyalty_benefits ?? undefined}
+                  />
+                  <GuestSegmentation groups={(selectedGuest as any)?.segments ?? []} />
+                </Box>
+              )}
+
+              {activeTab === 1 && (
+                <Box mt={2}>
+                  <GuestJourneyTracker events={(selectedGuest as any)?.journey_events ?? []} />
+                </Box>
+              )}
+
+              {activeTab === 2 && (
+                <Box mt={2}>
+                  <PreferenceManager
+                    preferences={preferences}
+                    onAdd={async () => {
+                      if (!selectedGuest) return;
+                      try {
+                        const created = await guestPreferencesService.create(selectedGuest.id, { service: (preferences[0]?.service ?? 1), rating: 5 });
+                        updateSelectedGuest((prev) => ({ ...prev, preferences: [...preferences, created] }));
+                      } catch (e) { console.error(e); }
+                    }}
+                    onRemove={async (pref) => {
+                      if (!selectedGuest) return;
+                      updateSelectedGuest((prev) => ({ ...prev, preferences: preferences.filter((p: any) => p.id !== pref.id) }));
+                      try { await guestPreferencesService.delete(selectedGuest.id, pref.id); } catch (e) { console.error(e); }
+                    }}
+                  />
+                </Box>
+              )}
+
+              {activeTab === 3 && (
+                <Box mt={2}>
+                  <CommunicationHistory
+                    communications={communications}
+                    onAdd={async () => {
+                      if (!selectedGuest) return;
+                      try {
+                        const created = await guestCommunicationsService.create(selectedGuest.id, { communication_type: 'in_person', subject: 'Front Desk Note', message: 'Spoke with guest about preferences' });
+                        updateSelectedGuest((prev) => ({ ...prev, communications: [created, ...communications] }));
+                      } catch (e) { console.error(e); }
+                    }}
+                  />
+                </Box>
+              )}
+
+              {activeTab === 4 && (
+                <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
+                  <AddressList
+                    addresses={addresses}
+                    onAdd={handleAddAddress}
+                    onEdit={handleEditAddress}
+                    onDelete={handleDeleteAddress}
+                  />
+                  <EmergencyContactList
+                    contacts={contacts}
+                    onAdd={handleAddContact}
+                    onEdit={handleEditContact}
+                    onDelete={handleDeleteContact}
+                  />
+                </Box>
+              )}
+
+              {activeTab === 5 && (
+                <Box mt={2}>
+                  <GuestFeedbackManager onSubmit={(text) => { try { console.log('Feedback submitted', { guestId: (selectedGuest as any)?.id, text }); } catch(e) { console.error(e); } }} />
+                </Box>
+              )}
             </Box>
           )}
         </Box>
