@@ -32,5 +32,13 @@ export const locationsApi = {
     const res = await api.post(`/locations/${id}/mark-vacant/`, {});
     return res.data;
   },
+  outOfService: async (id: number) => {
+    const res = await api.post(`/locations/${id}/out-of-service/`, {});
+    return res.data;
+  },
+  backInService: async (id: number) => {
+    const res = await api.post(`/locations/${id}/back-in-service/`, {});
+    return res.data;
+  },
 };
 

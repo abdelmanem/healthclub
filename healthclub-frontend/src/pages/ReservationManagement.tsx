@@ -15,6 +15,7 @@ import {
   DialogActions,
   Snackbar,
   Alert,
+  Autocomplete,
   FormControl,
   InputLabel,
   Select,
@@ -45,6 +46,7 @@ import isBetween from 'dayjs/plugin/isBetween';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation } from '../services/reservations';
 import { api } from '../services/api';
+import { locationsApi, Location } from '../services/locations';
 
 dayjs.extend(isBetween);
 
@@ -85,6 +87,7 @@ export const ReservationManagement: React.FC = () => {
   const [pendingMove, setPendingMove] = useState<any | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success'|'info'|'warning'|'error' }>({ open: false, message: '', severity: 'info' });
   const [dirtyConfirm, setDirtyConfirm] = useState<{ open: boolean; reservation?: Reservation }>(() => ({ open: false }));
+  const [assignRoom, setAssignRoom] = useState<{ open: boolean; reservation?: Reservation; options: Location[] }>({ open: false, reservation: undefined, options: [] });
 
   // KPI
   const [kpi, setKpi] = useState({ arrivalsToday: 0, checkedInNow: 0, inServiceNow: 0, revenueToday: 0 });
@@ -605,6 +608,19 @@ export const ReservationManagement: React.FC = () => {
                   <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />}>Check-out</Button>
                 )}
                 <Button variant="text" onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}>Edit</Button>
+                <Button variant="outlined" onClick={async ()=> {
+                  if (!selectedReservation) return;
+                  // Load clean & vacant rooms (and unisex or matching gender)
+                  try {
+                    const gender = (selectedReservation as any).guest_gender || undefined;
+                    const params: any = { is_clean: 'true', is_occupied: 'false' };
+                    if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                    const rooms = await locationsApi.list(params);
+                    setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
+                  } catch {
+                    setAssignRoom({ open: true, reservation: selectedReservation, options: [] });
+                  }
+                }}>Assign Room</Button>
               </Box>
 
               {/* Historical Reservations */}
@@ -744,6 +760,37 @@ export const ReservationManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditing(undefined)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Assign Room Dialog */}
+      <Dialog open={assignRoom.open} onClose={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>
+        <DialogTitle>Assign Room</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Autocomplete
+            options={assignRoom.options}
+            getOptionLabel={(o: Location) => `${o.name} ${o.is_clean ? '' : '(Dirty)'} ${o.is_occupied ? '(Occupied)' : ''}`.trim()}
+            onChange={(_, value) => {
+              (assignRoom as any).selected = value as any;
+            }}
+            renderInput={(params) => <TextField {...params} label="Room" sx={{ minWidth: 320 }} />}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            const r = assignRoom.reservation;
+            const selected: any = (assignRoom as any).selected;
+            if (!r || !selected) return;
+            try {
+              await reservationsService.update(r.id, { location: selected.id } as any);
+              await loadReservations();
+              setAssignRoom({ open: false, reservation: undefined, options: [] });
+              setSnackbar({ open: true, message: `Assigned ${selected.name}`, severity: 'success' });
+            } catch (e:any) {
+              setSnackbar({ open: true, message: e?.response?.data?.detail || 'Failed to assign room', severity: 'error' });
+            }
+          }}>Assign</Button>
         </DialogActions>
       </Dialog>
     </Box>
