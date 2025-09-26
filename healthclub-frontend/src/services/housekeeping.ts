@@ -17,7 +17,8 @@ export interface HousekeepingTask {
 export const housekeepingApi = {
   list: async (params?: Record<string, any>) => {
     const res = await api.get('/housekeeping-tasks/', { params });
-    return res.data as HousekeepingTask[];
+    const data = res.data as any;
+    return Array.isArray(data) ? (data as HousekeepingTask[]) : (data?.results ?? []);
   },
   get: async (id: number) => {
     const res = await api.get(`/housekeeping-tasks/${id}/`);
