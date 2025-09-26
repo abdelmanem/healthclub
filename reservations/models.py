@@ -45,6 +45,7 @@ class Location(models.Model):
     gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unisex")
     is_clean = models.BooleanField(default=True)
     is_occupied = models.BooleanField(default=False)
+    is_out_of_service = models.BooleanField(default=False, help_text="If true, room cannot be booked or used")
     type = models.ForeignKey(
         'reservations.LocationType',
         on_delete=models.SET_NULL,
@@ -371,6 +372,13 @@ class HousekeepingTask(models.Model):
         related_name='housekeeping_tasks'
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    PRIORITY_CHOICES = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    )
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    due_at = models.DateTimeField(null=True, blank=True)
     assigned_to = models.ForeignKey(
         'employees.Employee',
         on_delete=models.SET_NULL,

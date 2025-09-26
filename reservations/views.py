@@ -24,6 +24,7 @@ class LocationViewSet(viewsets.ModelViewSet):
         'type': ['exact', 'in'],
         'status': ['exact', 'in'],
         'is_active': ['exact'],
+        'is_out_of_service': ['exact'],
     }
 
     def get_queryset(self):
@@ -75,6 +76,7 @@ class HousekeepingTaskViewSet(viewsets.ModelViewSet):
         'status': ['exact', 'in'],
         'location': ['exact', 'in'],
         'assigned_to': ['exact', 'in'],
+        'priority': ['exact', 'in'],
     }
 
     @decorators.action(detail=True, methods=["post"], url_path="start")
@@ -105,6 +107,21 @@ class HousekeepingTaskViewSet(viewsets.ModelViewSet):
             pass
         return response.Response({"status": task.status, "completed_at": task.completed_at, "location_is_clean": task.location.is_clean})
 
+    @decorators.action(detail=False, methods=["get"], url_path="analytics")
+    def analytics(self, request):
+        from django.db.models import Count, Avg, DurationField, ExpressionWrapper, F
+        qs = self.get_queryset()
+        counts = qs.values('status').annotate(count=Count('id'))
+        # average completion time (completed_at - created_at)
+        completed = qs.filter(status=HousekeepingTask.STATUS_COMPLETED, completed_at__isnull=False)
+        from django.db.models.functions import Now
+        duration_expr = ExpressionWrapper(F('completed_at') - F('created_at'), output_field=DurationField())
+        avg_duration = completed.aggregate(avg=Avg(duration_expr)).get('avg')
+        return response.Response({
+            'counts': list(counts),
+            'avg_completion_duration_seconds': int(avg_duration.total_seconds()) if avg_duration else None,
+        })
+
     @decorators.action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         task = self.get_object()
@@ -122,6 +139,20 @@ class HousekeepingTaskViewSet(viewsets.ModelViewSet):
         obj.is_occupied = False
         obj.save(update_fields=["is_occupied"])
         return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
+
+    @decorators.action(detail=True, methods=["post"], url_path="out-of-service")
+    def out_of_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = True
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
+
+    @decorators.action(detail=True, methods=["post"], url_path="back-in-service")
+    def back_in_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = False
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -157,6 +188,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Enforce room clean and not occupied before check-in
         if getattr(reservation, 'location_id', None):
             loc = reservation.location
+            if getattr(loc, 'is_out_of_service', False):
+                return response.Response({"error": "Room is out of service"}, status=status.HTTP_400_BAD_REQUEST)
             # If room is dirty, require explicit confirmation from frontend
             if not getattr(loc, 'is_clean', True):
                 allow_dirty = False
