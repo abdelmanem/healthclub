@@ -664,6 +664,9 @@ export const ReservationManagement: React.FC = () => {
                     const gender = (selectedReservation as any).guest_gender || undefined;
                     const params: any = { is_clean: 'true', is_occupied: 'false' };
                     if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                    // If services exist, filter to locations linked to those services
+                    const serviceIds = (selectedReservation.reservation_services || []).map((s:any) => s.service).filter(Boolean);
+                    if (serviceIds.length > 0) (params as any).services = serviceIds.join(',');
                     const rooms = await locationsApi.list(params);
                     setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
                   } catch {

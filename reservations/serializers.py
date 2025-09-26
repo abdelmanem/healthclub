@@ -209,6 +209,10 @@ class ReservationSerializer(serializers.ModelSerializer):
             guest_gender = getattr(guest, 'gender', '') or ''
             if guest and guest_gender in ['male', 'female']:
                 qs = qs.filter(models.Q(gender='unisex') | models.Q(gender=guest_gender))
+            # If services are provided, prefer rooms linked to those services
+            service_ids = [s.get('service').id if hasattr(s.get('service'), 'id') else s.get('service') for s in services_data if s.get('service')]
+            if service_ids:
+                qs = qs.filter(services__in=service_ids).distinct()
             loc = qs.order_by('name').first()
             if loc:
                 validated_data['location'] = loc
