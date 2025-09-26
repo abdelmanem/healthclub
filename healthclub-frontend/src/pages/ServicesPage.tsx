@@ -1,42 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button, Paper, Stack, TextField, Typography, Grid, Chip, Autocomplete } from '@mui/material';
-import { servicesApi, ServiceInput, ServiceRecord } from '../services/services';
+import { servicesApi, ServiceInput, ServiceRecord, serviceCategoriesApi, ServiceCategoryRecord } from '../services/services';
 import { locationsApi, Location } from '../services/locations';
 
 export const ServicesPage: React.FC = () => {
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [form, setForm] = useState<ServiceInput>({ name: '', duration_minutes: 60, price: 0, description: '', locations: [] });
+  const [categories, setCategories] = useState<ServiceCategoryRecord[]>([]);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<ServiceRecord | null>(null);
+  const [catForm, setCatForm] = useState<{ name: string; description?: string }>({ name: '', description: '' });
   const [selectedLocations, setSelectedLocations] = useState<Location[]>([]);
 
   const load = async () => {
-    const [svc, loc] = await Promise.all([
+    const [svc, loc, cat] = await Promise.all([
       servicesApi.list(),
       locationsApi.list({ is_active: true }),
+      serviceCategoriesApi.list(),
     ]);
     setServices(svc);
     setLocations(loc);
+    setCategories(cat);
   };
 
   useEffect(() => { load(); }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload: ServiceInput = {
+    const payload: ServiceInput & { category_id?: number | null } = {
       ...form,
       duration_minutes: Number(form.duration_minutes),
       price: Number(form.price),
       locations: selectedLocations.map(l => l.id),
+      ...(categoryId ? { category_id: categoryId } : {}),
     };
-    await servicesApi.create(payload);
+    if (editing) {
+      await servicesApi.update(editing.id, payload);
+    } else {
+      await servicesApi.create(payload);
+    }
     setForm({ name: '', duration_minutes: 60, price: 0, description: '', locations: [] });
     setSelectedLocations([]);
+    setCategoryId(null);
+    setEditing(null);
     await load();
   };
 
   return (
     <Box p={2}>
-      <Typography variant="h5" gutterBottom>Create Service</Typography>
+      <Typography variant="h5" gutterBottom>{editing ? 'Edit Service' : 'Create Service'}</Typography>
       <Paper sx={{ p: 2, mb: 3 }}>
         <form onSubmit={submit}>
           <Grid container spacing={2}>
@@ -48,6 +61,15 @@ export const ServicesPage: React.FC = () => {
             </Grid>
             <Grid item xs={6} md={3}>
               <TextField type="number" label="Price" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} fullWidth required />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                options={categories}
+                value={categories.find(c => c.id === categoryId) || null}
+                onChange={(_, val) => setCategoryId(val ? val.id : null)}
+                getOptionLabel={(o) => o.name}
+                renderInput={(params) => <TextField {...params} label="Category (optional)" />}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth multiline minRows={2} />
@@ -80,10 +102,47 @@ export const ServicesPage: React.FC = () => {
                 <Stack direction="row" spacing={1} mt={1}>
                   <Chip label={`${s.duration_minutes} min`} size="small" />
                   <Chip label={`$${Number(s.price).toFixed(2)}`} size="small" />
+                  {(s as any).category && <Chip label={(s as any).category.name} size="small" />}
                 </Stack>
               </Box>
               <Stack direction="row" spacing={1}>
-                <Typography variant="caption" color="text.secondary">ID: {s.id}</Typography>
+                <Button size="small" onClick={() => {
+                  setEditing(s);
+                  setForm({ name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: Number(s.price), locations: [] });
+                  setCategoryId(((s as any).category?.id) || null);
+                }}>Edit</Button>
+                <Button size="small" color="error" onClick={async () => { await servicesApi.delete(s.id); await load(); }}>Delete</Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        ))}
+      </Stack>
+
+      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>Service Categories</Typography>
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField label="Name" value={catForm.name} onChange={(e)=> setCatForm({ ...catForm, name: e.target.value })} fullWidth />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField label="Description" value={catForm.description} onChange={(e)=> setCatForm({ ...catForm, description: e.target.value })} fullWidth />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <Button variant="contained" onClick={async ()=> { await serviceCategoriesApi.create(catForm); setCatForm({ name: '', description: '' }); await load(); }}>Add Category</Button>
+          </Grid>
+        </Grid>
+      </Paper>
+      <Stack spacing={1}>
+        {categories.map(c => (
+          <Paper key={c.id} sx={{ p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Box>
+                <Typography variant="subtitle1">{c.name}</Typography>
+                <Typography variant="body2" color="text.secondary">{c.description}</Typography>
+              </Box>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" onClick={async ()=> { const name = prompt('New name', c.name) || c.name; const description = prompt('New description', c.description || '') || c.description; await serviceCategoriesApi.update(c.id, { name, description }); await load(); }}>Edit</Button>
+                <Button size="small" color="error" onClick={async ()=> { await serviceCategoriesApi.delete(c.id); await load(); }}>Delete</Button>
               </Stack>
             </Stack>
           </Paper>

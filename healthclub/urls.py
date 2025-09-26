@@ -23,7 +23,7 @@ from rest_framework_simplejwt.views import (
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from guests.views import GuestViewSet
-from services.views import ServiceViewSet
+from services.views import ServiceViewSet, ServiceCategoryViewSet
 from reservations.views import LocationViewSet, ReservationViewSet, HousekeepingTaskViewSet
 from pos.views import InvoiceViewSet, PaymentViewSet
 from employees.views import (
@@ -56,6 +56,7 @@ from accounts.views import get_current_user
 router = DefaultRouter()
 router.register(r'guests', GuestViewSet, basename='guest')
 router.register(r'services', ServiceViewSet, basename='service')
+router.register(r'service-categories', ServiceCategoryViewSet, basename='service-category')
 router.register(r'locations', LocationViewSet, basename='location')
 router.register(r'reservations', ReservationViewSet, basename='reservation')
 router.register(r'housekeeping-tasks', HousekeepingTaskViewSet, basename='housekeeping-task')
