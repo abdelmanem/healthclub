@@ -28,6 +28,13 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
                     pass
         elif instance.status == Reservation.STATUS_IN_SERVICE:
             instance.in_service_at = now
+            # Ensure location is marked occupied during service
+            if getattr(instance, 'location_id', None):
+                try:
+                    instance.location.is_occupied = True
+                    instance.location.save(update_fields=["is_occupied"])
+                except Exception:
+                    pass
         elif instance.status == Reservation.STATUS_COMPLETED:
             instance.completed_at = now
         elif instance.status == Reservation.STATUS_CHECKED_OUT:

@@ -314,7 +314,26 @@ export const ReservationManagement: React.FC = () => {
     const targetReservation = reservation || selectedReservation;
     if (!targetReservation) return;
     try {
-      if (action === 'check_in') await reservationsService.checkIn(targetReservation.id);
+      if (action === 'check_in') {
+        try {
+          await reservationsService.checkIn(targetReservation.id);
+        } catch (err: any) {
+          const data = err?.response?.data || {};
+          if (data?.reason_code === 'room_dirty' && data?.requires_confirmation) {
+            const confirmProceed = window.confirm('Room is marked dirty. Proceed with check-in anyway?');
+            if (confirmProceed) {
+              await reservationsService.checkIn(targetReservation.id, { allow_dirty: true });
+            } else {
+              return;
+            }
+          } else if (data?.reason_code === 'room_occupied') {
+            alert('Selected room is currently occupied. Please choose another room.');
+            return;
+          } else {
+            throw err;
+          }
+        }
+      }
       if (action === 'in_service') await reservationsService.inService(targetReservation.id);
       if (action === 'complete') await reservationsService.complete(targetReservation.id);
       if (action === 'check_out') {
