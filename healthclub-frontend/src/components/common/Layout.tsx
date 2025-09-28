@@ -243,7 +243,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
+              color: '#ffffff',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+              '& .MuiTypography-root': {
+                color: '#ffffff',
+                fontWeight: 500,
+              },
+              '& .MuiIconButton-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItem-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItemButton-root': {
+                color: '#ffffff',
+              },
+            },
           }}
         >
           {drawer}
@@ -263,6 +282,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               // Remove any margin/padding that creates gap
               margin: 0,
               padding: 0,
+              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
+              color: '#ffffff',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+              '& .MuiTypography-root': {
+                color: '#ffffff',
+                fontWeight: 500,
+              },
+              '& .MuiIconButton-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItem-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItemButton-root': {
+                color: '#ffffff',
+              },
             },
           }}
           open
