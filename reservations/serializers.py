@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HistoricalReservation
+from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HousekeepingTask
 from datetime import timedelta
 from config.models import SystemConfiguration
 
@@ -21,9 +21,13 @@ class LocationSerializer(serializers.ModelSerializer):
     status = LocationStatusSerializer(read_only=True)
     type_id = serializers.PrimaryKeyRelatedField(queryset=LocationType.objects.all(), source='type', write_only=True, required=False, allow_null=True)
     status_id = serializers.PrimaryKeyRelatedField(queryset=LocationStatus.objects.all(), source='status', write_only=True, required=False, allow_null=True)
+    gender = serializers.CharField()
+    is_clean = serializers.BooleanField()
+    is_occupied = serializers.BooleanField(read_only=True)
+    is_out_of_service = serializers.BooleanField()
     class Meta:
         model = Location
-        fields = ["id", "name", "description", "capacity", "is_active", "type", "status", "type_id", "status_id"]
+        fields = ["id", "name", "description", "capacity", "is_active", "gender", "is_clean", "is_occupied", "is_out_of_service", "type", "status", "type_id", "status_id"]
 
 
 class ServiceDetailSerializer(serializers.Serializer):
@@ -70,6 +74,7 @@ class ReservationSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
     total_duration_minutes = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
+    location_is_out_of_service = serializers.BooleanField(source='location.is_out_of_service', read_only=True)
 
     class Meta:
         model = Reservation
@@ -94,6 +99,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "checked_out_at",
             "cancelled_at",
             "no_show_recorded_at",
+            "location_is_out_of_service",
         ]
         read_only_fields = [
             "checked_in_at",
@@ -129,6 +135,8 @@ class ReservationSerializer(serializers.ModelSerializer):
         start_time = attrs.get('start_time')
         end_time = attrs.get('end_time')
         services_data = attrs.get('reservation_services', [])
+        guest = attrs.get('guest') or getattr(self.instance, 'guest', None)
+        location = attrs.get('location') or getattr(self.instance, 'location', None)
 
         if not start_time:
             raise serializers.ValidationError({"start_time": "This field is required."})
@@ -142,6 +150,22 @@ class ReservationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "end_time": "end_time must be after start_time. Omit end_time to auto-calculate."
                 })
+
+        # Enforce room out-of-service block
+        if location and getattr(location, 'is_out_of_service', False):
+            raise serializers.ValidationError({
+                "location": "Selected room is out of service and cannot be reserved."
+            })
+
+        # Enforce gender constraint if both available
+        if guest and location:
+            location_gender = getattr(location, 'gender', 'unisex')
+            guest_gender = getattr(guest, 'gender', '') or ''
+            if location_gender in ['male', 'female']:
+                if guest_gender not in ['male', 'female'] or guest_gender != location_gender:
+                    raise serializers.ValidationError({
+                        "location": "Guest gender does not match the location's gender policy."
+                    })
 
         return attrs
 
@@ -176,6 +200,22 @@ class ReservationSerializer(serializers.ModelSerializer):
         # Ensure end_time is set correctly (in case validate wasn't run for some reason)
         if not validated_data.get('end_time') and validated_data.get('start_time'):
             validated_data['end_time'] = self._compute_end_time(validated_data['start_time'], services_data)
+        # Auto-assign a clean, vacant room if none provided
+        if not validated_data.get('location'):
+            from .models import Location
+            qs = Location.objects.filter(is_active=True, is_out_of_service=False, is_clean=True, is_occupied=False)
+            # Try gender match if guest has gender
+            guest = validated_data.get('guest')
+            guest_gender = getattr(guest, 'gender', '') or ''
+            if guest and guest_gender in ['male', 'female']:
+                qs = qs.filter(models.Q(gender='unisex') | models.Q(gender=guest_gender))
+            # If services are provided, prefer rooms linked to those services
+            service_ids = [s.get('service').id if hasattr(s.get('service'), 'id') else s.get('service') for s in services_data if s.get('service')]
+            if service_ids:
+                qs = qs.filter(services__in=service_ids).distinct()
+            loc = qs.order_by('name').first()
+            if loc:
+                validated_data['location'] = loc
         reservation = Reservation.objects.create(**validated_data)
         for srv in services_data:
             ReservationService.objects.create(reservation=reservation, **srv)
@@ -193,36 +233,15 @@ class ReservationSerializer(serializers.ModelSerializer):
         return instance
 
 
-class HistoricalReservationSerializer(serializers.ModelSerializer):
-    guest_name = serializers.CharField(source='guest.full_name', read_only=True)
+class HousekeepingTaskSerializer(serializers.ModelSerializer):
     location_name = serializers.CharField(source='location.name', read_only=True)
-    employee_name = serializers.SerializerMethodField()
+    reservation_id = serializers.IntegerField(source='reservation.id', read_only=True)
 
     class Meta:
-        model = HistoricalReservation
+        model = HousekeepingTask
         fields = [
-            "id",
-            "guest",
-            "guest_name",
-            "location",
-            "location_name",
-            "employee",
-            "employee_name",
-            "start_time",
-            "end_time",
-            "status",
-            "notes",
-            "history_id",
-            "history_date",
-            "history_type",
+            'id', 'location', 'location_name', 'reservation', 'reservation_id',
+            'status', 'priority', 'due_at', 'assigned_to', 'notes', 'created_at', 'started_at',
+            'completed_at', 'cancelled_at'
         ]
-        read_only_fields = fields
-
-    def get_employee_name(self, obj):
-        try:
-            employee = obj.employee
-            if not employee:
-                return None
-            return f"{employee.user.first_name} {employee.user.last_name}".strip()
-        except Exception:
-            return None
+        read_only_fields = ['created_at', 'started_at', 'completed_at', 'cancelled_at']

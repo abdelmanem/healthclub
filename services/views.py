@@ -1,7 +1,7 @@
 from rest_framework import viewsets, filters, decorators
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Service
-from .serializers import ServiceSerializer
+from .models import Service, ServiceCategory
+from .serializers import ServiceSerializer, ServiceCategorySerializer
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 
 class ServiceViewSet(viewsets.ModelViewSet):
@@ -34,3 +34,20 @@ class ServiceViewSet(viewsets.ModelViewSet):
         result = {u.username: perms for u, perms in users.items()}
         from rest_framework.response import Response
         return Response(result)
+
+
+class ServiceCategoryViewSet(viewsets.ModelViewSet):
+    queryset = ServiceCategory.objects.all().order_by("name")
+    serializer_class = ServiceCategorySerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "description"]
+    ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'services.view_servicecategory', qs)

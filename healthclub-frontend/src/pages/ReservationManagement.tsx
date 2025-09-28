@@ -13,6 +13,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Snackbar,
+  Alert,
+  Autocomplete,
   FormControl,
   InputLabel,
   Select,
@@ -43,6 +46,7 @@ import isBetween from 'dayjs/plugin/isBetween';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation } from '../services/reservations';
 import { api } from '../services/api';
+import { locationsApi, Location } from '../services/locations';
 
 dayjs.extend(isBetween);
 
@@ -81,6 +85,9 @@ export const ReservationManagement: React.FC = () => {
 
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success'|'info'|'warning'|'error' }>({ open: false, message: '', severity: 'info' });
+  const [dirtyConfirm, setDirtyConfirm] = useState<{ open: boolean; reservation?: Reservation }>(() => ({ open: false }));
+  const [assignRoom, setAssignRoom] = useState<{ open: boolean; reservation?: Reservation; options: Location[] }>({ open: false, reservation: undefined, options: [] });
 
   // KPI
   const [kpi, setKpi] = useState({ arrivalsToday: 0, checkedInNow: 0, inServiceNow: 0, revenueToday: 0 });
@@ -154,7 +161,7 @@ export const ReservationManagement: React.FC = () => {
 
   // keep ticking for timers
   useEffect(() => {
-    if (tab !== 4 || !showTimers) return;
+    if (tab !== 5 || !showTimers) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [tab, showTimers]);
@@ -244,6 +251,18 @@ export const ReservationManagement: React.FC = () => {
       if (r.guest) {
         await loadHistoricalReservations(r.guest);
       }
+      // Auto-suggest reassignment if room is out of service
+      if ((r as any).location_is_out_of_service) {
+        try {
+          const gender = (r as any).guest_gender || undefined;
+          const params: any = { is_clean: 'true', is_occupied: 'false' };
+          if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+          const rooms = await locationsApi.list(params);
+          setAssignRoom({ open: true, reservation: r, options: rooms });
+        } catch {
+          setAssignRoom({ open: true, reservation: r, options: [] });
+        }
+      }
     }
   };
 
@@ -314,14 +333,48 @@ export const ReservationManagement: React.FC = () => {
     const targetReservation = reservation || selectedReservation;
     if (!targetReservation) return;
     try {
-      if (action === 'check_in') await reservationsService.checkIn(targetReservation.id);
+      if (action === 'check_in') {
+        try {
+          await reservationsService.checkIn(targetReservation.id);
+        } catch (err: any) {
+          const data = err?.response?.data || {};
+          if (data?.reason_code === 'room_dirty' && data?.requires_confirmation) {
+            setDirtyConfirm({ open: true, reservation: targetReservation });
+            return;
+          } else if (data?.reason_code === 'room_occupied') {
+            setSnackbar({ open: true, message: 'Room is occupied. Choose another room.', severity: 'warning' });
+            return;
+          } else if ((data?.error || '').toLowerCase().includes('out of service')) {
+            setSnackbar({ open: true, message: 'Room is out of service. Please reassign.', severity: 'warning' });
+            try {
+              const gender = (targetReservation as any).guest_gender || undefined;
+              const params: any = { is_clean: 'true', is_occupied: 'false' };
+              if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+              const rooms = await locationsApi.list(params);
+              setAssignRoom({ open: true, reservation: targetReservation, options: rooms });
+            } catch {
+              setAssignRoom({ open: true, reservation: targetReservation, options: [] });
+            }
+            return;
+          } else {
+            throw err;
+          }
+        }
+      }
       if (action === 'in_service') await reservationsService.inService(targetReservation.id);
       if (action === 'complete') await reservationsService.complete(targetReservation.id);
-      if (action === 'check_out') await reservationsService.checkOut(targetReservation.id);
+      if (action === 'check_out') {
+        await reservationsService.checkOut(targetReservation.id);
+        // Auto-create invoice on checkout (non-blocking UI)
+        try { await reservationsService.createInvoice(targetReservation.id); } catch (e) { console.warn('Invoice creation failed:', e); }
+        // Notify user about room status change and HK task creation
+        setSnackbar({ open: true, message: 'Checked out. Room marked dirty and housekeeping task created.', severity: 'success' });
+      }
       await loadReservations();
       if (!reservation) setDrawerOpen(false);
-    } catch (e) {
+    } catch (e:any) {
       console.error('Action failed', e);
+      setSnackbar({ open: true, message: e?.response?.data?.detail || 'Action failed', severity: 'error' });
     }
   };
 
@@ -345,7 +398,14 @@ export const ReservationManagement: React.FC = () => {
           {rows.map((r) => (
             <TableRow key={r.id}>
               <TableCell>{r.guest_name}</TableCell>
-              <TableCell>{r.location_name}</TableCell>
+              <TableCell>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <span>{r.location_name}</span>
+                  {(r as any).location_is_out_of_service && (
+                    <Chip label="OOS" color="error" size="small" />
+                  )}
+                </Stack>
+              </TableCell>
               <TableCell>{r.employee_name}</TableCell>
               <TableCell>
                 <Chip label={r.status} sx={{ bgcolor: statusColor(r.status), color: '#fff' }} />
@@ -364,18 +424,31 @@ export const ReservationManagement: React.FC = () => {
                   }}>
                     <Edit fontSize="small" />
                   </IconButton>
-                  {r.status === 'confirmed' && (
-                    <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary">
+                  <IconButton size="small" onClick={async () => {
+                    try {
+                      const gender = (r as any).guest_gender || undefined;
+                      const params: any = { is_clean: 'true', is_occupied: 'false' };
+                      if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                      const rooms = await locationsApi.list(params);
+                      setAssignRoom({ open: true, reservation: r, options: rooms });
+                    } catch {
+                      setAssignRoom({ open: true, reservation: r, options: [] });
+                    }
+                  }} title="Assign Room">
+                    <DirectionsRun fontSize="small" />
+                  </IconButton>
+                  {(!r.status || r.status === 'confirmed') && (
+                    <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary" title="Check-in">
                       <Check fontSize="small" />
                     </IconButton>
                   )}
                   {r.status === 'checked_in' && (
-                    <IconButton size="small" onClick={() => performAction('in_service', r)} color="warning">
+                    <IconButton size="small" onClick={() => performAction('in_service', r)} color="warning" title="Start Service">
                       <DirectionsRun fontSize="small" />
                     </IconButton>
                   )}
                   {r.status === 'in_service' && (
-                    <IconButton size="small" onClick={() => performAction('complete', r)} color="success">
+                    <IconButton size="small" onClick={() => performAction('complete', r)} color="success" title="Complete Service">
                       <DoneAll fontSize="small" />
                     </IconButton>
                   )}
@@ -488,7 +561,8 @@ export const ReservationManagement: React.FC = () => {
           <Tab label="Arrivals" value={1} />
           <Tab label="In Service" value={2} />
           <Tab label="Completed" value={3} />
-          <Tab label="Calendar" value={4} />
+          <Tab label="Housekeeping" value={4} />
+          <Tab label="Calendar" value={5} />
         </Tabs>
         <Box flex={1} />
         <Button variant="contained" startIcon={<Add />} onClick={() => setEditing(null)}>New Reservation</Button>
@@ -499,9 +573,25 @@ export const ReservationManagement: React.FC = () => {
       {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'confirmed'))}
       {tab === 2 && renderTable(getFilteredReservations().filter(r => r.status === 'in_service'))}
       {tab === 3 && renderTable(getFilteredReservations().filter(r => r.status === 'completed'))}
+      {tab === 4 && (
+        <Box>
+          <Typography variant="h6" gutterBottom>Housekeeping Tasks</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Housekeeping tasks are automatically created when guests check out. 
+            Use the dedicated Housekeeping page for task management.
+          </Typography>
+          <Button 
+            variant="outlined" 
+            onClick={() => window.location.href = '/housekeeping'}
+            sx={{ mt: 2 }}
+          >
+            Go to Housekeeping Management
+          </Button>
+        </Box>
+      )}
 
       {/* Calendar */}
-      {tab === 4 && (
+      {tab === 5 && (
         <Card>
           <CardContent sx={{ position: 'relative' }}>
             {isDragging && (
@@ -563,14 +653,43 @@ export const ReservationManagement: React.FC = () => {
                 <Typography>{dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : '-'}</Typography>
                 <Typography mt={1} variant="subtitle2">Total Price</Typography>
                 <Typography>${Number(selectedReservation.total_price || 0).toFixed(2)}</Typography>
+                {((selectedReservation as any).location_is_out_of_service) && (
+                  <Box mt={1}>
+                    <Chip label="Room Out of Service" color="error" size="small" />
+                  </Box>
+                )}
               </Box>
 
               <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />} disabled={!(selectedReservation.status === 'confirmed' || !selectedReservation.status)}>Check-in</Button>
-                <Button variant="contained" color="warning" onClick={()=> performAction('in_service')} startIcon={<DirectionsRun />} disabled={!(selectedReservation.status === 'checked_in')}>In Service</Button>
-                <Button variant="contained" color="success" onClick={()=> performAction('complete')} startIcon={<DoneAll />} disabled={!(selectedReservation.status === 'in_service')}>Complete</Button>
-                <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />} disabled={!(selectedReservation.status === 'completed')}>Check-out</Button>
+                {(!selectedReservation.status || selectedReservation.status === 'confirmed') && (
+                  <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />}>Check-in</Button>
+                )}
+                {selectedReservation.status === 'checked_in' && (
+                  <Button variant="contained" color="warning" onClick={()=> performAction('in_service')} startIcon={<DirectionsRun />}>In Service</Button>
+                )}
+                {selectedReservation.status === 'in_service' && (
+                  <Button variant="contained" color="success" onClick={()=> performAction('complete')} startIcon={<DoneAll />}>Complete</Button>
+                )}
+                {selectedReservation.status === 'completed' && (
+                  <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />}>Check-out</Button>
+                )}
                 <Button variant="text" onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}>Edit</Button>
+                <Button variant="outlined" onClick={async ()=> {
+                  if (!selectedReservation) return;
+                  // Load clean & vacant rooms (and unisex or matching gender)
+                  try {
+                    const gender = (selectedReservation as any).guest_gender || undefined;
+                    const params: any = { is_clean: 'true', is_occupied: 'false' };
+                    if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                    // If services exist, filter to locations linked to those services
+                    const serviceIds = (selectedReservation.reservation_services || []).map((s:any) => s.service).filter(Boolean);
+                    if (serviceIds.length > 0) (params as any).services = serviceIds.join(',');
+                    const rooms = await locationsApi.list(params);
+                    setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
+                  } catch {
+                    setAssignRoom({ open: true, reservation: selectedReservation, options: [] });
+                  }
+                }}>Assign Room</Button>
               </Box>
 
               {/* Historical Reservations */}
@@ -644,6 +763,46 @@ export const ReservationManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Dirty room confirmation */}
+      <Dialog open={dirtyConfirm.open} onClose={() => setDirtyConfirm({ open: false })}>
+        <DialogTitle>Room is Dirty</DialogTitle>
+        <DialogContent>
+          <Typography>The selected room is marked dirty. Do you want to proceed with check-in anyway?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDirtyConfirm({ open: false })}>Cancel</Button>
+          <Button 
+            onClick={async () => {
+              const r = dirtyConfirm.reservation || selectedReservation;
+              setDirtyConfirm({ open: false });
+              if (!r) return;
+              try {
+                await reservationsService.checkIn(r.id, { allow_dirty: true });
+                await loadReservations();
+                setSnackbar({ open: true, message: 'Checked in (room dirty acknowledged)', severity: 'success' });
+              } catch (e:any) {
+                setSnackbar({ open: true, message: e?.response?.data?.detail || 'Check-in failed', severity: 'error' });
+              }
+            }}
+            variant="contained"
+          >
+            Proceed
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={3000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
       {/* New/Edit form dialog */}
       <Dialog 
         open={editing !== undefined} 
@@ -670,6 +829,37 @@ export const ReservationManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditing(undefined)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Assign Room Dialog */}
+      <Dialog open={assignRoom.open} onClose={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>
+        <DialogTitle>Assign Room</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Autocomplete
+            options={assignRoom.options}
+            getOptionLabel={(o: Location) => `${o.name} ${o.is_clean ? '' : '(Dirty)'} ${o.is_occupied ? '(Occupied)' : ''}`.trim()}
+            onChange={(_, value) => {
+              (assignRoom as any).selected = value as any;
+            }}
+            renderInput={(params) => <TextField {...params} label="Room" sx={{ minWidth: 320 }} />}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            const r = assignRoom.reservation;
+            const selected: any = (assignRoom as any).selected;
+            if (!r || !selected) return;
+            try {
+              await reservationsService.update(r.id, { location: selected.id } as any);
+              await loadReservations();
+              setAssignRoom({ open: false, reservation: undefined, options: [] });
+              setSnackbar({ open: true, message: `Assigned ${selected.name}`, severity: 'success' });
+            } catch (e:any) {
+              setSnackbar({ open: true, message: e?.response?.data?.detail || 'Failed to assign room', severity: 'error' });
+            }
+          }}>Assign</Button>
         </DialogActions>
       </Dialog>
     </Box>

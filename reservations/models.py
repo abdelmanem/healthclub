@@ -37,6 +37,15 @@ class Location(models.Model):
     description = models.TextField(blank=True)
     capacity = models.PositiveIntegerField(default=1, help_text="Maximum number of people")
     is_active = models.BooleanField(default=True)
+    GENDER_CHOICES = (
+        ("male", "Male"),
+        ("female", "Female"),
+        ("unisex", "Unisex"),
+    )
+    gender = models.CharField(max_length=16, choices=GENDER_CHOICES, default="unisex")
+    is_clean = models.BooleanField(default=True)
+    is_occupied = models.BooleanField(default=False)
+    is_out_of_service = models.BooleanField(default=False, help_text="If true, room cannot be booked or used")
     type = models.ForeignKey(
         'reservations.LocationType',
         on_delete=models.SET_NULL,
@@ -191,6 +200,15 @@ class Reservation(models.Model):
             if qs.exists():
                 raise ValidationError("This time slot conflicts with an existing reservation")
         
+        # Gender separation validation
+        if self.location_id and getattr(self, 'guest_id', None):
+            location_gender = getattr(self.location, 'gender', 'unisex')
+            guest_gender = getattr(self.guest, 'gender', '') or ''
+            # Enforce: specific-gender rooms require matching guest gender; non-binary/unspecified must use unisex
+            if location_gender in ["male", "female"]:
+                if guest_gender not in ["male", "female"] or guest_gender != location_gender:
+                    raise ValidationError("Guest gender does not match the location's gender policy.")
+        
 def save(self, *args, **kwargs):
     # Auto-set end_time if missing or mismatched
     if self.start_time and self.reservation_services.exists():
@@ -326,3 +344,57 @@ class BookingRule(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class HousekeepingTask(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_IN_PROGRESS = 'in_progress'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_IN_PROGRESS, 'In Progress'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    )
+
+    location = models.ForeignKey(
+        'reservations.Location',
+        on_delete=models.CASCADE,
+        related_name='housekeeping_tasks'
+    )
+    reservation = models.ForeignKey(
+        'reservations.Reservation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='housekeeping_tasks'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    PRIORITY_CHOICES = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    )
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    due_at = models.DateTimeField(null=True, blank=True)
+    assigned_to = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_housekeeping_tasks'
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self) -> str:
+        return f"HK Task for {self.location.name} ({self.status})"

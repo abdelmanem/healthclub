@@ -207,20 +207,44 @@ def main():
     # Future reservation
     start_future = timezone.now() + timedelta(days=1, hours=2)
     end_future = start_future + timedelta(minutes=30)
-    future_reservation = Reservation.objects.create(
+    future_reservation, created_fr1 = Reservation.objects.get_or_create(
         guest=guest2,
         location=room2,
         start_time=start_future,
         end_time=end_future,
-        status=Reservation.STATUS_BOOKED,
-        notes="Upcoming sauna session",
+        defaults={
+            "status": Reservation.STATUS_BOOKED,
+            "notes": "Upcoming sauna session",
+        }
     )
-    ReservationService.objects.create(reservation=future_reservation, service=sauna)
-    ReservationEmployeeAssignment.objects.create(
-        reservation=future_reservation,
-        employee=employee,
-        role_in_service="Therapist"
+    if created_fr1:
+        ReservationService.objects.create(reservation=future_reservation, service=sauna)
+        ReservationEmployeeAssignment.objects.create(
+            reservation=future_reservation,
+            employee=employee,
+            role_in_service="Therapist"
+        )
+
+    # Additional future reservation (massage for guest1)
+    start_future2 = timezone.now() + timedelta(days=3, hours=1)
+    end_future2 = start_future2 + timedelta(minutes=60)
+    future_reservation2, created_fr2 = Reservation.objects.get_or_create(
+        guest=guest1,
+        location=room1,
+        start_time=start_future2,
+        end_time=end_future2,
+        defaults={
+            "status": Reservation.STATUS_BOOKED,
+            "notes": "Upcoming massage session",
+        }
     )
+    if created_fr2:
+        ReservationService.objects.create(reservation=future_reservation2, service=massage)
+        ReservationEmployeeAssignment.objects.create(
+            reservation=future_reservation2,
+            employee=employee,
+            role_in_service="Therapist"
+        )
     print("✅ Reservations created")
 
     # 10. Create invoice and payment
