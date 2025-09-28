@@ -2,6 +2,7 @@
 Django==5.2.6
 asgiref==3.9.1
 sqlparse==0.5.3
+tzdata==2025.1
 
 # Django REST Framework
 djangorestframework==3.16.1
@@ -27,3 +28,6 @@ setuptools>=65.0.0
 pyotp==2.9.0
 qrcode==7.4.2
 Pillow==10.4.0
+
+# Utilities
+whitenoise==6.8.2

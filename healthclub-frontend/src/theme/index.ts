@@ -203,6 +203,7 @@ export const theme = createTheme({
       styleOverrides: {
         paper: {
           borderRight: '1px solid #e2e8f0',
+          backgroundColor: '#1e40af', // Match primary color like header
         },
       },
     },
