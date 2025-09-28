@@ -70,6 +70,23 @@ export interface GuestCommunication {
   is_successful?: boolean;
 }
 
+export interface HistoricalReservation {
+  history_id: number;
+  history_date: string;
+  history_type: '+' | '~' | '-';
+  id: number | null;
+  guest: number;
+  guest_name?: string;
+  location?: number | null;
+  location_name?: string | null;
+  employee?: number | null;
+  employee_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  status?: string | null;
+  notes?: string | null;
+}
+
 interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -107,6 +124,13 @@ export const guestsService = {
   async update(id: number, payload: UpdateGuestInput): Promise<Guest> {
     const response = await api.patch(`/guests/${id}/`, payload);
     return response.data;
+  },
+
+  async reservationHistory(id: number): Promise<HistoricalReservation[]> {
+    const response = await api.get(`/guests/${id}/reservation-history/`);
+    const data = response.data as HistoricalReservation[] | PaginatedResponse<HistoricalReservation>;
+    if (Array.isArray(data)) return data;
+    return data.results;
   },
 };
 

@@ -85,7 +85,7 @@ class RecurringPattern(models.Model):
     end_date = models.DateField(null=True, blank=True, help_text="End date for recurring pattern")
     max_occurrences = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum number of occurrences")
     
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
 
