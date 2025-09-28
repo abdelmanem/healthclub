@@ -703,6 +703,8 @@ export const ReservationManagement: React.FC = () => {
                     {historicalReservations.slice(0, 5).map((reservation) => (
                       <ListItem key={reservation.id} sx={{ px: 0 }}>
                         <ListItemText
+                          primaryTypographyProps={{ component: 'div' }}
+                          secondaryTypographyProps={{ component: 'div' }}
                           primary={
                             <Box display="flex" justifyContent="space-between" alignItems="center">
                               <Typography variant="body2">
