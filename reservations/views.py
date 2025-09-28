@@ -64,6 +64,27 @@ class LocationViewSet(viewsets.ModelViewSet):
         obj.save(update_fields=["is_occupied"])
         return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
 
+    @decorators.action(detail=True, methods=["post"], url_path="mark-vacant")
+    def mark_vacant(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_occupied = False
+        obj.save(update_fields=["is_occupied"])
+        return response.Response({"id": obj.id, "is_occupied": obj.is_occupied})
+
+    @decorators.action(detail=True, methods=["post"], url_path="out-of-service")
+    def out_of_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = True
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
+
+    @decorators.action(detail=True, methods=["post"], url_path="back-in-service")
+    def back_in_service(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_out_of_service = False
+        obj.save(update_fields=["is_out_of_service"])
+        return response.Response({"id": obj.id, "is_out_of_service": obj.is_out_of_service})
+
 
 class HousekeepingTaskViewSet(viewsets.ModelViewSet):
     queryset = HousekeepingTask.objects.all().select_related('location', 'reservation', 'assigned_to')

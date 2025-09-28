@@ -9,12 +9,14 @@ export interface Location {
   gender: 'male' | 'female' | 'unisex';
   is_clean: boolean;
   is_occupied: boolean;
+  is_out_of_service?: boolean;
 }
 
 export const locationsApi = {
   list: async (params?: Record<string, any>): Promise<Location[]> => {
     const res = await api.get('/locations/', { params });
-    return res.data as Location[];
+    const data = res.data as any;
+    return Array.isArray(data) ? (data as Location[]) : (data?.results ?? []);
   },
   markClean: async (id: number) => {
     const res = await api.post(`/locations/${id}/mark-clean/`, {});

@@ -303,13 +303,25 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
           </Box>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField select label="Employee" fullWidth value={employeeId} onChange={(e) => setEmployeeId(e.target.value as any)}>
+          <TextField 
+            select 
+            label="Employee" 
+            fullWidth 
+            value={employees.some((e:any) => e.id === employeeId) ? employeeId : ('' as any)} 
+            onChange={(e) => setEmployeeId(e.target.value as any)}
+          >
             <MenuItem value="">Unassigned</MenuItem>
             {employees.map((e: any) => <MenuItem key={e.id} value={e.id}>{e.full_name ?? `${e.first_name} ${e.last_name}`}</MenuItem>)}
           </TextField>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField select label="Location" fullWidth value={locationId} onChange={(e) => setLocationId(e.target.value as any)}>
+          <TextField 
+            select 
+            label="Location" 
+            fullWidth 
+            value={locations.some((l:any) => l.id === locationId) ? locationId : ('' as any)} 
+            onChange={(e) => setLocationId(e.target.value as any)}
+          >
             <MenuItem value="">Any</MenuItem>
             {locations.map((l: any) => <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>)}
           </TextField>

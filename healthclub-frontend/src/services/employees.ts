@@ -8,11 +8,14 @@ export interface EmployeeOption {
 export const employeesApi = {
   list: async (params?: Record<string, any>) => {
     const res = await api.get('/employees/', { params });
-    return res.data as any[];
+    const data = res.data as any;
+    return Array.isArray(data) ? data : (data?.results ?? []);
   },
   options: async () => {
     const res = await api.get('/employees/', { params: { active: true, ordering: 'user__username' } });
-    return (res.data as any[]).map(e => ({ id: e.id, full_name: e.full_name || e.user?.username } as EmployeeOption));
+    const data = res.data as any;
+    const employees = Array.isArray(data) ? data : (data?.results ?? []);
+    return employees.map((e: any) => ({ id: e.id, full_name: e.full_name || e.user?.username } as EmployeeOption));
   },
 };
 

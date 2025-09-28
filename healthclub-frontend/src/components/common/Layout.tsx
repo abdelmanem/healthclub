@@ -26,7 +26,8 @@ import {
   Business,
   Assessment,
   Settings,
-  AccountCircle
+  AccountCircle,
+  CleaningServices
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
@@ -42,6 +43,7 @@ const menuItems = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', permission: 'view', model: 'dashboard' },
   { text: 'Guests', icon: <People />, path: '/guests', permission: 'view', model: 'guests' },
   { text: 'Reservations', icon: <Event />, path: '/reservations', permission: 'view', model: 'reservations' },
+  { text: 'Housekeeping Management', icon: <CleaningServices />, path: '/housekeeping', permission: 'view', model: 'reservations' },
   { text: 'Services', icon: <Business />, path: '/services', permission: 'view', model: 'services' },
   { text: 'Analytics', icon: <Assessment />, path: '/analytics', permission: 'view', model: 'analytics' },
   { text: 'Configuration', icon: <Settings />, path: '/config', permission: 'view', model: 'config' },

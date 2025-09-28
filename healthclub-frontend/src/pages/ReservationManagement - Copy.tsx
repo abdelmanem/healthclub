@@ -55,7 +55,6 @@ export const ReservationManagement: React.FC = () => {
   const statusColor = (status?: string) => {
     switch (status) {
       case 'booked':
-      case 'confirmed':
         return 'primary';
       case 'checked_in':
       case 'in_service':
@@ -128,7 +127,7 @@ export const ReservationManagement: React.FC = () => {
                               </span>
                             </Tooltip>
                             {(() => {
-                              const canCheckIn = !!(r.status === 'confirmed' || r.status === 'pending' || r.status === 'checked_in' || r.status === undefined);
+                              const canCheckIn = r.status === 'booked';
                               const canInService = r.status === 'checked_in';
                               const canComplete = r.status === 'in_service';
                               const canCheckOut = r.status === 'completed';

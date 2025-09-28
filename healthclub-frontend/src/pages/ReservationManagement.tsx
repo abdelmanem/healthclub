@@ -53,7 +53,7 @@ dayjs.extend(isBetween);
 // Helper: status color
 const statusColor = (status?: string) => {
   switch (status) {
-    case 'confirmed': return '#1976d2';
+    case 'booked': return '#1976d2';
     case 'checked_in': return '#ed6c02';
     case 'in_service': return '#f97316';
     case 'completed': return '#10b981';
@@ -147,7 +147,7 @@ export const ReservationManagement: React.FC = () => {
     const todayEnd = dayjs().endOf('day');
     const arrivalsToday = reservations.filter(r =>
       dayjs(r.start_time).isBetween(todayStart, todayEnd, null, '[]') &&
-      r.status === 'confirmed'
+      r.status === 'booked'
     ).length;
     const checkedInNow = reservations.filter(r => r.status === 'checked_in').length;
     const inServiceNow = reservations.filter(r => r.status === 'in_service').length;
@@ -161,7 +161,7 @@ export const ReservationManagement: React.FC = () => {
 
   // keep ticking for timers
   useEffect(() => {
-    if (tab !== 4 || !showTimers) return;
+    if (tab !== 5 || !showTimers) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [tab, showTimers]);
@@ -437,7 +437,7 @@ export const ReservationManagement: React.FC = () => {
                   }} title="Assign Room">
                     <DirectionsRun fontSize="small" />
                   </IconButton>
-                  {(!r.status || r.status === 'booked' || r.status === 'confirmed') && (
+                  {r.status === 'booked' && (
                     <IconButton size="small" onClick={() => performAction('check_in', r)} color="primary" title="Check-in">
                       <Check fontSize="small" />
                     </IconButton>
@@ -488,12 +488,12 @@ export const ReservationManagement: React.FC = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="confirmed">Confirmed</MenuItem>
+                <MenuItem value="booked">Booked</MenuItem>
                 <MenuItem value="checked_in">Checked In</MenuItem>
                 <MenuItem value="in_service">In Service</MenuItem>
                 <MenuItem value="completed">Completed</MenuItem>
                 <MenuItem value="cancelled">Cancelled</MenuItem>
+                <MenuItem value="checked_out">Checked Out</MenuItem>
               </Select>
             </FormControl>
             <FormControl sx={{ minWidth: 120 }} size="small">
@@ -561,7 +561,8 @@ export const ReservationManagement: React.FC = () => {
           <Tab label="Arrivals" value={1} />
           <Tab label="In Service" value={2} />
           <Tab label="Completed" value={3} />
-          <Tab label="Calendar" value={4} />
+          <Tab label="Housekeeping" value={4} />
+          <Tab label="Calendar" value={5} />
         </Tabs>
         <Box flex={1} />
         <Button variant="contained" startIcon={<Add />} onClick={() => setEditing(null)}>New Reservation</Button>
@@ -569,12 +570,28 @@ export const ReservationManagement: React.FC = () => {
 
       {/* Table views */}
       {tab === 0 && renderTable(getFilteredReservations())}
-      {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'confirmed'))}
+      {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'booked'))}
       {tab === 2 && renderTable(getFilteredReservations().filter(r => r.status === 'in_service'))}
       {tab === 3 && renderTable(getFilteredReservations().filter(r => r.status === 'completed'))}
+      {tab === 4 && (
+        <Box>
+          <Typography variant="h6" gutterBottom>Housekeeping Tasks</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Housekeeping tasks are automatically created when guests check out. 
+            Use the dedicated Housekeeping page for task management.
+          </Typography>
+          <Button 
+            variant="outlined" 
+            onClick={() => window.location.href = '/housekeeping'}
+            sx={{ mt: 2 }}
+          >
+            Go to Housekeeping Management
+          </Button>
+        </Box>
+      )}
 
       {/* Calendar */}
-      {tab === 4 && (
+      {tab === 5 && (
         <Card>
           <CardContent sx={{ position: 'relative' }}>
             {isDragging && (
@@ -644,7 +661,7 @@ export const ReservationManagement: React.FC = () => {
               </Box>
 
               <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                {(!selectedReservation.status || selectedReservation.status === 'booked' || selectedReservation.status === 'confirmed') && (
+                {selectedReservation.status === 'booked' && (
                   <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />}>Check-in</Button>
                 )}
                 {selectedReservation.status === 'checked_in' && (
@@ -686,6 +703,8 @@ export const ReservationManagement: React.FC = () => {
                     {historicalReservations.slice(0, 5).map((reservation) => (
                       <ListItem key={reservation.id} sx={{ px: 0 }}>
                         <ListItemText
+                          primaryTypographyProps={{ component: 'div' }}
+                          secondaryTypographyProps={{ component: 'div' }}
                           primary={
                             <Box display="flex" justifyContent="space-between" alignItems="center">
                               <Typography variant="body2">
