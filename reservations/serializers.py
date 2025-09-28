@@ -133,7 +133,7 @@ class ReservationSerializer(serializers.ModelSerializer):
         return start_time + timedelta(minutes=total_minutes)
 
     def validate(self, attrs):
-        start_time = attrs.get('start_time')
+        start_time = attrs.get('start_time') or getattr(self.instance, 'start_time', None)
         end_time = attrs.get('end_time')
         services_data = attrs.get('reservation_services', [])
         guest = attrs.get('guest') or getattr(self.instance, 'guest', None)
@@ -167,6 +167,29 @@ class ReservationSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         "location": "Guest gender does not match the location's gender policy."
                     })
+
+        # If only location is being updated (PATCH), ensure the slot isn't conflicting
+        if self.instance and 'location' in self.initial_data and location and start_time:
+            try:
+                from .models import Reservation
+                overlapping = Reservation.objects.filter(
+                    location_id=getattr(location, 'id', None) or location,
+                    start_time__lt=end_time or getattr(self.instance, 'end_time', None) or start_time,
+                    end_time__gt=start_time,
+                    status__in=[
+                        Reservation.STATUS_BOOKED,
+                        Reservation.STATUS_CHECKED_IN,
+                        Reservation.STATUS_IN_SERVICE,
+                    ],
+                )
+                if getattr(self.instance, 'id', None):
+                    overlapping = overlapping.exclude(id=self.instance.id)
+                if overlapping.exists():
+                    raise serializers.ValidationError({
+                        "location": "Selected room conflicts with another reservation at this time."
+                    })
+            except Exception:
+                pass
 
         return attrs
 
