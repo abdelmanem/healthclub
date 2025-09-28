@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
+import { PageWrapper } from '../components/common/PageWrapper';
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -44,20 +45,10 @@ export const Home: React.FC = () => {
   ];
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Welcome Header */}
-      <Box textAlign="center" mb={6}>
-        <Typography variant="h3" component="h1" gutterBottom color="primary">
-          Welcome to HealthClub Management System
-        </Typography>
-        <Typography variant="h5" color="text.secondary" paragraph>
-          Hello, {user?.user?.first_name || user?.user?.username || 'User'}!
-        </Typography>
-        <Typography variant="body1" color="text.secondary" maxWidth="600px" mx="auto">
-          Manage your health club operations efficiently with our comprehensive management system.
-          Access guest information, reservations, services, and more from one centralized platform.
-        </Typography>
-      </Box>
+    <PageWrapper
+      title="Welcome to HealthClub Management System"
+      subtitle={`Hello, ${user?.user?.first_name || user?.user?.username || 'User'}! Manage your health club operations efficiently with our comprehensive management system.`}
+    >
 
       {/* Quick Actions */}
       <Box mb={6}>
@@ -116,6 +107,6 @@ export const Home: React.FC = () => {
           All systems operational • Last updated: {new Date().toLocaleString()}
         </Typography>
       </Paper>
-    </Container>
+    </PageWrapper>
   );
 };

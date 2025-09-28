@@ -46,6 +46,7 @@ import isBetween from 'dayjs/plugin/isBetween';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation } from '../services/reservations';
 import { api } from '../services/api';
+import { PageWrapper } from '../components/common/PageWrapper';
 import { locationsApi, Location } from '../services/locations';
 
 dayjs.extend(isBetween);
@@ -462,18 +463,18 @@ export const ReservationManagement: React.FC = () => {
   );
 
   return (
-    <Box p={2}>
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems="center">
-          <Typography variant="h5">Reservation Management</Typography>
-          <Stack direction="row" spacing={1}>
-            <Chip label={`Today's Arrivals: ${kpi.arrivalsToday}`} />
-            <Chip label={`Checked-in: ${kpi.checkedInNow}`} color="primary" />
-            <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: '#f97316', color: '#fff' }} />
-            <Chip label={`Revenue: $${kpi.revenueToday.toFixed(2)}`} color="success" />
-          </Stack>
+    <PageWrapper
+      title="Reservation Management"
+      subtitle="Manage reservations, check-ins, and service schedules"
+      actions={
+        <Stack direction="row" spacing={1}>
+          <Chip label={`Today's Arrivals: ${kpi.arrivalsToday}`} />
+          <Chip label={`Checked-in: ${kpi.checkedInNow}`} color="primary" />
+          <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: '#f97316', color: '#fff' }} />
+          <Chip label={`Revenue: $${kpi.revenueToday.toFixed(2)}`} color="success" />
         </Stack>
-      </Paper>
+      }
+    >
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -864,6 +865,6 @@ export const ReservationManagement: React.FC = () => {
           }}>Assign</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageWrapper>
   );
 };

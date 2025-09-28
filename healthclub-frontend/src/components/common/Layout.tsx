@@ -280,7 +280,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           ml: { md: `${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px` },
           mt: 8,
           minHeight: 'calc(100vh - 64px)', // Full height minus header
-          background: theme.palette.background.gradient,
+          background: theme.palette.background.content,
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,

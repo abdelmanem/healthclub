@@ -6,6 +6,7 @@ declare module '@mui/material/styles' {
     gradient?: string;
     gradientLight?: string;
     gradientWarm?: string;
+    content?: string;
   }
 }
 
@@ -149,14 +150,15 @@ export const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
-          background: 'rgba(255, 255, 255, 0.8)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: 16,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)',
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
           '&:hover': {
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
-            background: 'rgba(255, 255, 255, 0.9)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15)',
+            background: 'rgba(255, 255, 255, 1)',
+            transform: 'translateY(-2px)',
           },
         },
       },
@@ -164,19 +166,20 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
-          background: 'rgba(255, 255, 255, 0.7)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: 16,
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
         },
         elevation1: {
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         },
         elevation2: {
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         },
         elevation3: {
-          boxShadow: '0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
         },
       },
     },
@@ -284,10 +287,11 @@ export const theme = createTheme({
     MuiTabs: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-          borderRadius: 8,
-          padding: '4px',
-          marginBottom: 16,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: 12,
+          padding: '6px',
+          marginBottom: 20,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         },
         indicator: {
           backgroundColor: '#1e40af',
@@ -299,19 +303,22 @@ export const theme = createTheme({
     MuiTab: {
       styleOverrides: {
         root: {
-          color: '#64748b',
+          color: '#475569',
           fontWeight: 500,
           textTransform: 'none',
           minHeight: 48,
-          borderRadius: 6,
-          margin: '0 4px',
+          borderRadius: 8,
+          margin: '0 6px',
+          transition: 'all 0.2s ease-in-out',
           '&.Mui-selected': {
             color: '#1e40af',
-            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            backgroundColor: 'rgba(30, 64, 175, 0.1)',
             fontWeight: 600,
+            boxShadow: '0 2px 4px rgba(30, 64, 175, 0.2)',
           },
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            backgroundColor: 'rgba(30, 64, 175, 0.05)',
+            color: '#1e40af',
           },
         },
       },
@@ -326,22 +333,32 @@ export const theme = createTheme({
     MuiTypography: {
       styleOverrides: {
         h4: {
-          color: '#0f172a',
+          color: '#1e293b',
           fontWeight: 700,
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
         },
         h5: {
-          color: '#0f172a',
+          color: '#1e293b',
           fontWeight: 600,
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
         },
         h6: {
-          color: '#0f172a',
+          color: '#1e293b',
           fontWeight: 600,
         },
         subtitle1: {
-          color: '#64748b',
+          color: '#475569',
+          fontWeight: 500,
         },
         subtitle2: {
           color: '#64748b',
+          fontWeight: 500,
+        },
+        body1: {
+          color: '#334155',
+        },
+        body2: {
+          color: '#475569',
         },
       },
     },

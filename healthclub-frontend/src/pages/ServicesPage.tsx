@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete, CircularProgress } from '@mui/material';
 import { servicesApi, ServiceInput, ServiceRecord, serviceCategoriesApi, ServiceCategoryRecord } from '../services/services';
 import { locationsApi, Location } from '../services/locations';
+import { PageWrapper } from '../components/common/PageWrapper';
 
 export const ServicesPage: React.FC = () => {
   const [services, setServices] = useState<ServiceRecord[]>([]);
@@ -87,8 +88,10 @@ export const ServicesPage: React.FC = () => {
   }
 
   return (
-    <Box p={2}>
-      <Typography variant="h5" gutterBottom>{editing ? 'Edit Service' : 'Create Service'}</Typography>
+    <PageWrapper
+      title={editing ? 'Edit Service' : 'Create Service'}
+      subtitle="Manage service offerings and categories"
+    >
       <Paper sx={{ p: 2, mb: 3 }}>
         <form onSubmit={submit}>
           <Stack spacing={2}>
@@ -215,7 +218,7 @@ export const ServicesPage: React.FC = () => {
           </Paper>
         ))}
       </Stack>
-    </Box>
+    </PageWrapper>
   );
 };
 
