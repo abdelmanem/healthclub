@@ -204,6 +204,7 @@ export const theme = createTheme({
         paper: {
           borderRight: '1px solid #e2e8f0',
           backgroundColor: '#1e40af', // Match primary color like header
+          color: '#ffffff', // White text color
         },
       },
     },
@@ -212,8 +213,9 @@ export const theme = createTheme({
         root: {
           borderRadius: 8,
           margin: '2px 0',
+          color: '#ffffff', // White text for dark background
           '&:hover': {
-            backgroundColor: '#f1f5f9',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)', // Light white overlay
           },
         },
       },
@@ -223,13 +225,14 @@ export const theme = createTheme({
         root: {
           borderRadius: 8,
           margin: '2px 0',
+          color: '#ffffff', // White text for dark background
           '&:hover': {
-            backgroundColor: '#f1f5f9',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)', // Light white overlay
           },
           '&.Mui-selected': {
-            backgroundColor: '#dbeafe',
+            backgroundColor: 'rgba(255, 255, 255, 0.2)', // Slightly more opaque white
             '&:hover': {
-              backgroundColor: '#bfdbfe',
+              backgroundColor: 'rgba(255, 255, 255, 0.3)', // Even more opaque on hover
             },
           },
         },
