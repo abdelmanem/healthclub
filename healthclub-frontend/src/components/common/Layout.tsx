@@ -27,13 +27,16 @@ import {
   Assessment,
   Settings,
   AccountCircle,
-  CleaningServices
+  CleaningServices,
+  ChevronLeft,
+  ChevronRight
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';
 
 const drawerWidth = 240;
+const collapsedDrawerWidth = 64;
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -51,6 +54,7 @@ const menuItems = [
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,6 +64,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleDesktopDrawerToggle = () => {
+    setDesktopCollapsed(!desktopCollapsed);
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -79,10 +87,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const drawer = (
     <Box>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          Health Club
-        </Typography>
+      <Toolbar sx={{ justifyContent: 'space-between', px: 2 }}>
+        {!desktopCollapsed && (
+          <Typography variant="h6" noWrap component="div">
+            Health Club
+          </Typography>
+        )}
+        {!isMobile && (
+          <IconButton onClick={handleDesktopDrawerToggle} size="small">
+            {desktopCollapsed ? <ChevronRight /> : <ChevronLeft />}
+          </IconButton>
+        )}
       </Toolbar>
       <Divider />
       <List>
@@ -98,11 +113,30 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <ListItemButton
                 onClick={() => handleNavigation(item.path)}
                 selected={isActive}
+                sx={{
+                  minHeight: 48,
+                  justifyContent: desktopCollapsed && !isMobile ? 'center' : 'initial',
+                  px: desktopCollapsed && !isMobile ? 1.5 : 2,
+                }}
+                title={desktopCollapsed && !isMobile ? item.text : ''}
               >
-                <ListItemIcon>
+                <ListItemIcon
+                  sx={{
+                    minWidth: desktopCollapsed && !isMobile ? 'auto' : 56,
+                    justifyContent: 'center',
+                  }}
+                >
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText primary={item.text} />
+                {(!desktopCollapsed || isMobile) && (
+                  <ListItemText 
+                    primary={item.text} 
+                    sx={{ 
+                      opacity: desktopCollapsed && !isMobile ? 0 : 1,
+                      transition: 'opacity 0.2s',
+                    }} 
+                  />
+                )}
               </ListItemButton>
             </ListItem>
           );
@@ -116,8 +150,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <AppBar
         position="fixed"
         sx={{
-          width: { md: `calc(100% - ${drawerWidth}px)` },
-          ml: { md: `${drawerWidth}px` },
+          width: { md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` },
+          ml: { md: `${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px` },
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         <Toolbar>
@@ -207,7 +245,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           variant="permanent"
           sx={{
             display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: desktopCollapsed ? collapsedDrawerWidth : drawerWidth,
+              transition: theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+              overflowX: 'hidden',
+            },
           }}
           open
         >
@@ -220,8 +266,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { md: `calc(100% - ${drawerWidth}px)` },
+          width: { md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` },
           mt: 8,
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         {children}
