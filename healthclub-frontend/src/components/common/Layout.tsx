@@ -146,7 +146,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
         <AppBar
         position="fixed"
         sx={{
@@ -225,7 +225,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <Box
         component="nav"
-        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+        sx={{ 
+          width: { md: desktopCollapsed ? collapsedDrawerWidth : drawerWidth }, 
+          flexShrink: { md: 0 },
+          transition: theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+        }}
       >
         <Drawer
           variant="temporary"
@@ -253,6 +260,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 duration: theme.transitions.duration.enteringScreen,
               }),
               overflowX: 'hidden',
+              // Remove any margin/padding that creates gap
+              margin: 0,
+              padding: 0,
             },
           }}
           open
@@ -273,6 +283,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
+          // Remove any extra margin/padding that creates gap
+          marginLeft: { md: 0 },
+          marginRight: 0,
         }}
       >
         {children}
