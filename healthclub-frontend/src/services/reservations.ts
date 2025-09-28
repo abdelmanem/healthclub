@@ -25,7 +25,7 @@ export interface Reservation {
   location?: number | null;
   start_time: string; // ISO
   end_time?: string; // ISO
-  status?: 'pending' | 'confirmed' | 'checked_in' | 'in_service' | 'completed' | 'cancelled';
+  status?: 'booked' | 'checked_in' | 'in_service' | 'completed' | 'cancelled' | 'checked_out';
   notes?: string;
   // denormalized fields from backend
   guest_name?: string;
