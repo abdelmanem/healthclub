@@ -61,7 +61,7 @@ export const LoginForm: React.FC = () => {
       justifyContent="center"
       alignItems="center"
       minHeight="100vh"
-      sx={{ backgroundColor: '#f5f5f5' }}
+      sx={{ backgroundColor: 'grey.100' }}
     >
       <Card sx={{ maxWidth: 400, width: '100%', mx: 2 }}>
         <CardContent sx={{ p: 4 }}>

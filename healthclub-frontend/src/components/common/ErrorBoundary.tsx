@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
           justifyContent="center"
           alignItems="center"
           minHeight="100vh"
-          sx={{ backgroundColor: '#f5f5f5' }}
+          sx={{ backgroundColor: 'grey.100' }}
         >
           <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center' }}>
             <ErrorOutline sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />

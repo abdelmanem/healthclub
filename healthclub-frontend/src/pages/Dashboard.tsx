@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Box, Card, CardContent, CircularProgress, Alert, Chip } from '@mui/material';
+import { Typography, Box, Card, CardContent, CircularProgress, Alert, Chip, useTheme } from '@mui/material';
 import { 
   People, 
   Event, 
@@ -14,6 +14,7 @@ import { api } from '../services/api';
 import { PageWrapper } from '../components/common/PageWrapper';
 
 export const Dashboard: React.FC = () => {
+  const theme = useTheme();
   const { user } = usePermissions();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -48,12 +49,12 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   const formatStats = (data: DashboardStats) => [
-    { title: 'Total Guests', value: data.total_guests.toLocaleString(), icon: <People />, color: '#1976d2' },
-    { title: 'Today\'s Reservations', value: data.todays_reservations.toString(), icon: <Event />, color: '#388e3c' },
-    { title: 'Active Services', value: data.active_services.toString(), icon: <Business />, color: '#f57c00' },
-    { title: 'Revenue Today', value: `$${data.todays_revenue.toFixed(2)}`, icon: <TrendingUp />, color: '#7b1fa2' },
-    { title: 'Active Employees', value: data.active_employees.toString(), icon: <Assessment />, color: '#9c27b0' },
-    { title: 'Recent Reservations', value: data.recent_reservations.toString(), icon: <Schedule />, color: '#ff9800' },
+    { title: 'Total Guests', value: data.total_guests.toLocaleString(), icon: <People />, color: 'primary.main' },
+    { title: 'Today\'s Reservations', value: data.todays_reservations.toString(), icon: <Event />, color: 'success.main' },
+    { title: 'Active Services', value: data.active_services.toString(), icon: <Business />, color: 'warning.main' },
+    { title: 'Revenue Today', value: `$${data.todays_revenue.toFixed(2)}`, icon: <TrendingUp />, color: 'secondary.main' },
+    { title: 'Active Employees', value: data.active_employees.toString(), icon: <Assessment />, color: 'info.main' },
+    { title: 'Recent Reservations', value: data.recent_reservations.toString(), icon: <Schedule />, color: 'warning.dark' },
   ];
 
   return (
@@ -97,7 +98,7 @@ export const Dashboard: React.FC = () => {
                       justifyContent: 'center',
                     }}
                   >
-                    {React.cloneElement(stat.icon, { sx: { color: 'white' } })}
+                    {React.cloneElement(stat.icon, { sx: { color: 'primary.contrastText' } })}
                   </Box>
                   <Box>
                     <Typography variant="h4" component="div">

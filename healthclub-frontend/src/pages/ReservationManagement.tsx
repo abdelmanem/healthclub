@@ -483,7 +483,7 @@ export const ReservationManagement: React.FC = () => {
         <Stack direction="row" spacing={1}>
           <Chip label={`Today's Arrivals: ${kpi.arrivalsToday}`} />
           <Chip label={`Checked-in: ${kpi.checkedInNow}`} color="primary" />
-          <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: '#f97316', color: '#fff' }} />
+          <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: 'warning.dark', color: 'warning.contrastText' }} />
           <Chip label={`Revenue: $${kpi.revenueToday.toFixed(2)}`} color="success" />
         </Stack>
       }

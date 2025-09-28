@@ -7,13 +7,15 @@ import {
   Button,
   Card,
   CardContent,
-  CardActions
+  CardActions,
+  useTheme
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { PageWrapper } from '../components/common/PageWrapper';
 
 export const Home: React.FC = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
   const { user } = usePermissions();
 
@@ -22,25 +24,25 @@ export const Home: React.FC = () => {
       title: 'Guest Management',
       description: 'Search and manage guest information',
       action: () => navigate('/guests'),
-      color: '#2563eb'
+      color: 'primary.main'
     },
     {
       title: 'Reservations',
       description: 'Create and manage reservations',
       action: () => navigate('/reservations'),
-      color: '#10b981'
+      color: 'success.main'
     },
     {
       title: 'Services',
       description: 'View and manage services',
       action: () => navigate('/services'),
-      color: '#f59e0b'
+      color: 'warning.main'
     },
     {
       title: 'Dashboard',
       description: 'View analytics and reports',
       action: () => navigate('/dashboard'),
-      color: '#8b5cf6'
+      color: 'secondary.main'
     }
   ];
 
