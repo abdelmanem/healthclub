@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { PermissionProvider } from './contexts/PermissionContext';
 import { ConfigurationProvider } from './contexts/ConfigurationContext';
@@ -16,42 +16,10 @@ import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
+import { theme } from './theme';
 
 // Lazy load ConfigurationPage to avoid circular dependency
 const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
-
-// Create theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#2563eb', // Professional blue
-    },
-    secondary: {
-      main: '#10b981', // Health green
-    },
-    success: {
-      main: '#22c55e',
-    },
-    warning: {
-      main: '#f59e0b',
-    },
-    error: {
-      main: '#ef4444',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-        },
-      },
-    },
-  },
-});
 
 function App() {
   return (

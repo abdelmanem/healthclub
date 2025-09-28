@@ -237,28 +237,28 @@ class ReservationViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         reservation.status = Reservation.STATUS_CHECKED_IN
-        reservation.save(update_fields=["status"])
+        reservation.save()  # Use full save() to trigger signals properly
         return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="in-service")
     def in_service(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_IN_SERVICE
-        reservation.save(update_fields=["status"])
+        reservation.save()  # Use full save() to trigger signals properly
         return response.Response({"status": reservation.status, "in_service_at": reservation.in_service_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="complete")
     def complete(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_COMPLETED
-        reservation.save(update_fields=["status"])
+        reservation.save()  # Use full save() to trigger signals properly
         return response.Response({"status": reservation.status, "completed_at": reservation.completed_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="check-out")
     def check_out(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = Reservation.STATUS_CHECKED_OUT
-        reservation.save(update_fields=["status"])
+        reservation.save()  # Use full save() to trigger signals properly
         return response.Response({"status": reservation.status, "checked_out_at": reservation.checked_out_at})
 
     @decorators.action(detail=True, methods=["get"], url_path="services")
