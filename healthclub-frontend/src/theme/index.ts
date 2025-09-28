@@ -1,5 +1,14 @@
 import { createTheme } from '@mui/material/styles';
 
+// Extend the theme interface to include custom background gradients
+declare module '@mui/material/styles' {
+  interface TypeBackground {
+    gradient?: string;
+    gradientLight?: string;
+    gradientWarm?: string;
+  }
+}
+
 export const theme = createTheme({
   palette: {
     mode: 'light',
@@ -38,6 +47,9 @@ export const theme = createTheme({
     background: {
       default: '#f8fafc',
       paper: '#ffffff',
+      gradient: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
+      gradientLight: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #e2e8f0 100%)',
+      gradientWarm: 'linear-gradient(135deg, #fef7f0 0%, #f3e8ff 50%, #e0e7ff 100%)',
     },
     text: {
       primary: '#0f172a',
@@ -139,8 +151,12 @@ export const theme = createTheme({
         root: {
           borderRadius: 12,
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           '&:hover': {
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
+            background: 'rgba(255, 255, 255, 0.9)',
           },
         },
       },
@@ -149,6 +165,9 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
         },
         elevation1: {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
@@ -259,6 +278,70 @@ export const theme = createTheme({
         head: {
           fontWeight: 600,
           color: '#374151',
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          borderRadius: 8,
+          padding: '4px',
+          marginBottom: 16,
+        },
+        indicator: {
+          backgroundColor: '#1e40af',
+          height: 3,
+          borderRadius: '2px 2px 0 0',
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          color: '#64748b',
+          fontWeight: 500,
+          textTransform: 'none',
+          minHeight: 48,
+          borderRadius: 6,
+          margin: '0 4px',
+          '&.Mui-selected': {
+            color: '#1e40af',
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            fontWeight: 600,
+          },
+          '&:hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+          },
+        },
+      },
+    },
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'transparent',
+        },
+      },
+    },
+    MuiTypography: {
+      styleOverrides: {
+        h4: {
+          color: '#0f172a',
+          fontWeight: 700,
+        },
+        h5: {
+          color: '#0f172a',
+          fontWeight: 600,
+        },
+        h6: {
+          color: '#0f172a',
+          fontWeight: 600,
+        },
+        subtitle1: {
+          color: '#64748b',
+        },
+        subtitle2: {
+          color: '#64748b',
         },
       },
     },

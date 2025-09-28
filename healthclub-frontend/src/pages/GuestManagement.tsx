@@ -13,6 +13,7 @@ import {
   Divider
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
+import { PageWrapper } from '../components/common/PageWrapper';
 import { GuestSearch } from '../components/guest/GuestSearch';
 import { PermissionGate } from '../components/common/PermissionGate';
 import { GuestProfile } from '../components/guest/GuestProfile';
@@ -161,11 +162,10 @@ export const GuestManagement: React.FC = () => {
   };
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Guest Management
-        </Typography>
+    <PageWrapper
+      title="Guest Management"
+      subtitle="Manage guest profiles, preferences, and communication history"
+      actions={
         <PermissionGate permission="add" model="guests">
           <Button
             variant="contained"
@@ -175,7 +175,8 @@ export const GuestManagement: React.FC = () => {
             Add Guest
           </Button>
         </PermissionGate>
-      </Box>
+      }
+    >
 
       <Box
         display="grid"
@@ -415,6 +416,6 @@ export const GuestManagement: React.FC = () => {
           navigate(`/reservations?guest=${selectedGuest?.id}`);
         }}
       />
-    </Box>
+    </PageWrapper>
   );
 };

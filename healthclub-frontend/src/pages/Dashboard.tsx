@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box, Card, CardContent, CircularProgress, Alert, Chip } from '@mui/material';
+import { Typography, Box, Card, CardContent, CircularProgress, Alert, Chip } from '@mui/material';
 import { 
   People, 
   Event, 
@@ -11,6 +11,7 @@ import {
 import { usePermissions } from '../contexts/PermissionContext';
 import { dashboardService, DashboardStats } from '../services/dashboard';
 import { api } from '../services/api';
+import { PageWrapper } from '../components/common/PageWrapper';
 
 export const Dashboard: React.FC = () => {
   const { user } = usePermissions();
@@ -56,15 +57,10 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Welcome back, {user?.user.first_name}!
-        </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          Here's what's happening at your health club today.
-        </Typography>
-      </Box>
+    <PageWrapper
+      title={`Welcome back, ${user?.user.first_name}!`}
+      subtitle="Here's what's happening at your health club today."
+    >
 
       {loading && (
         <Box display="flex" justifyContent="center" my={4}>
@@ -173,6 +169,6 @@ export const Dashboard: React.FC = () => {
           </Card>
         </Box>
       )}
-    </Container>
+    </PageWrapper>
   );
 };

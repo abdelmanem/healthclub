@@ -5,6 +5,7 @@ import { housekeepingApi, HousekeepingTask } from '../services/housekeeping';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { employeesApi, EmployeeOption } from '../services/employees';
 import { locationsApi, Location } from '../services/locations';
+import { PageWrapper } from '../components/common/PageWrapper';
 
 const StatusChip: React.FC<{ status: HousekeepingTask['status'] }> = ({ status }) => {
   const color = status === 'completed' ? 'success' : status === 'in_progress' ? 'warning' : status === 'cancelled' ? 'default' : 'info';
@@ -83,10 +84,10 @@ export const Housekeeping: React.FC = () => {
   if (loading) return <LoadingSpinner message="Loading housekeeping tasks..." />;
 
   return (
-    <Box p={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5">Housekeeping</Typography>
-      </Stack>
+    <PageWrapper
+      title="Housekeeping"
+      subtitle="Manage housekeeping tasks and room status"
+    >
       <Tabs value={tab} onChange={handleTabChange} sx={{ mb: 2 }}>
         <Tab label="Tasks" value="tasks" />
         <Tab label="Rooms" value="rooms" />
@@ -239,7 +240,7 @@ export const Housekeeping: React.FC = () => {
       )}
       <Divider sx={{ my: 3 }} />
       <Typography variant="body2" color="text.secondary">Tasks auto-create on reservation checkout and completing a task sets the room to clean.</Typography>
-    </Box>
+    </PageWrapper>
   );
 };
 
