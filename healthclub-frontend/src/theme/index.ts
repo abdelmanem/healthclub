@@ -218,6 +218,35 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          color: '#ffffff', // White text color
+          '& .MuiTypography-root': {
+            color: '#ffffff', // White text for all typography in AppBar
+          },
+          '& .MuiIconButton-root': {
+            color: '#ffffff', // White icons
+          },
+          '& .MuiToolbar-root': {
+            color: '#ffffff', // White text in toolbar
+            '& .MuiTypography-root': {
+              color: '#ffffff', // White text for all typography in toolbar
+            },
+            '& .MuiIconButton-root': {
+              color: '#ffffff', // White icons in toolbar
+            },
+          },
+        },
+      },
+    },
+    MuiToolbar: {
+      styleOverrides: {
+        root: {
+          color: '#ffffff', // White text color
+          '& .MuiTypography-root': {
+            color: '#ffffff', // White text for all typography
+          },
+          '& .MuiIconButton-root': {
+            color: '#ffffff', // White icons
+          },
         },
       },
     },
@@ -227,6 +256,12 @@ export const theme = createTheme({
           borderRight: '1px solid #e2e8f0',
           background: 'linear-gradient(180deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%)', // Gradient from dark to light blue
           color: '#ffffff', // White text color
+          '& .MuiTypography-root': {
+            color: '#ffffff', // White text for all typography in drawer
+          },
+          '& .MuiIconButton-root': {
+            color: '#ffffff', // White icons in drawer
+          },
         },
       },
     },
