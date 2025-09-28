@@ -218,20 +218,20 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          color: '#ffffff', // White text color
+          color: 'primary.contrastText',
           '& .MuiTypography-root': {
-            color: '#ffffff', // White text for all typography in AppBar
+            color: 'primary.contrastText',
           },
           '& .MuiIconButton-root': {
-            color: '#ffffff', // White icons
+            color: 'primary.contrastText',
           },
           '& .MuiToolbar-root': {
-            color: '#ffffff', // White text in toolbar
+            color: 'primary.contrastText',
             '& .MuiTypography-root': {
-              color: '#ffffff', // White text for all typography in toolbar
+              color: 'primary.contrastText',
             },
             '& .MuiIconButton-root': {
-              color: '#ffffff', // White icons in toolbar
+              color: 'primary.contrastText',
             },
           },
         },
@@ -240,12 +240,12 @@ export const theme = createTheme({
     MuiToolbar: {
       styleOverrides: {
         root: {
-          color: '#ffffff', // White text color
+          color: 'primary.contrastText',
           '& .MuiTypography-root': {
-            color: '#ffffff', // White text for all typography
+            color: 'primary.contrastText',
           },
           '& .MuiIconButton-root': {
-            color: '#ffffff', // White icons
+            color: 'primary.contrastText',
           },
         },
       },
@@ -253,14 +253,15 @@ export const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          borderRight: '1px solid #e2e8f0',
-          background: 'linear-gradient(180deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%)', // Gradient from dark to light blue
-          color: '#ffffff', // White text color
+          borderRight: '1px solid',
+          borderColor: 'grey.200',
+          background: 'linear-gradient(180deg, primary.main 0%, primary.light 50%, primary.light 100%)',
+          color: 'primary.contrastText',
           '& .MuiTypography-root': {
-            color: '#ffffff', // White text for all typography in drawer
+            color: 'primary.contrastText',
           },
           '& .MuiIconButton-root': {
-            color: '#ffffff', // White icons in drawer
+            color: 'primary.contrastText',
           },
         },
       },
@@ -270,9 +271,9 @@ export const theme = createTheme({
         root: {
           borderRadius: 8,
           margin: '2px 0',
-          color: '#ffffff', // White text for dark background
+          color: 'primary.contrastText',
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)', // Light white overlay
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
           },
         },
       },
@@ -282,14 +283,14 @@ export const theme = createTheme({
         root: {
           borderRadius: 8,
           margin: '2px 0',
-          color: '#ffffff', // White text for dark background
+          color: 'primary.contrastText',
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)', // Light white overlay
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
           },
           '&.Mui-selected': {
-            backgroundColor: 'rgba(255, 255, 255, 0.2)', // Slightly more opaque white
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
             '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.3)', // Even more opaque on hover
+              backgroundColor: 'rgba(255, 255, 255, 0.3)',
             },
           },
         },
@@ -298,7 +299,7 @@ export const theme = createTheme({
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: '#f8fafc',
+          backgroundColor: 'grey.50',
         },
       },
     },
@@ -306,7 +307,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '&:hover': {
-            backgroundColor: '#f8fafc',
+            backgroundColor: 'grey.50',
           },
         },
       },
@@ -315,7 +316,7 @@ export const theme = createTheme({
       styleOverrides: {
         head: {
           fontWeight: 600,
-          color: '#374151',
+          color: 'grey.700',
         },
       },
     },
@@ -329,7 +330,7 @@ export const theme = createTheme({
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
         },
         indicator: {
-          backgroundColor: '#1e40af',
+          backgroundColor: 'primary.main',
           height: 3,
           borderRadius: '2px 2px 0 0',
         },
@@ -338,7 +339,7 @@ export const theme = createTheme({
     MuiTab: {
       styleOverrides: {
         root: {
-          color: '#475569',
+          color: 'grey.600',
           fontWeight: 500,
           textTransform: 'none',
           minHeight: 48,
@@ -346,14 +347,14 @@ export const theme = createTheme({
           margin: '0 6px',
           transition: 'all 0.2s ease-in-out',
           '&.Mui-selected': {
-            color: '#1e40af',
+            color: 'primary.main',
             backgroundColor: 'rgba(30, 64, 175, 0.1)',
             fontWeight: 600,
             boxShadow: '0 2px 4px rgba(30, 64, 175, 0.2)',
           },
           '&:hover': {
             backgroundColor: 'rgba(30, 64, 175, 0.05)',
-            color: '#1e40af',
+            color: 'primary.main',
           },
         },
       },
@@ -368,32 +369,32 @@ export const theme = createTheme({
     MuiTypography: {
       styleOverrides: {
         h4: {
-          color: '#1e293b',
+          color: 'grey.900',
           fontWeight: 700,
           textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
         },
         h5: {
-          color: '#1e293b',
+          color: 'grey.900',
           fontWeight: 600,
           textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
         },
         h6: {
-          color: '#1e293b',
+          color: 'grey.900',
           fontWeight: 600,
         },
         subtitle1: {
-          color: '#475569',
+          color: 'grey.600',
           fontWeight: 500,
         },
         subtitle2: {
-          color: '#64748b',
+          color: 'grey.500',
           fontWeight: 500,
         },
         body1: {
-          color: '#334155',
+          color: 'grey.700',
         },
         body2: {
-          color: '#475569',
+          color: 'grey.600',
         },
       },
     },

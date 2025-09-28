@@ -34,6 +34,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  useTheme,
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -54,16 +55,17 @@ dayjs.extend(isBetween);
 // Helper: status color
 const statusColor = (status?: string) => {
   switch (status) {
-    case 'booked': return '#1976d2';
-    case 'checked_in': return '#ed6c02';
-    case 'in_service': return '#f97316';
-    case 'completed': return '#10b981';
-    case 'cancelled': return '#ef4444';
-    default: return '#0288d1';
+    case 'booked': return 'primary.main';
+    case 'checked_in': return 'warning.main';
+    case 'in_service': return 'warning.dark';
+    case 'completed': return 'success.main';
+    case 'cancelled': return 'error.main';
+    default: return 'info.main';
   }
 };
 
 export const ReservationManagement: React.FC = () => {
+  const theme = useTheme();
   const [tab, setTab] = useState<number>(0);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
@@ -192,9 +194,13 @@ export const ReservationManagement: React.FC = () => {
     title: `${r.guest_name ?? 'Guest'}`,
     start: r.start_time,
     end: r.end_time,
-    backgroundColor: statusColor(r.status),
-    borderColor: '#ffffff',
-    textColor: '#fff',
+    backgroundColor: r.status === 'booked' ? theme.palette.primary.main :
+                     r.status === 'checked_in' ? theme.palette.warning.main :
+                     r.status === 'in_service' ? theme.palette.warning.dark :
+                     r.status === 'completed' ? theme.palette.success.main :
+                     r.status === 'cancelled' ? theme.palette.error.main : theme.palette.info.main,
+    borderColor: theme.palette.common.white,
+    textColor: theme.palette.common.white,
     extendedProps: { reservation: r, status: r.status, locationId: r.location, employeeId: r.employee },
     resourceId: groupBy === 'location' ? String(r.location) : (groupBy === 'employee' ? String(r.employee) : undefined),
     editable: true,
@@ -409,7 +415,14 @@ export const ReservationManagement: React.FC = () => {
               </TableCell>
               <TableCell>{r.employee_name}</TableCell>
               <TableCell>
-                <Chip label={r.status} sx={{ bgcolor: statusColor(r.status), color: '#fff' }} />
+                <Chip 
+                  label={r.status} 
+                  color={r.status === 'booked' ? 'primary' : 
+                         r.status === 'checked_in' ? 'warning' :
+                         r.status === 'in_service' ? 'warning' :
+                         r.status === 'completed' ? 'success' :
+                         r.status === 'cancelled' ? 'error' : 'info'}
+                />
               </TableCell>
               <TableCell>{dayjs(r.start_time).format('MMM D, h:mm A')}</TableCell>
               <TableCell>{r.end_time ? dayjs(r.end_time).format('h:mm A') : '-'}</TableCell>
@@ -643,8 +656,9 @@ export const ReservationManagement: React.FC = () => {
         sx={{
           '& .MuiDrawer-paper': {
             width: 420,
-            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
-            borderLeft: '1px solid rgba(255, 255, 255, 0.2)',
+            background: theme.palette.background.content,
+            borderLeft: '1px solid',
+            borderColor: 'rgba(255, 255, 255, 0.2)',
           },
         }}
       >
@@ -659,7 +673,7 @@ export const ReservationManagement: React.FC = () => {
             <>
               {/* Header */}
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, color: '#1e293b', mb: 1 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: 'grey.900', mb: 1 }}>
                   {selectedReservation.guest_name}
                 </Typography>
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
@@ -667,9 +681,12 @@ export const ReservationManagement: React.FC = () => {
                 </Typography>
                 <Chip 
                   label={(selectedReservation.status ?? 'pending').replace('_',' ')} 
+                  color={selectedReservation.status === 'booked' ? 'primary' : 
+                         selectedReservation.status === 'checked_in' ? 'warning' :
+                         selectedReservation.status === 'in_service' ? 'warning' :
+                         selectedReservation.status === 'completed' ? 'success' :
+                         selectedReservation.status === 'cancelled' ? 'error' : 'info'}
                   sx={{ 
-                    bgcolor: statusColor(selectedReservation.status), 
-                    color: '#fff',
                     fontWeight: 600,
                     textTransform: 'capitalize'
                   }} 
@@ -678,30 +695,30 @@ export const ReservationManagement: React.FC = () => {
 
               {/* Details Card */}
               <Paper sx={{ p: 3, mb: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
-                <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>Reservation Details</Typography>
+                <Typography variant="h6" sx={{ mb: 2, color: 'grey.900' }}>Reservation Details</Typography>
                 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Services</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Services</Typography>
                   <Typography variant="body2">
                     {(selectedReservation.reservation_services || []).map((s:any)=> s.service_details?.name || `#${s.service}`).join(', ') || 'No services'}
                   </Typography>
                 </Box>
 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Notes</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Notes</Typography>
                   <Typography variant="body2">{selectedReservation.notes || '—'}</Typography>
                 </Box>
 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Schedule</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Schedule</Typography>
                   <Typography variant="body2">
                     {dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : 'TBD'}
                   </Typography>
                 </Box>
 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Total Price</Typography>
-                  <Typography variant="h6" sx={{ color: '#059669', fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Total Price</Typography>
+                  <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 600 }}>
                     ${Number(selectedReservation.total_price || 0).toFixed(2)}
                   </Typography>
                 </Box>
@@ -713,7 +730,7 @@ export const ReservationManagement: React.FC = () => {
 
               {/* Action Buttons */}
               <Paper sx={{ p: 2, mb: 3, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>
-                <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>Actions</Typography>
+                <Typography variant="h6" sx={{ mb: 2, color: 'grey.900' }}>Actions</Typography>
                 <Stack spacing={1}>
                   {selectedReservation.status === 'booked' && (
                     <Button 
@@ -803,7 +820,7 @@ export const ReservationManagement: React.FC = () => {
               {/* Historical Reservations */}
               {historicalReservations.length > 0 && (
                 <Paper sx={{ p: 2, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>
-                  <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>
+                  <Typography variant="h6" sx={{ mb: 2, color: 'grey.900' }}>
                     Historical Reservations ({historicalReservations.length})
                   </Typography>
                   <List dense>
@@ -820,9 +837,12 @@ export const ReservationManagement: React.FC = () => {
                               <Chip 
                                 label={reservation.status} 
                                 size="small"
+                                color={reservation.status === 'booked' ? 'primary' : 
+                                       reservation.status === 'checked_in' ? 'warning' :
+                                       reservation.status === 'in_service' ? 'warning' :
+                                       reservation.status === 'completed' ? 'success' :
+                                       reservation.status === 'cancelled' ? 'error' : 'info'}
                                 sx={{ 
-                                  bgcolor: statusColor(reservation.status), 
-                                  color: '#fff',
                                   fontSize: '0.7rem',
                                   height: 20
                                 }} 
