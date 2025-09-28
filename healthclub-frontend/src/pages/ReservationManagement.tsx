@@ -636,68 +636,174 @@ export const ReservationManagement: React.FC = () => {
       )}
 
       {/* Drawer for reservation summary */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 380, p: 2 }}>
+      <Drawer 
+        anchor="right" 
+        open={drawerOpen} 
+        onClose={() => setDrawerOpen(false)}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: 420,
+            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
+            borderLeft: '1px solid rgba(255, 255, 255, 0.2)',
+          },
+        }}
+      >
+        <Box sx={{ 
+          width: '100%', 
+          height: '100%', 
+          p: 3,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
           {selectedReservation ? (
             <>
-              <Typography variant="h6">{selectedReservation.guest_name}</Typography>
-              <Typography variant="body2" color="text.secondary">{selectedReservation.location_name} — {selectedReservation.employee_name}</Typography>
-              <Box mt={1}>
-                <Chip label={(selectedReservation.status ?? 'pending').replace('_',' ')} sx={{ bgcolor: statusColor(selectedReservation.status), color: '#fff' }} />
-              </Box>
-              <Box mt={2}>
-                <Typography variant="subtitle2">Services</Typography>
-                <Typography>{(selectedReservation.reservation_services || []).map((s:any)=> s.service_details?.name || `#${s.service}`).join(', ') || 'No services'}</Typography>
-                <Typography mt={1} variant="subtitle2">Notes</Typography>
-                <Typography>{selectedReservation.notes || '—'}</Typography>
-                <Typography mt={1} variant="subtitle2">Start / End</Typography>
-                <Typography>{dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : '-'}</Typography>
-                <Typography mt={1} variant="subtitle2">Total Price</Typography>
-                <Typography>${Number(selectedReservation.total_price || 0).toFixed(2)}</Typography>
-                {((selectedReservation as any).location_is_out_of_service) && (
-                  <Box mt={1}>
-                    <Chip label="Room Out of Service" color="error" size="small" />
-                  </Box>
-                )}
+              {/* Header */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: '#1e293b', mb: 1 }}>
+                  {selectedReservation.guest_name}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                  {selectedReservation.location_name} • {selectedReservation.employee_name}
+                </Typography>
+                <Chip 
+                  label={(selectedReservation.status ?? 'pending').replace('_',' ')} 
+                  sx={{ 
+                    bgcolor: statusColor(selectedReservation.status), 
+                    color: '#fff',
+                    fontWeight: 600,
+                    textTransform: 'capitalize'
+                  }} 
+                />
               </Box>
 
-              <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-                {selectedReservation.status === 'booked' && (
-                  <Button variant="contained" onClick={()=> performAction('check_in')} startIcon={<Check />}>Check-in</Button>
+              {/* Details Card */}
+              <Paper sx={{ p: 3, mb: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
+                <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>Reservation Details</Typography>
+                
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Services</Typography>
+                  <Typography variant="body2">
+                    {(selectedReservation.reservation_services || []).map((s:any)=> s.service_details?.name || `#${s.service}`).join(', ') || 'No services'}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Notes</Typography>
+                  <Typography variant="body2">{selectedReservation.notes || '—'}</Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Schedule</Typography>
+                  <Typography variant="body2">
+                    {dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : 'TBD'}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#475569', mb: 0.5 }}>Total Price</Typography>
+                  <Typography variant="h6" sx={{ color: '#059669', fontWeight: 600 }}>
+                    ${Number(selectedReservation.total_price || 0).toFixed(2)}
+                  </Typography>
+                </Box>
+
+                {((selectedReservation as any).location_is_out_of_service) && (
+                  <Chip label="Room Out of Service" color="error" size="small" />
                 )}
-                {selectedReservation.status === 'checked_in' && (
-                  <Button variant="contained" color="warning" onClick={()=> performAction('in_service')} startIcon={<DirectionsRun />}>In Service</Button>
-                )}
-                {selectedReservation.status === 'in_service' && (
-                  <Button variant="contained" color="success" onClick={()=> performAction('complete')} startIcon={<DoneAll />}>Complete</Button>
-                )}
-                {selectedReservation.status === 'completed' && (
-                  <Button variant="outlined" color="inherit" onClick={()=> performAction('check_out')} startIcon={<Logout />}>Check-out</Button>
-                )}
-                <Button variant="text" onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}>Edit</Button>
-                <Button variant="outlined" onClick={async ()=> {
-                  if (!selectedReservation) return;
-                  // Load clean & vacant rooms (and unisex or matching gender)
-                  try {
-                    const gender = (selectedReservation as any).guest_gender || undefined;
-                    const params: any = { is_clean: 'true', is_occupied: 'false' };
-                    if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
-                    // If services exist, filter to locations linked to those services
-                    const serviceIds = (selectedReservation.reservation_services || []).map((s:any) => s.service).filter(Boolean);
-                    if (serviceIds.length > 0) (params as any).services = serviceIds.join(',');
-                    const rooms = await locationsApi.list(params);
-                    setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
-                  } catch {
-                    setAssignRoom({ open: true, reservation: selectedReservation, options: [] });
-                  }
-                }}>Assign Room</Button>
-              </Box>
+              </Paper>
+
+              {/* Action Buttons */}
+              <Paper sx={{ p: 2, mb: 3, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>
+                <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>Actions</Typography>
+                <Stack spacing={1}>
+                  {selectedReservation.status === 'booked' && (
+                    <Button 
+                      variant="contained" 
+                      onClick={()=> performAction('check_in')} 
+                      startIcon={<Check />}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Check-in
+                    </Button>
+                  )}
+                  {selectedReservation.status === 'checked_in' && (
+                    <Button 
+                      variant="contained" 
+                      color="warning" 
+                      onClick={()=> performAction('in_service')} 
+                      startIcon={<DirectionsRun />}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Start Service
+                    </Button>
+                  )}
+                  {selectedReservation.status === 'in_service' && (
+                    <Button 
+                      variant="contained" 
+                      color="success" 
+                      onClick={()=> performAction('complete')} 
+                      startIcon={<DoneAll />}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Complete Service
+                    </Button>
+                  )}
+                  {selectedReservation.status === 'completed' && (
+                    <Button 
+                      variant="outlined" 
+                      color="inherit" 
+                      onClick={()=> performAction('check_out')} 
+                      startIcon={<Logout />}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Check-out
+                    </Button>
+                  )}
+                  
+                  <Divider sx={{ my: 1 }} />
+                  
+                  <Button 
+                    variant="outlined" 
+                    onClick={()=> { setEditing(selectedReservation); setDrawerOpen(false); }}
+                    fullWidth
+                    sx={{ justifyContent: 'flex-start' }}
+                  >
+                    Edit Reservation
+                  </Button>
+                  
+                  <Button 
+                    variant="outlined" 
+                    onClick={async ()=> {
+                      if (!selectedReservation) return;
+                      // Load clean & vacant rooms (and unisex or matching gender)
+                      try {
+                        const gender = (selectedReservation as any).guest_gender || undefined;
+                        const params: any = { is_clean: 'true', is_occupied: 'false' };
+                        if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
+                        // If services exist, filter to locations linked to those services
+                        const serviceIds = (selectedReservation.reservation_services || []).map((s:any) => s.service).filter(Boolean);
+                        if (serviceIds.length > 0) (params as any).services = serviceIds.join(',');
+                        const rooms = await locationsApi.list(params);
+                        setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
+                      } catch {
+                        setAssignRoom({ open: true, reservation: selectedReservation, options: [] });
+                      }
+                    }}
+                    fullWidth
+                    sx={{ justifyContent: 'flex-start' }}
+                  >
+                    Assign Room
+                  </Button>
+                </Stack>
+              </Paper>
 
               {/* Historical Reservations */}
               {historicalReservations.length > 0 && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" gutterBottom>
+                <Paper sx={{ p: 2, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#1e293b' }}>
                     Historical Reservations ({historicalReservations.length})
                   </Typography>
                   <List dense>
@@ -745,7 +851,7 @@ export const ReservationManagement: React.FC = () => {
                       </ListItem>
                     )}
                   </List>
-                </>
+                </Paper>
               )}
             </>
           ) : (
