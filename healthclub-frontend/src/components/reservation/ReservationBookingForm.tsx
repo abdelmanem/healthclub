@@ -35,6 +35,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [availabilityStatus, setAvailabilityStatus] = React.useState<'unknown' | 'available' | 'unavailable' | 'error'>('unknown');
+  const [availabilityReason, setAvailabilityReason] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -134,6 +135,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     try {
       const res = await reservationsService.availability({
         service: selectedServices[0]?.id || undefined,
+        services: selectedServices.map(s => s.id),
         employee: employeeId || undefined,
         location: locationId || undefined,
         start: start,
@@ -141,10 +143,12 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       });
       const isAvailable = !!res.available;
       setAvailabilityStatus(isAvailable ? 'available' : 'unavailable');
+      setAvailabilityReason(isAvailable ? null : (res.reason || null));
       setSlots([]);
       return isAvailable;
     } catch (e) {
       setAvailabilityStatus('error');
+      setAvailabilityReason('server_error');
       setSlots([]);
       return true;
     }
@@ -161,6 +165,8 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         start_time: start,
         end_time: end,
         location: locationId ? Number(locationId) : null,
+        service: selectedServices[0]?.id || undefined,
+        services: selectedServices.map(s => s.id),
         exclude_reservation: reservation?.id || undefined,
       });
       const hasConflict = !!res.conflict;
@@ -353,7 +359,12 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
               <Typography variant="caption" color="success.main">Available</Typography>
             )}
             {availabilityStatus === 'unavailable' && (
-              <Typography variant="caption" color="error.main">Unavailable</Typography>
+              <>
+                <Typography variant="caption" color="error.main">Unavailable</Typography>
+                {availabilityReason && (
+                  <Chip size="small" color="error" label={availabilityReason.replace(/_/g, ' ')} />
+                )}
+              </>
             )}
             {availabilityStatus === 'error' && (
               <Typography variant="caption" color="warning.main">Could not check (server error)</Typography>

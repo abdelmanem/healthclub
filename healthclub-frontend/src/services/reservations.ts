@@ -126,11 +126,11 @@ export const reservationsService = {
     const response = await api.patch(`/reservations/${id}/`, body);
     return response.data;
   },
-  async availability(params: { service?: number; employee?: number; location?: number; start: string; exclude_reservation?: number }): Promise<{ available: boolean }> {
+  async availability(params: { service?: number; services?: number[]; employee?: number; location?: number; start: string; exclude_reservation?: number }): Promise<{ available: boolean; reason?: string; overlaps?: number; capacity?: number }> {
     const response = await api.get('/reservations/availability/', { params });
     return response.data;
   },
-  async conflictCheck(payload: { start_time: string; end_time: string; location: number | null; exclude_reservation?: number }): Promise<{ conflict: boolean }> {
+  async conflictCheck(payload: { start_time: string; end_time: string; location: number | null; service?: number; services?: number[]; exclude_reservation?: number }): Promise<{ conflict: boolean; reason?: string; overlaps?: number; capacity?: number }> {
     const response = await api.post('/reservations/conflict-check/', payload);
     return response.data;
   },

@@ -398,6 +398,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
     def availability(self, request):
         """Check if a location/employee/service is available at a given start time"""
         service_id = request.query_params.get("service")
+        services_param = request.query_params.getlist("services") if hasattr(request.query_params, 'getlist') else None
         employee_id = request.query_params.get("employee")
         start_time = request.query_params.get("start")
         location_id = request.query_params.get("location")
@@ -411,14 +412,24 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # TODO: add your service duration lookup
         from services.models import Service
         try:
-            service = Service.objects.get(pk=service_id)
+            if services_param:
+                services_qs = Service.objects.filter(pk__in=services_param)
+                services = list(services_qs)
+                if not services:
+                    return response.Response({"error": "Services not found"}, status=status.HTTP_404_NOT_FOUND)
+                # use max duration among selected services
+                duration_minutes = max([s.duration_minutes for s in services] or [60])
+            else:
+                service = Service.objects.get(pk=service_id)
+                services = [service]
+                duration_minutes = service.duration_minutes
         except Service.DoesNotExist:
             return response.Response({"error": "Service not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # calculate end time
         from datetime import timedelta
         start_dt = timezone.datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        end_dt = start_dt + timedelta(minutes=service.duration_minutes)
+        end_dt = start_dt + timedelta(minutes=duration_minutes)
 
         # check conflicts
         conflicts = Reservation.objects.filter(
@@ -436,14 +447,40 @@ class ReservationViewSet(viewsets.ModelViewSet):
         if location_id:
             conflicts = conflicts.filter(location_id=location_id)
 
-        # Block out-of-service locations
+        # Exclude current reservation when editing
+        exclude_reservation = request.query_params.get("exclude_reservation")
+        if exclude_reservation:
+            try:
+                conflicts = conflicts.exclude(pk=int(exclude_reservation))
+            except Exception:
+                pass
+
+        # Block out-of-service and validate compatibility/capacity
         if location_id:
             try:
                 loc = Location.objects.get(pk=location_id)
-                if getattr(loc, 'is_out_of_service', False):
-                    return response.Response({"available": False, "reason": "out_of_service"})
             except Location.DoesNotExist:
-                pass
+                return response.Response({"available": False, "reason": "invalid_location"})
+
+            if getattr(loc, 'is_out_of_service', False):
+                return response.Response({"available": False, "reason": "out_of_service"})
+
+            # service compatibility: service must be allowed in location
+            try:
+                compat_all = all([s.locations.filter(pk=loc.pk).exists() for s in services])
+            except Exception:
+                compat_all = False
+            if not compat_all:
+                return response.Response({"available": False, "reason": "incompatible_room"})
+
+            # capacity-aware availability
+            overlap_count = conflicts.count()
+            capacity = getattr(loc, 'capacity', 1) or 1
+            is_available = overlap_count < capacity
+            payload = {"available": is_available, "overlaps": overlap_count, "capacity": capacity}
+            if not is_available:
+                payload.update({"reason": "capacity_reached"})
+            return response.Response(payload)
 
         return response.Response({"available": not conflicts.exists()})
 
@@ -453,6 +490,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         start_time = request.data.get("start_time")
         end_time = request.data.get("end_time")
         location_id = request.data.get("location")
+        exclude_reservation = request.data.get("exclude_reservation")
+        service_id = request.data.get("service")
+        services_list = request.data.get("services")
 
         if not (start_time and end_time and location_id):
             return response.Response(
@@ -473,12 +513,41 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 Reservation.STATUS_IN_SERVICE,
             ],
         )
-        # Block out-of-service locations here too
+        if exclude_reservation:
+            try:
+                conflicts = conflicts.exclude(pk=int(exclude_reservation))
+            except Exception:
+                pass
+
+        # Validate location & service compatibility and capacity-aware conflicts
         try:
             loc = Location.objects.get(pk=location_id)
-            if getattr(loc, 'is_out_of_service', False):
-                return response.Response({"conflict": True, "reason": "out_of_service"})
         except Location.DoesNotExist:
-            pass
+            return response.Response({"conflict": True, "reason": "invalid_location"})
 
-        return response.Response({"conflict": conflicts.exists()})
+        if getattr(loc, 'is_out_of_service', False):
+            return response.Response({"conflict": True, "reason": "out_of_service"})
+
+        # service compatibility: all services must be allowed in location
+        try:
+            from services.models import Service
+            if services_list and isinstance(services_list, list):
+                svcs = Service.objects.filter(pk__in=services_list)
+                if not all([s.locations.filter(pk=loc.pk).exists() for s in svcs]):
+                    return response.Response({"conflict": True, "reason": "incompatible_room"})
+            elif service_id:
+                svc = Service.objects.get(pk=int(service_id))
+                if not svc.locations.filter(pk=loc.pk).exists():
+                    return response.Response({"conflict": True, "reason": "incompatible_room"})
+        except Service.DoesNotExist:
+            return response.Response({"conflict": True, "reason": "invalid_service"})
+        except Exception:
+            return response.Response({"conflict": True, "reason": "invalid_service"})
+
+        overlap_count = conflicts.count()
+        capacity = getattr(loc, 'capacity', 1) or 1
+        is_conflict = overlap_count >= capacity
+        payload = {"conflict": is_conflict, "overlaps": overlap_count, "capacity": capacity}
+        if is_conflict:
+            payload.update({"reason": "capacity_reached"})
+        return response.Response(payload)
