@@ -24,7 +24,13 @@ type Reservation = {
   employee: number | null;
 };
 
-type Employee = { id: number; name: string };
+type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
+
+const getEmployeeDisplayName = (e?: Employee | null) => {
+  if (!e) return 'Unassigned';
+  const full = `${e.first_name ?? ''} ${e.last_name ?? ''}`.trim();
+  return (e.name && e.name.length > 0) ? e.name : (full.length > 0 ? full : 'Staff');
+};
 
 const statusColor = (status?: string) => {
   switch (status) {
@@ -56,7 +62,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   React.useEffect(() => { loadData(); }, [loadData]);
 
-  const resources = employees.map((e) => ({ id: String(e.id), title: e.name }));
+  const resources = employees.map((e) => ({ id: String(e.id), title: getEmployeeDisplayName(e) }));
 
   const events = reservations.map((r) => ({
     id: String(r.id),
@@ -163,7 +169,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                 <Typography variant="h6">{drawer.reservation.guest_name}</Typography>
                 <Stack direction="row" spacing={1} alignItems="center" mt={1}>
                   <Typography variant="body2">Staff:</Typography>
-                  <Typography variant="body2">{employees.find(e => e.id === drawer.reservation?.employee)?.name || 'Unassigned'}</Typography>
+                  <Typography variant="body2">{getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}</Typography>
                 </Stack>
                 <Box mt={1}>
                   <Chip label={(drawer.reservation.status || '').replace('_',' ')} color={
