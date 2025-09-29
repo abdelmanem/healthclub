@@ -77,7 +77,7 @@ export const ReservationManagement: React.FC = () => {
   const [employeeFilter, setEmployeeFilter] = useState<string>('');
   const [guestSearch, setGuestSearch] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<string>(dayjs().format('YYYY-MM-DD'));
-  const [groupBy] = useState<'location'|'employee'|'none'>('none');
+  const [groupBy] = useState<'location'|'employee'|'none'>('employee');
   const [showTimers] = useState(true);
   const [now, setNow] = useState<number>(Date.now());
 
@@ -281,6 +281,7 @@ export const ReservationManagement: React.FC = () => {
   const onEventDrop = async (dropInfo: any) => {
     const event = dropInfo.event;
     const reservation = event.extendedProps?.reservation;
+    const newResource = (dropInfo as any).newResource || (event as any).getResources?.()?.[0] || null;
     
     if (!reservation) return;
 
@@ -308,11 +309,24 @@ export const ReservationManagement: React.FC = () => {
       const newStart = dayjs(event.start);
       const newEnd = newStart.add(totalDurationMinutes, 'minutes');
 
-      // Update the reservation
+      // Update the reservation time
       await reservationsService.update(reservation.id, {
         start_time: newStart.toISOString(),
         end_time: newEnd.toISOString(),
       });
+
+      // If dragged to a different employee column, assign employee
+      if (groupBy === 'employee' && newResource && String(reservation.employee || '') !== String(newResource.id)) {
+        try {
+          await api.post('/reservation-assignments/', {
+            reservation: reservation.id,
+            employee: Number(newResource.id),
+            role_in_service: 'Primary',
+          });
+        } catch (assignErr) {
+          console.warn('Employee assignment failed:', assignErr);
+        }
+      }
 
       // Reload reservations to reflect changes
       await loadReservations();
@@ -641,10 +655,12 @@ export const ReservationManagement: React.FC = () => {
             )}
             <FullCalendar
               plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin, resourceTimelinePlugin]}
-              initialView={groupBy === 'none' ? 'timeGridDay' : 'resourceTimelineDay'}
+              initialView={'resourceTimelineDay'}
               headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,dayGridMonth,resourceTimelineDay' }}
               events={events}
               resources={resources}
+              resourceOrder={'title'}
+              resourceAreaHeaderContent={'Employees'}
               slotDuration="00:30:00"
               slotLabelInterval="00:30"
               slotLabelContent={(arg: any) => {
@@ -660,6 +676,7 @@ export const ReservationManagement: React.FC = () => {
               selectable={true}
               editable={true}
               eventStartEditable={true}
+              eventResourceEditable={true}
               eventDurationEditable={false}
               eventClick={onEventClick}
               eventDrop={onEventDrop}
