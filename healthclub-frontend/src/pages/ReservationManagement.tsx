@@ -645,6 +645,18 @@ export const ReservationManagement: React.FC = () => {
               headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,dayGridMonth,resourceTimelineDay' }}
               events={events}
               resources={resources}
+              slotDuration="00:30:00"
+              slotLabelInterval="00:30"
+              slotLabelContent={(arg: any) => {
+                const d = new Date(arg.date);
+                const mins = d.getMinutes();
+                if (mins === 30) return ':30';
+                // Top of the hour: show HH:00 in 12-hour with leading zero
+                const rawHour = d.getHours();
+                const hour12 = rawHour % 12 === 0 ? 12 : rawHour % 12;
+                const hh = String(hour12).padStart(2, '0');
+                return `${hh}:00`;
+              }}
               selectable={true}
               editable={true}
               eventStartEditable={true}
