@@ -10,6 +10,8 @@ export interface Guest {
   id: number;
   first_name: string;
   last_name: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  date_of_birth?: string; // YYYY-MM-DD
   email: string;
   phone: string;
   membership_tier?: string | MembershipTierObject;
@@ -22,6 +24,8 @@ export interface Guest {
 export interface CreateGuestInput {
   first_name: string;
   last_name: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  date_of_birth?: string; // YYYY-MM-DD
   email: string;
   phone: string;
   membership_tier?: string | null;

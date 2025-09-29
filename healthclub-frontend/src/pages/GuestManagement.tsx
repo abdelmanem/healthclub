@@ -35,6 +35,7 @@ import { guestsService, Guest as GuestType } from '../services/guests';
 import { guestPreferencesService } from '../services/guestPreferences';
 import { guestCommunicationsService } from '../services/guestCommunications';
 import { useNavigate } from 'react-router-dom';
+import { reservationsService } from '../services/reservations';
 import { QuickReservationDialog } from '../components/guest/QuickReservationDialog';
 
 
@@ -74,10 +75,7 @@ export const GuestManagement: React.FC = () => {
     (async () => {
       try {
         setReservationsLoading(true);
-        const resp = await fetch(`/api/reservations/?guest=${guestId}&ordering=-start_time`);
-        if (!resp.ok) throw new Error(`Failed to load reservations: ${resp.status}`);
-        const data = await resp.json();
-        const items = Array.isArray(data) ? data : (data?.results ?? []);
+        const items = await reservationsService.list({ guest: guestId });
         if (!aborted) setGuestReservations(items);
       } catch (e) {
         console.error(e);

@@ -25,6 +25,8 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
   const [form, setForm] = useState<CreateGuestInput>({
     first_name: '',
     last_name: '',
+    gender: undefined,
+    date_of_birth: undefined,
     email: '',
     phone: '',
     membership_tier: '',
@@ -45,7 +47,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
       const created = await guestsService.create(form);
       onCreated(created);
       onClose();
-      setForm({ first_name: '', last_name: '', email: '', phone: '', membership_tier: '' });
+      setForm({ first_name: '', last_name: '', gender: undefined, date_of_birth: undefined, email: '', phone: '', membership_tier: '' });
     } catch (err) {
       console.error('Failed to create guest', err);
     } finally {
@@ -70,6 +72,31 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
           margin="normal"
           value={form.last_name}
           onChange={handleChange('last_name')}
+        />
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="gender-label">Gender</InputLabel>
+          <Select
+            labelId="gender-label"
+            id="gender"
+            value={form.gender || ''}
+            label="Gender"
+            onChange={handleSelectChange('gender')}
+          >
+            <MenuItem value="">Unspecified</MenuItem>
+            <MenuItem value="male">Male</MenuItem>
+            <MenuItem value="female">Female</MenuItem>
+            <MenuItem value="other">Other</MenuItem>
+            <MenuItem value="prefer_not_to_say">Prefer not to say</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          fullWidth
+          label="Date of Birth"
+          margin="normal"
+          type="date"
+          value={form.date_of_birth || ''}
+          onChange={handleChange('date_of_birth') as any}
+          InputLabelProps={{ shrink: true }}
         />
         <TextField
           fullWidth

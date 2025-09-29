@@ -90,7 +90,7 @@ export const ReservationManagement: React.FC = () => {
   const [pendingMove, setPendingMove] = useState<any | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success'|'info'|'warning'|'error' }>({ open: false, message: '', severity: 'info' });
   const [dirtyConfirm, setDirtyConfirm] = useState<{ open: boolean; reservation?: Reservation }>(() => ({ open: false }));
-  const [assignRoom, setAssignRoom] = useState<{ open: boolean; reservation?: Reservation; options: Location[] }>({ open: false, reservation: undefined, options: [] });
+  const [assignRoom, setAssignRoom] = useState<{ open: boolean; reservation?: Reservation; options: Location[]; selected?: Location | null }>({ open: false, reservation: undefined, options: [], selected: null });
 
   // KPI
   const [kpi, setKpi] = useState({ arrivalsToday: 0, checkedInNow: 0, inServiceNow: 0, revenueToday: 0 });
@@ -265,9 +265,14 @@ export const ReservationManagement: React.FC = () => {
           const params: any = { is_clean: 'true', is_occupied: 'false' };
           if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
           const rooms = await locationsApi.list(params);
-          setAssignRoom({ open: true, reservation: r, options: rooms });
+          // Ensure current room is present in options and preselect it
+          const currentRoomId = r.location as any;
+          const hasCurrent = rooms.some((loc: any) => loc.id === currentRoomId);
+          const options = hasCurrent ? rooms : ([...rooms, { id: currentRoomId, name: r.location_name, is_clean: (r as any).location_is_clean, is_occupied: (r as any).location_is_occupied }] as any);
+          const selected = options.find((loc: any) => loc.id === currentRoomId) || null;
+          setAssignRoom({ open: true, reservation: r, options, selected });
         } catch {
-          setAssignRoom({ open: true, reservation: r, options: [] });
+          setAssignRoom({ open: true, reservation: r, options: [], selected: null });
         }
       }
     }
@@ -444,9 +449,14 @@ export const ReservationManagement: React.FC = () => {
                       const params: any = { is_clean: 'true', is_occupied: 'false' };
                       if (gender === 'male' || gender === 'female') params.gender = `${gender},unisex`;
                       const rooms = await locationsApi.list(params);
-                      setAssignRoom({ open: true, reservation: r, options: rooms });
+                      // Ensure current room is present in options and preselect it
+                      const currentRoomId = r.location as any;
+                      const hasCurrent = rooms.some((loc: any) => loc.id === currentRoomId);
+                      const options = hasCurrent ? rooms : ([...rooms, { id: currentRoomId, name: r.location_name, is_clean: (r as any).location_is_clean, is_occupied: (r as any).location_is_occupied }] as any);
+                      const selected = options.find((loc: any) => loc.id === currentRoomId) || null;
+                      setAssignRoom({ open: true, reservation: r, options, selected });
                     } catch {
-                      setAssignRoom({ open: true, reservation: r, options: [] });
+                      setAssignRoom({ open: true, reservation: r, options: [], selected: null });
                     }
                   }} title="Assign Room">
                     <DirectionsRun fontSize="small" />
@@ -804,9 +814,14 @@ export const ReservationManagement: React.FC = () => {
                         const serviceIds = (selectedReservation.reservation_services || []).map((s:any) => s.service).filter(Boolean);
                         if (serviceIds.length > 0) (params as any).services = serviceIds.join(',');
                         const rooms = await locationsApi.list(params);
-                        setAssignRoom({ open: true, reservation: selectedReservation, options: rooms });
+                        // Ensure current room is present in options and preselect it
+                        const currentRoomId = selectedReservation.location as any;
+                        const hasCurrent = rooms.some((loc: any) => loc.id === currentRoomId);
+                        const options = hasCurrent ? rooms : ([...rooms, { id: currentRoomId, name: selectedReservation.location_name, is_clean: (selectedReservation as any).location_is_clean, is_occupied: (selectedReservation as any).location_is_occupied }] as any);
+                        const selected = options.find((loc: any) => loc.id === currentRoomId) || null;
+                        setAssignRoom({ open: true, reservation: selectedReservation, options, selected });
                       } catch {
-                        setAssignRoom({ open: true, reservation: selectedReservation, options: [] });
+                        setAssignRoom({ open: true, reservation: selectedReservation, options: [], selected: null });
                       }
                     }}
                     fullWidth
@@ -962,28 +977,29 @@ export const ReservationManagement: React.FC = () => {
       </Dialog>
 
       {/* Assign Room Dialog */}
-      <Dialog open={assignRoom.open} onClose={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>
+      <Dialog open={assignRoom.open} onClose={() => setAssignRoom({ open: false, reservation: undefined, options: [], selected: null })}>
         <DialogTitle>Assign Room</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Autocomplete
             options={assignRoom.options}
             getOptionLabel={(o: Location) => `${o.name} ${o.is_clean ? '' : '(Dirty)'} ${o.is_occupied ? '(Occupied)' : ''}`.trim()}
+            value={assignRoom.selected || (assignRoom.options.find((o:any) => o.id === assignRoom.reservation?.location) || null)}
             onChange={(_, value) => {
-              (assignRoom as any).selected = value as any;
+              setAssignRoom(prev => ({ ...prev, selected: (value as any) || null }));
             }}
             renderInput={(params) => <TextField {...params} label="Room" sx={{ minWidth: 320 }} />}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAssignRoom({ open: false, reservation: undefined, options: [] })}>Cancel</Button>
+          <Button onClick={() => setAssignRoom({ open: false, reservation: undefined, options: [], selected: null })}>Cancel</Button>
           <Button variant="contained" onClick={async () => {
             const r = assignRoom.reservation;
-            const selected: any = (assignRoom as any).selected;
+            const selected: any = assignRoom.selected;
             if (!r || !selected) return;
             try {
               await reservationsService.update(r.id, { location: selected.id } as any);
               await loadReservations();
-              setAssignRoom({ open: false, reservation: undefined, options: [] });
+              setAssignRoom({ open: false, reservation: undefined, options: [], selected: null });
               setSnackbar({ open: true, message: `Assigned ${selected.name}`, severity: 'success' });
             } catch (e:any) {
               setSnackbar({ open: true, message: e?.response?.data?.detail || 'Failed to assign room', severity: 'error' });
