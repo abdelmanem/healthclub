@@ -206,9 +206,13 @@ export const ReservationManagement: React.FC = () => {
     editable: true,
   }));
 
-  const resources = (groupBy === 'location' ? locations : groupBy === 'employee' ? employees : []).map((x:any) => ({
+  const resources = (groupBy === 'location' ? locations : groupBy === 'employee' ? employees : []).map((x:any, idx:number) => ({
     id: String(x.id),
-    title: x.name
+    title: x.name,
+    extendedProps: {
+      index: idx + 1,
+      altName: x.short_name || x.nickname || x.display_name || x.first_name || undefined,
+    }
   }));
 
   const renderEventContent = (arg:any) => {
@@ -660,7 +664,15 @@ export const ReservationManagement: React.FC = () => {
               events={events}
               resources={resources}
               resourceOrder={'title'}
-              resourceAreaHeaderContent={'Employees'}
+              resourceAreaHeaderContent={'Staff'}
+              resourceLabelContent={(arg:any) => {
+                const p = arg.resource?.extendedProps || {};
+                const index = p.index || '';
+                const title = arg.resource?.title || '';
+                const alt = p.altName && p.altName !== title ? String(p.altName) : '';
+                const second = alt ? `<div style=\"font-size:12px;color:rgba(0,0,0,0.6)\">(${alt})</div>` : '';
+                return { html: `<div>${index ? `${index}. ` : ''}${title}${second}</div>` };
+              }}
               slotDuration="00:30:00"
               slotLabelInterval="00:30"
               slotLabelContent={(arg: any) => {
@@ -673,6 +685,9 @@ export const ReservationManagement: React.FC = () => {
                 const hh = String(hour12).padStart(2, '0');
                 return `${hh}:00`;
               }}
+              slotMinTime={'08:00:00'}
+              slotMaxTime={'22:00:00'}
+              nowIndicator={true}
               selectable={true}
               editable={true}
               eventStartEditable={true}
