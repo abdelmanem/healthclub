@@ -137,6 +137,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         employee: employeeId || undefined,
         location: locationId || undefined,
         start: start,
+        exclude_reservation: reservation?.id || undefined,
       });
       const isAvailable = !!res.available;
       setAvailabilityStatus(isAvailable ? 'available' : 'unavailable');
@@ -151,13 +152,16 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
 
   const detectConflicts = async () => {
     try {
-      // Compute end_time from selected services durations
-      const totalMinutes = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
-      const end = dayjs(start).add(totalMinutes, 'minute').toISOString();
+      // Compute end_time: preserve original duration when editing; otherwise use selected services
+      const durationMinutes = (reservation && reservation.start_time && reservation.end_time)
+        ? dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute')
+        : (selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60);
+      const end = dayjs(start).add(durationMinutes, 'minute').toISOString();
       const res = await reservationsService.conflictCheck({
         start_time: start,
         end_time: end,
         location: locationId ? Number(locationId) : null,
+        exclude_reservation: reservation?.id || undefined,
       });
       const hasConflict = !!res.conflict;
       setConflicts(hasConflict ? [{ id: 1, description: 'Conflict detected for selected time range' }] : []);
@@ -195,9 +199,16 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         start_time: start,
       };
 
-      // Compute end_time from selected services
-      const totalMinutesForCreate = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
-      reservationData.end_time = dayjs(start).add(totalMinutesForCreate, 'minute').toISOString();
+      // Compute end_time
+      if (reservation && reservation.id && reservation.start_time && reservation.end_time) {
+        // Preserve original duration on edit
+        const durationMinutes = dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute');
+        reservationData.end_time = dayjs(start).add(durationMinutes, 'minute').toISOString();
+      } else {
+        // Create: derive from selected services
+        const totalMinutesForCreate = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
+        reservationData.end_time = dayjs(start).add(totalMinutesForCreate, 'minute').toISOString();
+      }
 
       // Add services in the format expected by the backend
       if (selectedServices.length > 0) {
