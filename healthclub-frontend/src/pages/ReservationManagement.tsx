@@ -49,6 +49,7 @@ import { reservationsService, Reservation } from '../services/reservations';
 import { api } from '../services/api';
 import { PageWrapper } from '../components/common/PageWrapper';
 import { locationsApi, Location } from '../services/locations';
+import { StaffSchedulingCalendar } from '../components/reservation/StaffSchedulingCalendar';
 
 dayjs.extend(isBetween);
 
@@ -635,69 +636,8 @@ export const ReservationManagement: React.FC = () => {
       {/* Calendar */}
       {tab === 5 && (
         <Card>
-          <CardContent sx={{ position: 'relative' }}>
-            {isDragging && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 1000,
-                  borderRadius: 1,
-                }}
-              >
-                <Typography variant="h6" color="primary">
-                  Updating reservation...
-                </Typography>
-              </Box>
-            )}
-            <FullCalendar
-              plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin, resourceTimelinePlugin]}
-              initialView={'resourceTimelineDay'}
-              headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,dayGridMonth,resourceTimelineDay' }}
-              events={events}
-              resources={resources}
-              resourceOrder={'title'}
-              resourceAreaHeaderContent={'Staff'}
-              resourceLabelContent={(arg:any) => {
-                const p = arg.resource?.extendedProps || {};
-                const index = p.index || '';
-                const title = arg.resource?.title || '';
-                const alt = p.altName && p.altName !== title ? String(p.altName) : '';
-                const second = alt ? `<div style=\"font-size:12px;color:rgba(0,0,0,0.6)\">(${alt})</div>` : '';
-                return { html: `<div>${index ? `${index}. ` : ''}${title}${second}</div>` };
-              }}
-              slotDuration="00:30:00"
-              slotLabelInterval="00:30"
-              slotLabelContent={(arg: any) => {
-                const d = new Date(arg.date);
-                const mins = d.getMinutes();
-                if (mins === 30) return ':30';
-                // Top of the hour: show HH:00 in 12-hour with leading zero
-                const rawHour = d.getHours();
-                const hour12 = rawHour % 12 === 0 ? 12 : rawHour % 12;
-                const hh = String(hour12).padStart(2, '0');
-                return `${hh}:00`;
-              }}
-              slotMinTime={'08:00:00'}
-              slotMaxTime={'22:00:00'}
-              nowIndicator={true}
-              selectable={true}
-              editable={true}
-              eventStartEditable={true}
-              eventResourceEditable={true}
-              eventDurationEditable={false}
-              eventClick={onEventClick}
-              eventDrop={onEventDrop}
-              eventContent={renderEventContent}
-              height="auto"
-            />
+          <CardContent>
+            <StaffSchedulingCalendar />
           </CardContent>
         </Card>
       )}
