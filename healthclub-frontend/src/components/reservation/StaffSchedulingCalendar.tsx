@@ -142,6 +142,14 @@ export const StaffSchedulingCalendar: React.FC = () => {
         editable
         eventResourceEditable
         slotDuration="00:30:00"
+        slotLabelInterval="00:30"
+        slotLabelContent={(arg: any) => {
+          const d = new Date(arg.date);
+          const mins = d.getMinutes();
+          if (mins === 30) return ':30';
+          const hh = String(d.getHours()).padStart(2, '0');
+          return `${hh}:00`;
+        }}
         slotMinTime={workingHours.start}
         slotMaxTime={workingHours.end}
         headerToolbar={{ left: 'prev,next today', center: 'title', right: 'resourceTimeGridDay,resourceTimeGridWeek' }}
