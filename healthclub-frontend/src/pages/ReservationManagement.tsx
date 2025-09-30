@@ -90,7 +90,7 @@ export const ReservationManagement: React.FC = () => {
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success'|'info'|'warning'|'error' }>({ open: false, message: '', severity: 'info' });
-  const [dirtyConfirm, setDirtyConfirm] = useState<{ open: boolean; reservation?: Reservation }>(() => ({ open: false }));
+  // Dirty-room confirmation removed
   const [assignRoom, setAssignRoom] = useState<{ open: boolean; reservation?: Reservation; options: Location[]; selected?: Location | null }>({ open: false, reservation: undefined, options: [], selected: null });
 
   // KPI
@@ -369,10 +369,7 @@ export const ReservationManagement: React.FC = () => {
           await reservationsService.checkIn(targetReservation.id);
         } catch (err: any) {
           const data = err?.response?.data || {};
-          if (data?.reason_code === 'room_dirty' && data?.requires_confirmation) {
-            setDirtyConfirm({ open: true, reservation: targetReservation });
-            return;
-          } else if (data?.reason_code === 'room_occupied') {
+          if (data?.reason_code === 'room_occupied') {
             setSnackbar({ open: true, message: 'Room is occupied. Choose another room.', severity: 'warning' });
             return;
           } else if ((data?.error || '').toLowerCase().includes('out of service')) {
@@ -891,33 +888,7 @@ export const ReservationManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Dirty room confirmation */}
-      <Dialog open={dirtyConfirm.open} onClose={() => setDirtyConfirm({ open: false })}>
-        <DialogTitle>Room is Dirty</DialogTitle>
-        <DialogContent>
-          <Typography>The selected room is marked dirty. Do you want to proceed with check-in anyway?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDirtyConfirm({ open: false })}>Cancel</Button>
-          <Button 
-            onClick={async () => {
-              const r = dirtyConfirm.reservation || selectedReservation;
-              setDirtyConfirm({ open: false });
-              if (!r) return;
-              try {
-                await reservationsService.checkIn(r.id, { allow_dirty: true });
-                await loadReservations();
-                setSnackbar({ open: true, message: 'Checked in (room dirty acknowledged)', severity: 'success' });
-              } catch (e:any) {
-                setSnackbar({ open: true, message: e?.response?.data?.detail || 'Check-in failed', severity: 'error' });
-              }
-            }}
-            variant="contained"
-          >
-            Proceed
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Dirty room confirmation removed */}
 
       {/* Snackbar */}
       <Snackbar 

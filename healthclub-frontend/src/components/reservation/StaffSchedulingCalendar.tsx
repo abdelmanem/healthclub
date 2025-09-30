@@ -103,8 +103,51 @@ export const StaffSchedulingCalendar: React.FC = () => {
         end_time: dayjs(dropInfo.event.end).toISOString(),
       };
       const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
-      if (resource) body.employee = Number(resource.id);
+      // Update times first (employee may not be writable on reservation serializer)
       await api.patch(`/reservations/${r.id}/`, body);
+      // If resource (employee) changed, use assignment endpoint
+      if (resource) {
+        const newEmployeeId = Number(resource.id);
+        try {
+          // Load existing assignments for this reservation (client-side filter for safety)
+          const listResp = await api.get('/reservation-assignments/');
+          const allAssignments = (listResp.data?.results ?? listResp.data ?? []) as Array<any>;
+          const primaryForReservation = allAssignments.filter((a) => a.reservation === r.id && a.role_in_service === 'Primary');
+          const existingPrimary = primaryForReservation[0];
+          const targetPrimaryForNew = primaryForReservation.find((a) => a.employee === newEmployeeId);
+
+          if (existingPrimary) {
+            if (existingPrimary.employee === newEmployeeId) {
+              // Already assigned to this employee; nothing to change
+            } else if (targetPrimaryForNew) {
+              // A primary assignment already exists for the new employee: remove the old one
+              await api.delete(`/reservation-assignments/${existingPrimary.id}/`);
+              // Keep targetPrimaryForNew as the current primary
+            } else {
+              // Switch employee on existing primary
+              await api.patch(`/reservation-assignments/${existingPrimary.id}/`, { employee: newEmployeeId });
+            }
+          } else {
+            // No primary yet: create one
+            await api.post('/reservation-assignments/', {
+              reservation: r.id,
+              employee: newEmployeeId,
+              role_in_service: 'Primary',
+            });
+          }
+        } catch (assignErr: any) {
+          console.warn('Employee reassignment failed:', assignErr);
+          const serverMsg = assignErr?.response?.data;
+          try {
+            const msg = typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg);
+            window.alert(`Cannot reassign: ${msg}`);
+          } catch {
+            window.alert('Cannot reassign: validation failed (qualification/shift coverage or unique constraint).');
+          }
+          dropInfo.revert();
+          return;
+        }
+      }
       await loadData();
     } catch (e) {
       console.error('Failed to update reservation', e);

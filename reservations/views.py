@@ -206,27 +206,11 @@ class ReservationViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
         reservation = self.get_object()
-        # Enforce room clean and not occupied before check-in
+        # Enforce room not out-of-service or occupied before check-in
         if getattr(reservation, 'location_id', None):
             loc = reservation.location
             if getattr(loc, 'is_out_of_service', False):
                 return response.Response({"error": "Room is out of service"}, status=status.HTTP_400_BAD_REQUEST)
-            # If room is dirty, require explicit confirmation from frontend
-            if not getattr(loc, 'is_clean', True):
-                allow_dirty = False
-                # support both JSON body and query param for convenience
-                allow_dirty = allow_dirty or str(request.data.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
-                allow_dirty = allow_dirty or str(request.query_params.get('allow_dirty', '')).lower() in ['1', 'true', 'yes']
-                if not allow_dirty:
-                    return response.Response(
-                        {
-                            "error": "Room is dirty",
-                            "reason_code": "room_dirty",
-                            "requires_confirmation": True,
-                            "message": "Room is marked dirty. Confirm to proceed with check-in.",
-                        },
-                        status=status.HTTP_409_CONFLICT,
-                    )
             if getattr(loc, 'is_occupied', False):
                 return response.Response(
                     {
@@ -443,7 +427,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         )
 
         if employee_id:
-            conflicts = conflicts.filter(reservation_services__employee_id=employee_id)
+            # Filter by the reservation's employee (no employee on ReservationService)
+            conflicts = conflicts.filter(employee_id=employee_id)
         if location_id:
             conflicts = conflicts.filter(location_id=location_id)
 
