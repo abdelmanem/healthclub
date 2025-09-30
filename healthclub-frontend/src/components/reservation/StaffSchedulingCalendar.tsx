@@ -105,6 +105,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
         const dur = s.service_duration_minutes || s.service_details?.duration_minutes;
         return dur ? `${name} (${dur}m)` : name;
       }).join(', '),
+      totalDurationMin: (() => {
+        const list = (r.reservation_services || []) as any[];
+        const sum = list.reduce((acc, s) => acc + (s.service_duration_minutes || s.service_details?.duration_minutes || 0), 0);
+        if (sum > 0) return sum;
+        try {
+          const diff = dayjs(r.end_time).diff(dayjs(r.start_time), 'minute');
+          return isNaN(diff) ? undefined : diff;
+        } catch { return undefined as any; }
+      })(),
     },
   }));
 
@@ -233,12 +242,14 @@ export const StaffSchedulingCalendar: React.FC = () => {
           const title = ev.title || '';
           const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
           const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
+          const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
           const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
           const html = `
             <div style="padding:3px 4px;line-height:1.15;">
               <div style="font-size:11px;opacity:.95;">${start}</div>
               <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
               ${servicesText ? `<div style=\"font-size:11px;opacity:.95;\">${servicesText}</div>` : ''}
+              ${typeof totalDurationMin === 'number' ? `<div style=\"font-size:11px;opacity:.95;\"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
               <div style="font-size:11px;opacity:.95;">${end}</div>
             </div>`;
           return { html };
