@@ -216,6 +216,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
         selectMirror
         editable
         eventResourceEditable
+        snapDuration="00:01:00"
         slotDuration="00:30:00"
         slotLabelInterval="00:30"
         slotLabelContent={(arg: any) => {
@@ -242,13 +243,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
           const title = ev.title || '';
           const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
           const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
+          const servicesLines = servicesText ? String(servicesText).split(', ') : [];
           const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
           const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
+          const servicesHtml = servicesLines.length > 0 ? `<div style=\"font-size:11px;opacity:.95;\">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
           const html = `
             <div style="padding:3px 4px;line-height:1.15;">
               <div style="font-size:11px;opacity:.95;">${start}</div>
               <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
-              ${servicesText ? `<div style=\"font-size:11px;opacity:.95;\">${servicesText}</div>` : ''}
+              ${servicesHtml}
               ${typeof totalDurationMin === 'number' ? `<div style=\"font-size:11px;opacity:.95;\"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
               <div style="font-size:11px;opacity:.95;">${end}</div>
             </div>`;
