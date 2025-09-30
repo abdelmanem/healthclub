@@ -236,6 +236,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
           const r: Reservation | undefined = arg.event.extendedProps?.reservation;
           if (r) openDrawer(r);
         }}
+        eventDidMount={(info:any) => {
+          try {
+            info.el.style.border = '1px solid #000';
+            info.el.style.boxShadow = 'none';
+          } catch {}
+        }}
         eventContent={(arg:any) => {
           const ev = arg.event;
           const start = ev.start ? dayjs(ev.start).format('h:mm A') : '';
