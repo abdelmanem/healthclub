@@ -20,11 +20,17 @@ import { api } from '../../services/api';
 
 type Reservation = {
   id: number;
+  guest: number;
   guest_name: string;
   start_time: string;
   end_time: string;
   status: 'booked'|'checked_in'|'in_service'|'completed'|'cancelled';
   employee: number | null;
+  reservation_services?: Array<{
+    service: number;
+    service_details?: { name?: string; duration_minutes?: number };
+    service_duration_minutes?: number;
+  }>;
 };
 
 type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
@@ -51,6 +57,20 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
   const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '08:00:00', end: '22:00:00' });
+  const firstReservationIdSet = React.useMemo(() => {
+    const map: Record<number, { id: number; start: string }> = {};
+    for (const r of reservations) {
+      const g = (r as any).guest;
+      if (!g) continue;
+      const existing = map[g];
+      if (!existing || dayjs(r.start_time).isBefore(existing.start)) {
+        map[g] = { id: r.id, start: r.start_time };
+      }
+    }
+    const ids = new Set<number>();
+    Object.values(map).forEach(v => ids.add(v.id));
+    return ids;
+  }, [reservations]);
   const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
 
   const loadData = React.useCallback(async () => {
@@ -77,7 +97,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
     backgroundColor: statusColor(r.status),
     borderColor: statusColor(r.status),
     textColor: '#fff',
-    extendedProps: { reservation: r },
+    extendedProps: {
+      reservation: r,
+      isFirst: firstReservationIdSet.has(r.id),
+      servicesText: (r.reservation_services || []).map((s: any) => {
+        const name = s.service_details?.name || `Service #${s.service}`;
+        const dur = s.service_duration_minutes || s.service_details?.duration_minutes;
+        return dur ? `${name} (${dur}m)` : name;
+      }).join(', '),
+    },
   }));
 
   const handleSelect = (info: any) => {
@@ -199,10 +227,21 @@ export const StaffSchedulingCalendar: React.FC = () => {
           if (r) openDrawer(r);
         }}
         eventContent={(arg:any) => {
-          const r: Reservation | undefined = arg.event.extendedProps?.reservation;
-          const durationMin = r ? dayjs(r.end_time).diff(dayjs(r.start_time), 'minute') : (arg.event.end && arg.event.start ? dayjs(arg.event.end).diff(dayjs(arg.event.start), 'minute') : undefined);
-          const title = arg.event.title || '';
-          return { html: `<div style=\"padding:2px 4px;\"><div style=\"font-weight:600;\">${title}</div><div style=\"font-size:11px;opacity:.85\">${durationMin ?? ''} min</div></div>` };
+          const ev = arg.event;
+          const start = ev.start ? dayjs(ev.start).format('h:mm A') : '';
+          const end = ev.end ? dayjs(ev.end).format('h:mm A') : '';
+          const title = ev.title || '';
+          const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
+          const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
+          const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
+          const html = `
+            <div style="padding:3px 4px;line-height:1.15;">
+              <div style="font-size:11px;opacity:.95;">${start}</div>
+              <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
+              ${servicesText ? `<div style=\"font-size:11px;opacity:.95;\">${servicesText}</div>` : ''}
+              <div style="font-size:11px;opacity:.95;">${end}</div>
+            </div>`;
+          return { html };
         }}
         height="auto"
       />
