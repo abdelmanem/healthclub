@@ -147,17 +147,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
-        <AppBar
-        position="fixed"
-        sx={{
-          width: { md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` },
-          ml: { md: `${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px` },
-          transition: theme.transitions.create(['width', 'margin'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.enteringScreen,
-          }),
-        }}
-      >
+      <AppBar position="fixed" sx={{ width: '100%' }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -172,6 +162,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Health Club Management System
           </Typography>
+
+          {/* Desktop top navigation */}
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1, mr: 2 }}>
+            {menuItems.map((item) => (
+              hasPermission(item.permission, item.model) ? (
+                <ListItemButton
+                  key={item.text}
+                  onClick={() => handleNavigation(item.path)}
+                  selected={location.pathname === item.path}
+                  sx={{ borderRadius: 1, color: 'inherit' }}
+                >
+                  <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              ) : null
+            ))}
+          </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
@@ -223,17 +232,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Toolbar>
       </AppBar>
 
-      <Box
-        component="nav"
-        sx={{ 
-          width: { md: desktopCollapsed ? collapsedDrawerWidth : drawerWidth }, 
-          flexShrink: { md: 0 },
-          transition: theme.transitions.create('width', {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.enteringScreen,
-          }),
-        }}
-      >
+      <Box component="nav" sx={{ width: { md: 0 }, flexShrink: { md: 0 } }}>
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -267,64 +266,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         >
           {drawer}
         </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': { 
-              boxSizing: 'border-box', 
-              width: desktopCollapsed ? collapsedDrawerWidth : drawerWidth,
-              transition: theme.transitions.create('width', {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
-              overflowX: 'hidden',
-              // Remove any margin/padding that creates gap
-              margin: 0,
-              padding: 0,
-              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
-              color: '#ffffff',
-              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
-              '& .MuiTypography-root': {
-                color: '#ffffff',
-                fontWeight: 500,
-              },
-              '& .MuiIconButton-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItem-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItemButton-root': {
-                color: '#ffffff',
-              },
-            },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
       </Box>
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` },
-          ml: { md: `${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px` },
-          mt: 8,
-          minHeight: 'calc(100vh - 64px)', // Full height minus header
-          background: theme.palette.background.content,
-          transition: theme.transitions.create(['width', 'margin'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.enteringScreen,
-          }),
-          // Remove any extra margin/padding that creates gap
-          marginLeft: { md: 0 },
-          marginRight: 0,
-        }}
-      >
+      <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', mt: 8, minHeight: 'calc(100vh - 64px)', background: theme.palette.background.content }}>
         {children}
       </Box>
     </Box>
