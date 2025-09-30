@@ -502,64 +502,11 @@ export const ReservationManagement: React.FC = () => {
   );
 
   return (
-    <PageWrapper
-      title="Reservation Management"
-      subtitle="Manage reservations, check-ins, and service schedules"
-      actions={
-        <Stack direction="row" spacing={1}>
-          <Chip label={`Today's Arrivals: ${kpi.arrivalsToday}`} />
-          <Chip label={`Checked-in: ${kpi.checkedInNow}`} color="primary" />
-          <Chip label={`In Service: ${kpi.inServiceNow}`} sx={{ bgcolor: 'warning.dark', color: 'warning.contrastText' }} />
-          <Chip label={`Revenue: $${kpi.revenueToday.toFixed(2)}`} color="success" />
-        </Stack>
-      }
-    >
-
-      {/* Filters removed per request */}
-
-      <Box display="flex" gap={2} mb={2} alignItems="center">
-        <Tabs value={tab} onChange={(_, v) => setTab(Number(v))}>
-          <Tab label="Reservations" value={0} />
-          <Tab label="Arrivals" value={1} />
-          <Tab label="In Service" value={2} />
-          <Tab label="Completed" value={3} />
-          <Tab label="Housekeeping" value={4} />
-          <Tab label="Calendar" value={5} />
-        </Tabs>
-        <Box flex={1} />
-        <Button variant="contained" startIcon={<Add />} onClick={() => setEditing(null)}>New Reservation</Button>
+    <PageWrapper title="">
+      {/* Calendar only (full page) */}
+      <Box sx={{ height: 'calc(100vh - 180px)' }}>
+        <StaffSchedulingCalendar />
       </Box>
-
-      {/* Table views */}
-      {tab === 0 && renderTable(getFilteredReservations())}
-      {tab === 1 && renderTable(getFilteredReservations().filter(r => r.status === 'booked'))}
-      {tab === 2 && renderTable(getFilteredReservations().filter(r => r.status === 'in_service'))}
-      {tab === 3 && renderTable(getFilteredReservations().filter(r => r.status === 'completed'))}
-      {tab === 4 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>Housekeeping Tasks</Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Housekeeping tasks are automatically created when guests check out. 
-            Use the dedicated Housekeeping page for task management.
-          </Typography>
-          <Button 
-            variant="outlined" 
-            onClick={() => window.location.href = '/housekeeping'}
-            sx={{ mt: 2 }}
-          >
-            Go to Housekeeping Management
-          </Button>
-        </Box>
-      )}
-
-      {/* Calendar */}
-      {tab === 5 && (
-        <Card>
-          <CardContent>
-            <StaffSchedulingCalendar />
-          </CardContent>
-        </Card>
-      )}
 
       {/* Drawer for reservation summary */}
       <Drawer 
