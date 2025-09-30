@@ -1,0 +1,33 @@
+# Core Django
+Django==5.2.6
+asgiref==3.9.1
+sqlparse==0.5.3
+tzdata==2025.1
+
+# Django REST Framework
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.3.0
+drf-spectacular==0.27.0
+
+# Django Extensions
+django-filter==25.1
+django-simple-history==3.10.1
+django-guardian==2.4.0
+django-cors-headers==4.3.1
+
+# Database
+psycopg2-binary==2.9.10
+
+# Environment
+python-dotenv==1.0.0
+
+# Additional dependencies
+setuptools>=65.0.0
+
+# Security dependencies
+pyotp==2.9.0
+qrcode==7.4.2
+Pillow==10.4.0
+
+# Utilities
+whitenoise==6.8.2
