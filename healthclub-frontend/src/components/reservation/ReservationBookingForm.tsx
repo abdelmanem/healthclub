@@ -8,15 +8,15 @@ import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
 import { useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void }> = ({ reservation, onCreated, onSaved }) => {
+export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, initialStart, initialEmployeeId, initialLocationId }) => {
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
   const [selectedServiceId, setSelectedServiceId] = React.useState<number | ''>('' as any);
   const [selectedServices, setSelectedServices] = React.useState<Array<{id: number, name: string, duration: number, price: number}>>([]);
-  const [employeeId, setEmployeeId] = React.useState<number | ''>('' as any);
-  const [locationId, setLocationId] = React.useState<number | ''>('' as any);
-  const [start, setStart] = React.useState<string>(dayjs().add(1, 'hour').minute(0).second(0).toISOString());
+  const [employeeId, setEmployeeId] = React.useState<number | ''>((initialEmployeeId as any) ?? ('' as any));
+  const [locationId, setLocationId] = React.useState<number | ''>((initialLocationId as any) ?? ('' as any));
+  const [start, setStart] = React.useState<string>(initialStart || dayjs().add(1, 'hour').minute(0).second(0).toISOString());
   const [totalPrice, setTotalPrice] = React.useState<number>(0);
   const [services, setServices] = React.useState<any[]>([]);
   const [employees, setEmployees] = React.useState<any[]>([]);
@@ -73,6 +73,19 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       }
     }
   }, [reservation]);
+
+  // Apply initial props after lists load (to ensure value is in dropdowns)
+  React.useEffect(() => {
+    if (typeof initialEmployeeId === 'number') {
+      setEmployeeId(initialEmployeeId as any);
+    }
+    if (typeof initialLocationId === 'number') {
+      setLocationId(initialLocationId as any);
+    }
+    if (initialStart) {
+      setStart(initialStart);
+    }
+  }, [initialEmployeeId, initialLocationId, initialStart]);
 
   React.useEffect(() => {
     const gid = searchParams.get('guest');

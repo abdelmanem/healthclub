@@ -11,8 +11,11 @@ import {
   Stack,
   Button,
   Divider,
-  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from '@mui/material';
+import { ReservationBookingForm } from './ReservationBookingForm';
 import { api } from '../../services/api';
 
 type Reservation = {
@@ -48,6 +51,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
   const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '08:00:00', end: '22:00:00' });
+  const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
 
   const loadData = React.useCallback(async () => {
     const [empRes, resRes] = await Promise.all([
@@ -76,22 +80,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
     extendedProps: { reservation: r },
   }));
 
-  const handleSelect = async (info: any) => {
-    try {
-      const guest = window.prompt('Enter guest name for new reservation:');
-      if (!guest) return;
-      // Minimal create flow: backend normally expects more fields; here we demo assignment and times
-      const body: any = {
-        guest_name: guest,
-        start_time: dayjs(info.start).toISOString(),
-        end_time: dayjs(info.end).toISOString(),
-        employee: info.resource?.id ? Number(info.resource.id) : null,
-      };
-      await api.post('/reservations/', body);
-      await loadData();
-    } catch (e) {
-      console.error(e);
-    }
+  const handleSelect = (info: any) => {
+    setCreateDialog({
+      open: true,
+      start: dayjs(info.start).toISOString(),
+      employeeId: info.resource?.id ? Number(info.resource.id) : undefined,
+      locationId: undefined,
+    });
   };
 
   const handleEventDrop = async (dropInfo: any) => {
@@ -260,6 +255,18 @@ export const StaffSchedulingCalendar: React.FC = () => {
           )}
         </Box>
       </Drawer>
+
+      <Dialog open={createDialog.open} onClose={() => setCreateDialog({ open: false })} maxWidth="md" fullWidth>
+        <DialogTitle>New Reservation</DialogTitle>
+        <DialogContent>
+          <ReservationBookingForm
+            onCreated={() => { setCreateDialog({ open: false }); loadData(); }}
+            initialStart={createDialog.start}
+            initialEmployeeId={createDialog.employeeId}
+            initialLocationId={createDialog.locationId}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
