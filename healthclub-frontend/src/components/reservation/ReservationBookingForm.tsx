@@ -1,15 +1,10 @@
 import React from 'react';
-import { Box, TextField, MenuItem, Button, Typography, Alert, Chip, Card, CardContent, IconButton, List, ListItem, ListItemText, ListItemSecondaryAction } from '@mui/material';
+import { Box, TextField, MenuItem, Button, Typography, Alert, Chip, Card, CardContent, IconButton, List, ListItem, ListItemText, ListItemSecondaryAction, FormControlLabel, Checkbox } from '@mui/material';
 import { Add, Delete } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
-import { RecurringBookingManager } from './advanced/RecurringBookingManager';
-import { WaitlistManager } from './advanced/WaitlistManager';
-import { BookingRuleManager } from './advanced/BookingRuleManager';
 import { ConflictResolver } from './advanced/ConflictResolver';
-import { GuestSearch } from '../guest/GuestSearch';
-import { CreateGuestDialog } from '../guest/CreateGuestDialog';
 import { guestsService } from '../../services/guests';
 import { useSearchParams } from 'react-router-dom';
 
@@ -17,7 +12,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
-  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [selectedServiceId, setSelectedServiceId] = React.useState<number | ''>('' as any);
   const [selectedServices, setSelectedServices] = React.useState<Array<{id: number, name: string, duration: number, price: number}>>([]);
   const [employeeId, setEmployeeId] = React.useState<number | ''>('' as any);
@@ -29,13 +23,20 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [locations, setLocations] = React.useState<any[]>([]);
   const [slots, setSlots] = React.useState<string[]>([]);
   const [conflicts, setConflicts] = React.useState<{ id: string | number; description: string }[]>([]);
-  const [recurring, setRecurring] = React.useState({ enabled: false, frequency: 'weekly' as any, count: 4 });
-  const [waitlist, setWaitlist] = React.useState({ enabled: false, maxWaitMinutes: 30 });
-  const [rules, setRules] = React.useState({ minAdvanceHours: 1, maxAdvanceDays: 60, enforceGapMinutes: 10, enforceRules: true });
+  // Removed Booking Rules / Recurring / Waitlist per requirements
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [availabilityStatus, setAvailabilityStatus] = React.useState<'unknown' | 'available' | 'unavailable' | 'error'>('unknown');
   const [availabilityReason, setAvailabilityReason] = React.useState<string | null>(null);
+  // Classic form extras (for UI parity)
+  const [source, setSource] = React.useState<string>('');
+  const [contactName, setContactName] = React.useState<string>('');
+  const [email, setEmail] = React.useState<string>('');
+  const [country, setCountry] = React.useState<string>('');
+  const [phone, setPhone] = React.useState<string>('');
+  const [phoneType, setPhoneType] = React.useState<'Mobile' | 'Home' | 'Work'>('Mobile');
+  const [notes, setNotes] = React.useState<string>('');
+  const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     (async () => {
@@ -94,6 +95,14 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     const total = selectedServices.reduce((sum, service) => sum + service.price, 0);
     setTotalPrice(total);
   }, [selectedServices]);
+
+  // Derived end time for display (start + total duration)
+  const computedEndIso = React.useMemo(() => {
+    const durationMinutes = (reservation && reservation.start_time && reservation.end_time)
+      ? dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute')
+      : (selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60);
+    return dayjs(start).add(durationMinutes, 'minute').toISOString();
+  }, [reservation, selectedServices, start]);
 
   const addService = () => {
     if (!selectedServiceId) return;
@@ -181,8 +190,8 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const handleSubmit = async () => {
     setError(null);
     setSuccess(null);
-    if (!guestId || selectedServices.length === 0 || !start) {
-      setError('Guest, at least one service, and start time are required.');
+    if (selectedServices.length === 0 || !start) {
+      setError('At least one service and start time are required.');
       return;
     }
     const isEditing = !!(reservation && reservation.id);
@@ -197,12 +206,37 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     if (!proceed) { setError('Conflicts detected or unavailable. Adjust time or override.'); return; }
 
     try {
+      // Ensure we have a guest: search by phone; create if missing and name/email provided
+      let effectiveGuestId = guestId as number | '';
+      if (!effectiveGuestId && phone) {
+        try {
+          const results = await guestsService.list({ search: phone });
+          const match = results.find((g: any) => (g.phone || '').includes(phone));
+          if (match) {
+            effectiveGuestId = match.id;
+            setGuestId(match.id);
+            setGuestName(`${match.first_name} ${match.last_name}`.trim());
+          }
+        } catch {}
+      }
+      if (!effectiveGuestId) {
+        // create a minimal guest if we have required details
+        const split = (contactName || '').trim().split(/\s+/);
+        const first = split[0] || 'Guest';
+        const last = split.slice(1).join(' ') || 'Unknown';
+        const created = await guestsService.create({ first_name: first, last_name: last, email: email || '', phone: phone || '', membership_tier: null });
+        effectiveGuestId = created.id as any;
+        setGuestId(created.id);
+        setGuestName(`${created.first_name} ${created.last_name}`.trim());
+      }
+
       // Create or update reservation with multiple services
       const reservationData: any = {
-        guest: Number(guestId),
+        guest: Number(effectiveGuestId),
         //employee: employeeId ? Number(employeeId) : null,
         location: locationId ? Number(locationId) : null,
         start_time: start,
+        notes: notes || undefined,
       };
 
       // Compute end_time
@@ -248,6 +282,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       // Reset form
       setSelectedServices([]);
       setTotalPrice(0);
+      setNotes('');
     } catch (e: any) {
       console.error('Reservation creation error:', e);
       const serverDetail = e?.response?.data;
@@ -266,27 +301,43 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
+        {/* Guest section replaced by phone-driven lookup + name/email */}
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          {!guestId ? (
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Search Guests</Typography>
-              <GuestSearch onGuestSelect={(g: any) => { setGuestId(g.id); setGuestName(`${g.first_name} ${g.last_name}`.trim()); }} />
-              <Box mt={1}>
-                <Button size="small" variant="outlined" onClick={() => setIsCreateOpen(true)}>Add Guest</Button>
-              </Box>
-            </Box>
-          ) : (
-            <Box display="flex" alignItems="center" gap={1}>
-              <Chip label={`Guest: ${guestName || guestId}`} />
-              <Button size="small" onClick={() => { setGuestId('' as any); setGuestName(''); }}>Change</Button>
-            </Box>
-          )}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Guest Info</Typography>
+          <Box display="flex" gap={1}>
+            <TextField label="Phone" fullWidth value={phone} onChange={async (e) => {
+              const v = e.target.value;
+              setPhone(v);
+              // live search by phone when length >= 4
+              if ((v || '').replace(/\D/g, '').length >= 4) {
+                try {
+                  const results = await guestsService.list({ search: v });
+                  const match = results.find((g: any) => (g.phone || '').includes(v));
+                  if (match) {
+                    setGuestId(match.id);
+                    setGuestName(`${match.first_name} ${match.last_name}`.trim());
+                    setContactName(`${match.first_name} ${match.last_name}`.trim());
+                    setEmail(match.email || '');
+                  }
+                } catch {}
+              }
+            }} />
+            <TextField select label="" value={phoneType} onChange={(e) => setPhoneType(e.target.value as any)} sx={{ minWidth: 120 }}>
+              <MenuItem value="Mobile">Mobile</MenuItem>
+              <MenuItem value="Home">Home</MenuItem>
+              <MenuItem value="Work">Work</MenuItem>
+            </TextField>
+          </Box>
+          <Box display="flex" gap={1} mt={1}>
+            <TextField label="Name" fullWidth value={contactName} onChange={(e) => setContactName(e.target.value)} />
+            <TextField label="Email" fullWidth value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Box>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
           <Box display="flex" gap={1}>
             <TextField 
               select 
-              label="Add Service" 
+              label="Service" 
               fullWidth 
               value={selectedServiceId} 
               onChange={(e) => {
@@ -322,7 +373,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField 
             select 
-            label="Employee" 
+            label="Staff" 
             fullWidth 
             value={employees.some((e:any) => e.id === employeeId) ? employeeId : ('' as any)} 
             onChange={(e) => setEmployeeId(e.target.value as any)}
@@ -334,7 +385,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
           <TextField 
             select 
-            label="Location" 
+            label="Room" 
             fullWidth 
             value={locations.some((l:any) => l.id === locationId) ? locationId : ('' as any)} 
             onChange={(e) => setLocationId(e.target.value as any)}
@@ -344,7 +395,10 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
           </TextField>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
-          <TextField type="datetime-local" label="Start" fullWidth value={dayjs(start).format('YYYY-MM-DDTHH:mm')} onChange={(e) => setStart(dayjs(e.target.value).toISOString())} InputLabelProps={{ shrink: true }} />
+          <Box display="flex" gap={1}>
+            <TextField type="datetime-local" label="Start" fullWidth value={dayjs(start).format('YYYY-MM-DDTHH:mm')} onChange={(e) => setStart(dayjs(e.target.value).toISOString())} InputLabelProps={{ shrink: true }} />
+            <TextField type="datetime-local" label="to" fullWidth value={dayjs(computedEndIso).format('YYYY-MM-DDTHH:mm')} InputLabelProps={{ shrink: true }} inputProps={{ readOnly: true }} />
+          </Box>
         </Box>
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 2' } }}>
           <TextField label="Total Price" fullWidth value={`$${totalPrice.toFixed(2)}`} InputProps={{ readOnly: true }} />
@@ -371,6 +425,35 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
             )}
             <Button size="small" onClick={checkAvailability}>Check</Button>
           </Box>
+        </Box>
+        {/* Source */}
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
+          <TextField select label="Source" fullWidth value={source} onChange={(e) => setSource(e.target.value)}>
+            <MenuItem value="">Select</MenuItem>
+            <MenuItem value="walk_in">Walk-in</MenuItem>
+            <MenuItem value="phone">Phone</MenuItem>
+            <MenuItem value="website">Website</MenuItem>
+            <MenuItem value="referral">Referral</MenuItem>
+          </TextField>
+        </Box>
+        {/* Name & Email */}
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
+          <Box display="flex" gap={1}>
+            <TextField label="Name" fullWidth value={contactName} onChange={(e) => setContactName(e.target.value)} />
+            <TextField label="Email" fullWidth value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Box>
+        </Box>
+        {/* Country (optional, kept for parity) */}
+        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
+          <TextField label="Country" fullWidth value={country} onChange={(e) => setCountry(e.target.value)} />
+        </Box>
+        {/* Notes */}
+        <Box sx={{ gridColumn: 'span 12' }}>
+          <TextField label="Notes" fullWidth multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Box>
+        {/* Confirmed */}
+        <Box sx={{ gridColumn: 'span 12' }}>
+          <FormControlLabel control={<Checkbox checked={markConfirmed} onChange={(e) => setMarkConfirmed(e.target.checked)} />} label="Mark as Confirmed" />
         </Box>
       </Box>
 
@@ -411,38 +494,16 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         </Card>
       )}
 
-      <CreateGuestDialog
-        open={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onCreated={(g: any) => {
-          setGuestId(g.id);
-          setGuestName(`${g.first_name} ${g.last_name}`.trim());
-          setIsCreateOpen(false);
-        }}
-      />
-
-      <Box mt={2} display="grid" gap={2} gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}>
-        <BookingRuleManager onChange={setRules} value={rules} />
-        <RecurringBookingManager
-          enabled={recurring.enabled}
-          onChange={(v) => {
-            // Guard against unnecessary updates to prevent update loops
-            setRecurring((prev) => {
-              const next = { ...prev, ...v };
-              if (prev.enabled === next.enabled && prev.frequency === next.frequency && prev.count === next.count) {
-                return prev; // no state change
-              }
-              return next;
-            });
-          }}
-          value={recurring}
-        />
-        <WaitlistManager enabled={waitlist.enabled} onChange={(v) => setWaitlist({ ...waitlist, ...v })} value={waitlist} />
+      {/* Removed Booking Rules, Recurring, and Waitlist sections */}
+      <Box mt={2}>
         <ConflictResolver conflicts={conflicts} onResolve={() => setConflicts([])} />
       </Box>
 
-      <Box mt={2}>
-        <Button variant="contained" onClick={handleSubmit}>Confirm Booking</Button>
+      <Box mt={2} display="flex" gap={2}>
+        <Button variant="text" onClick={() => {
+          setSource(''); setContactName(''); setEmail(''); setCountry(''); setPhone(''); setNotes(''); setMarkConfirmed(false);
+        }}>Cancel</Button>
+        <Button variant="contained" onClick={handleSubmit}>Save</Button>
       </Box>
     </Box>
   );
