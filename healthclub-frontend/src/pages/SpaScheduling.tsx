@@ -4,7 +4,7 @@ import { AppointmentSchedulingGrid } from '../components/reservation/Appointment
 
 export const SpaScheduling: React.FC = () => {
   return (
-    <SpaLayout>
+    <SpaLayout hideTopBars>
       <AppointmentSchedulingGrid />
     </SpaLayout>
   );

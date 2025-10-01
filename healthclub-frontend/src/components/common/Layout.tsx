@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   AppBar,
   Toolbar,
   Typography,
   IconButton,
+  TextField,
+  InputAdornment,
+  Button,
   Drawer,
   List,
   ListItem,
@@ -16,7 +19,8 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Divider
+  Divider,
+  Badge
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -29,7 +33,9 @@ import {
   AccountCircle,
   CleaningServices,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Search,
+  Notifications
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
@@ -57,6 +63,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [subNavActive, setSubNavActive] = useState<string>('Calendar');
+  const [showAppointmentsSubNav, setShowAppointmentsSubNav] = useState<boolean>(false);
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -85,6 +93,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       setMobileOpen(false);
     }
   };
+
+  // Hide Appointments sub-nav on any route change
+  useEffect(() => {
+    setShowAppointmentsSubNav(false);
+  }, [location.pathname]);
 
   const drawer = (
     <Box>
@@ -148,8 +161,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ width: '100%' }}>
-        <Toolbar>
+      <AppBar position="fixed" sx={{ width: '100%', backgroundColor: '#8B5CF6', boxShadow: 'none' }}>
+        <Toolbar sx={{ minHeight: '40px !important', py: 0.5 }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -160,59 +173,68 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600, fontSize: '1rem' }}>
             Health Club Management System
           </Typography>
-
-          {/* Desktop top navigation */}
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1, mr: 2 }}>
-            {menuItems.map((item) => (
-              hasPermission(item.permission, item.model) ? (
-                <ListItemButton
-                  key={item.text}
-                  onClick={() => handleNavigation(item.path)}
-                  selected={location.pathname === item.path}
-                  sx={{ borderRadius: 1, color: 'inherit' }}
-                >
-                  <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
-                    {item.icon}
-                  </ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              ) : null
-            ))}
-          </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              Welcome, {user?.user.first_name || user?.user.username}
-            </Typography>
-            
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <TextField
+              size="small"
+              placeholder="scan ID or type name"
+              variant="outlined"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: 'white',
+                  borderRadius: 2,
+                  '& fieldset': { borderColor: 'transparent' },
+                  '&:hover fieldset': { borderColor: 'transparent' },
+                  '&.Mui-focused fieldset': { borderColor: 'transparent' },
+                },
+                '& .MuiInputBase-input': { py: 0.5, px: 1.5, fontSize: '0.85rem' }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: '#666', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: 'white',
+                color: '#8B5CF6',
+                fontWeight: 600,
+                px: 1.5,
+                py: 0.5,
+                '&:hover': { backgroundColor: '#f3f4f6' }
+              }}
+            >
+              + Pro Tools
+            </Button>
+            <IconButton sx={{ color: 'white', display: { xs: 'none', md: 'inline-flex' } }}>
+              <Badge badgeContent={3} color="error">
+                <Notifications />
+              </Badge>
+            </IconButton>
             <IconButton
               size="large"
               aria-label="account of current user"
               aria-controls="menu-appbar"
               aria-haspopup="true"
               onClick={handleMenuOpen}
-              color="inherit"
+              sx={{ color: 'white' }}
             >
-              <Avatar sx={{ width: 32, height: 32 }}>
+              <Avatar sx={{ width: 32, height: 32, backgroundColor: '#A855F7' }}>
                 {user?.user.first_name?.[0] || user?.user.username?.[0] || 'U'}
               </Avatar>
             </IconButton>
-            
             <Menu
               id="menu-appbar"
               anchorEl={anchorEl}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
+              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
               keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               open={Boolean(anchorEl)}
               onClose={handleMenuClose}
             >
@@ -231,6 +253,70 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </Menu>
           </Box>
         </Toolbar>
+        <Box sx={{ backgroundColor: '#8B5CF6', px: 2, py: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {['Appointments','Customers','Orders','Schedules','Marketing','Products','Reports'].map((label) => (
+              <Button
+                key={label}
+                sx={{
+                  color: 'white',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
+                }}
+                endIcon={<ChevronRight sx={{ fontSize: 16 }} />}
+                onClick={() => {
+                  if (label === 'Appointments') {
+                    setShowAppointmentsSubNav((v) => !v);
+                    setSubNavActive('Calendar');
+                    return;
+                  }
+                  setShowAppointmentsSubNav(false);
+                }}
+              >
+                {label}
+              </Button>
+            ))}
+            <Box sx={{ flexGrow: 1 }} />
+            <IconButton sx={{ color: 'white' }}>
+              <Settings />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* Sub navigation for Appointments */}
+        {(() => {
+          if (!showAppointmentsSubNav) return null;
+          const items = ['Calendar','Find Appointment','New Appointment','Manage Waitlist','Class Schedule'];
+          return (
+            <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {items.map((label) => (
+                  <Button
+                    key={label}
+                    onClick={() => {
+                      setSubNavActive(label);
+                      if (label === 'Calendar') navigate('/spa-scheduling');
+                      if (label === 'New Appointment') navigate('/spa-scheduling/new');
+                      setShowAppointmentsSubNav(false);
+                    }}
+                    sx={{
+                      textTransform: 'none',
+                      color: '#374151',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      backgroundColor: subNavActive === label ? '#E5E7EB' : 'transparent',
+                      '&:hover': { backgroundColor: '#F3F4F6' }
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Box>
+            </Box>
+          );
+        })()}
       </AppBar>
 
       <Box component="nav" sx={{ width: { md: 0 }, flexShrink: { md: 0 } }}>
@@ -269,7 +355,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', mt: 8, minHeight: 'calc(100vh - 64px)', background: theme.palette.background.content }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 2, width: '100%', mt: 12, minHeight: 'calc(100vh - 96px)', background: theme.palette.background.content }}>
         {children}
       </Box>
     </Box>

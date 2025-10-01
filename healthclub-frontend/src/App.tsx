@@ -17,6 +17,7 @@ import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
 import { SpaScheduling } from './pages/SpaScheduling';
+import { NewReservation } from './pages/NewReservation';
 import { theme } from './theme';
 
 // Lazy load ConfigurationPage to avoid circular dependency
@@ -110,7 +111,16 @@ function App() {
               
               <Route path="/spa-scheduling" element={
                 <ProtectedRoute requiredPermission="view" requiredModel="reservations">
-                  <SpaScheduling />
+                  <Layout>
+                    <SpaScheduling />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/spa-scheduling/new" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <NewReservation />
+                  </Layout>
                 </ProtectedRoute>
               } />
               

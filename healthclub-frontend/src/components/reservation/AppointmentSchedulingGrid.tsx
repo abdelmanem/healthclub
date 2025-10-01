@@ -52,7 +52,7 @@ type Appointment = SpaAppointment;
 type Staff = SpaStaff;
 
 // Generate time slots from 06:00 to 00:59 (next day)
-const ROW_HEIGHT = 30; // px per 30-minute slot to fit more rows on screen
+const ROW_HEIGHT = 24; // px per 30-minute slot to fit more rows on screen
 const generateTimeSlots = () => {
   const slots = [];
   
@@ -102,11 +102,11 @@ const getCurrentTime = () => {
 const getStatusIcon = (status: string) => {
   switch (status) {
     case 'new':
-      return <NewReleases sx={{ fontSize: 16, color: '#3B82F6' }} />;
+      return <NewReleases sx={{ fontSize: 10, color: '#3B82F6' }} />;
     case 'completed':
-      return <CheckCircle sx={{ fontSize: 16, color: '#10B981' }} />;
+      return <CheckCircle sx={{ fontSize: 10, color: '#10B981' }} />;
     case 'blocked':
-      return <Warning sx={{ fontSize: 16, color: '#F59E0B' }} />;
+      return <Warning sx={{ fontSize: 10, color: '#F59E0B' }} />;
     default:
       return null;
   }
@@ -139,20 +139,7 @@ export const AppointmentSchedulingGrid: React.FC = () => {
   const theme = useTheme();
   const currentTime = getCurrentTime();
 
-  // Debug: live clock to inspect timezone rendering
-  const [now, setNow] = useState<Date>(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000); // update every 30s
-    return () => clearInterval(t);
-  }, []);
-
-  const fmtLocal = (d: Date) => d.toLocaleString();
-  const fmtUTC = (d: Date) => d.toUTCString();
-  const fmtInTZ = (d: Date, tz: string) => new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false, timeZone: tz
-  }).format(d);
+  // Debug clock removed
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { 
@@ -452,6 +439,17 @@ export const AppointmentSchedulingGrid: React.FC = () => {
     return totalMinutes * 1; // 1px per minute
   };
 
+  // Auto-scroll to current time when viewing today
+  useEffect(() => {
+    const isToday = new Date(selectedDate).toDateString() === new Date().toDateString();
+    if (!isToday) return;
+    const container = document.getElementById('appointment-grid-scroll');
+    if (!container) return;
+    const position = getCurrentTimePosition();
+    // Center the current time line if possible
+    container.scrollTo({ top: Math.max(position - 200, 0), behavior: 'smooth' });
+  }, [selectedDate, loading]);
+
   if (loading) {
     return (
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -544,18 +542,7 @@ export const AppointmentSchedulingGrid: React.FC = () => {
           <IconButton>
             <Print />
           </IconButton>
-          {/* Debug: show current time in multiple zones */}
-          <Box sx={{ ml: 2, px: 1, py: 0.5, borderRadius: 1, backgroundColor: '#F9FAFB' }}>
-            <Typography variant="caption" sx={{ display: 'block', color: '#111827', fontWeight: 600 }}>
-              Now (Local): {fmtLocal(now)}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: '#374151' }}>
-              Now (UTC): {fmtUTC(now)}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: '#374151' }}>
-              Now (Africa/Cairo): {fmtInTZ(now, 'Africa/Cairo')}
-            </Typography>
-          </Box>
+          {/* timezone debug removed */}
         </Box>
       </Box>
 
@@ -596,7 +583,7 @@ export const AppointmentSchedulingGrid: React.FC = () => {
       </Box>
 
       {/* Grid Content */}
-      <Box sx={{ 
+      <Box id="appointment-grid-scroll" sx={{ 
         flex: 1, 
         overflow: 'auto',
         position: 'relative',
