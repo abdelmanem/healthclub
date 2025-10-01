@@ -200,14 +200,7 @@ class Reservation(models.Model):
             if qs.exists():
                 raise ValidationError("This time slot conflicts with an existing reservation")
         
-        # Gender separation validation
-        if self.location_id and getattr(self, 'guest_id', None):
-            location_gender = getattr(self.location, 'gender', 'unisex')
-            guest_gender = getattr(self.guest, 'gender', '') or ''
-            # Enforce: specific-gender rooms require matching guest gender; non-binary/unspecified must use unisex
-            if location_gender in ["male", "female"]:
-                if guest_gender not in ["male", "female"] or guest_gender != location_gender:
-                    raise ValidationError("Guest gender does not match the location's gender policy.")
+        # Gender separation validation removed - allowing all guests to use any location
         
 def save(self, *args, **kwargs):
     # Auto-set end_time if missing or mismatched

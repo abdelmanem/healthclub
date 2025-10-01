@@ -46,6 +46,7 @@ const menuItems = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', permission: 'view', model: 'dashboard' },
   { text: 'Guests', icon: <People />, path: '/guests', permission: 'view', model: 'guests' },
   { text: 'Reservations', icon: <Event />, path: '/reservations', permission: 'view', model: 'reservations' },
+  { text: 'Spa Scheduling', icon: <Event />, path: '/spa-scheduling', permission: 'view', model: 'reservations' },
   { text: 'Housekeeping Management', icon: <CleaningServices />, path: '/housekeeping', permission: 'view', model: 'reservations' },
   { text: 'Services', icon: <Business />, path: '/services', permission: 'view', model: 'services' },
   { text: 'Analytics', icon: <Assessment />, path: '/analytics', permission: 'view', model: 'analytics' },

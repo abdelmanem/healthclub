@@ -158,15 +158,7 @@ class ReservationSerializer(serializers.ModelSerializer):
                 "location": "Selected room is out of service and cannot be reserved."
             })
 
-        # Enforce gender constraint if both available
-        if guest and location:
-            location_gender = getattr(location, 'gender', 'unisex')
-            guest_gender = getattr(guest, 'gender', '') or ''
-            if location_gender in ['male', 'female']:
-                if guest_gender not in ['male', 'female'] or guest_gender != location_gender:
-                    raise serializers.ValidationError({
-                        "location": "Guest gender does not match the location's gender policy."
-                    })
+        # Gender constraint removed - allowing all guests to use any location
 
         # If only location is being updated (PATCH), ensure the slot isn't conflicting
         if self.instance and 'location' in self.initial_data and location and start_time:
@@ -228,11 +220,7 @@ class ReservationSerializer(serializers.ModelSerializer):
         if not validated_data.get('location'):
             from .models import Location
             qs = Location.objects.filter(is_active=True, is_out_of_service=False, is_clean=True, is_occupied=False)
-            # Try gender match if guest has gender
-            guest = validated_data.get('guest')
-            guest_gender = getattr(guest, 'gender', '') or ''
-            if guest and guest_gender in ['male', 'female']:
-                qs = qs.filter(models.Q(gender='unisex') | models.Q(gender=guest_gender))
+            # Gender matching removed - allowing any available location
             # If services are provided, prefer rooms linked to those services
             service_ids = [s.get('service').id if hasattr(s.get('service'), 'id') else s.get('service') for s in services_data if s.get('service')]
             if service_ids:

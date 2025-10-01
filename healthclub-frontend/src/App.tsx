@@ -16,6 +16,7 @@ import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
+import { SpaScheduling } from './pages/SpaScheduling';
 import { theme } from './theme';
 
 // Lazy load ConfigurationPage to avoid circular dependency
@@ -104,6 +105,12 @@ function App() {
                       <ConfigurationPage />
                     </Suspense>
                   </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/spa-scheduling" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <SpaScheduling />
                 </ProtectedRoute>
               } />
               
