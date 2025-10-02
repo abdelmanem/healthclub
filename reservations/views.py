@@ -192,8 +192,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         'guest': ['exact', 'in'],
         'location': ['exact', 'in'],
         'status': ['exact', 'in'],
-        'start_time': ['gte', 'lte'],
-        'end_time': ['gte', 'lte'],
+        'start_time': ['gte', 'lte', 'date'],
+        'end_time': ['gte', 'lte', 'date'],
         'reservation_services__service': ['exact', 'in'],
     }
 

@@ -297,8 +297,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     key={label}
                     onClick={() => {
                       setSubNavActive(label);
-                      if (label === 'Calendar') navigate('/spa-scheduling');
-                      if (label === 'New Appointment') navigate('/spa-scheduling/new');
+                      if (label === 'Calendar') navigate('/reservations');
+                      if (label === 'New Appointment') navigate('/reservations/new');
                       setShowAppointmentsSubNav(false);
                     }}
                     sx={{

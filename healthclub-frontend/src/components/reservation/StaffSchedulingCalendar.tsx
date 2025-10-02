@@ -14,9 +14,14 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  IconButton,
+  Popover,
+  useTheme
 } from '@mui/material';
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { api } from '../../services/api';
+import { CalendarToday, ChevronLeft, ChevronRight, Today } from '@mui/icons-material';
+import { useDateContext } from '../common/SpaLayout';
 
 type Reservation = {
   id: number;
@@ -57,6 +62,25 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
   const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '08:00:00', end: '22:00:00' });
+  const [calendarAnchor, setCalendarAnchor] = React.useState<null | HTMLElement>(null);
+  const [monthlyReservations, setMonthlyReservations] = React.useState<Record<string, number>>({});
+  const [localDate, setLocalDate] = React.useState(new Date());
+  const theme = useTheme();
+  const calendarRef = React.useRef<FullCalendar>(null);
+
+  // Try to use shared date context from SpaLayout, fallback to local state
+  let selectedDate: Date;
+  let setSelectedDate: (date: Date) => void;
+  
+  try {
+    const dateContext = useDateContext();
+    selectedDate = dateContext.selectedDate;
+    setSelectedDate = dateContext.setSelectedDate;
+  } catch {
+    // Fallback to local state if not within SpaLayout
+    selectedDate = localDate;
+    setSelectedDate = setLocalDate;
+  }
   const firstReservationIdSet = React.useMemo(() => {
     const map: Record<number, { id: number; start: string }> = {};
     for (const r of reservations) {
@@ -73,6 +97,233 @@ export const StaffSchedulingCalendar: React.FC = () => {
   }, [reservations]);
   const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
 
+  // Mini calendar helper functions
+  const handleCalendarClick = (event: React.MouseEvent<HTMLElement>) => {
+    setCalendarAnchor(event.currentTarget);
+    loadMonthlyReservations(selectedDate);
+  };
+
+  const handleCalendarClose = () => {
+    setCalendarAnchor(null);
+  };
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    // Update the FullCalendar to show the selected date
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.gotoDate(date);
+    }
+    handleCalendarClose();
+  };
+
+  const loadMonthlyReservations = async (date: Date) => {
+    try {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      const startDate = firstDay.toISOString().split('T')[0];
+      const endDate = lastDay.toISOString().split('T')[0];
+      
+      const response = await api.get(`/reservations/?start_time__gte=${startDate}&start_time__lte=${endDate}`);
+      const reservations = response.data.results || response.data || [];
+      
+      // Count reservations by date
+      const counts: Record<string, number> = {};
+      reservations.forEach((reservation: any) => {
+        const reservationDate = new Date(reservation.start_time).toISOString().split('T')[0];
+        counts[reservationDate] = (counts[reservationDate] || 0) + 1;
+      });
+      
+      setMonthlyReservations(counts);
+    } catch (error) {
+      console.error('Failed to load monthly reservations:', error);
+      setMonthlyReservations({});
+    }
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const isSameDay = (date1: Date, date2: Date) => {
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+  };
+
+  const isToday = (date: Date) => {
+    return isSameDay(date, new Date());
+  };
+
+  // Mini calendar component
+  const renderMiniCalendar = () => {
+    const currentMonth = selectedDate.getMonth();
+    const currentYear = selectedDate.getFullYear();
+    const daysInMonth = getDaysInMonth(selectedDate);
+    const firstDay = getFirstDayOfMonth(selectedDate);
+    
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    const days = [];
+    
+    // Empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(
+        <Box key={`empty-${i}`} sx={{ 
+          width: 32, 
+          height: 32, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center' 
+        }} />
+      );
+    }
+    
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const isSelected = isSameDay(date, selectedDate);
+      const isTodayDate = isToday(date);
+      const dateString = date.toISOString().split('T')[0];
+      const reservationCount = monthlyReservations[dateString] || 0;
+      
+      days.push(
+        <Box
+          key={day}
+          onClick={() => handleDateSelect(date)}
+          sx={{
+            width: 32,
+            height: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderRadius: 1,
+            fontSize: '0.875rem',
+            fontWeight: isSelected ? 600 : 400,
+            backgroundColor: isSelected ? theme.palette.primary.main : 'transparent',
+            color: isSelected ? 'white' : isTodayDate ? theme.palette.primary.main : 'inherit',
+            border: isTodayDate && !isSelected ? `1px solid ${theme.palette.primary.main}` : 'none',
+            position: 'relative',
+            '&:hover': {
+              backgroundColor: isSelected ? theme.palette.primary.dark : theme.palette.action.hover,
+            }
+          }}
+        >
+          {day}
+          {reservationCount > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 2,
+                right: 2,
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: isSelected ? 'white' : theme.palette.secondary.main,
+                opacity: 0.8
+              }}
+            />
+          )}
+        </Box>
+      );
+    }
+    
+    return (
+      <Box sx={{ p: 2, minWidth: 280 }}>
+        {/* Month/Year Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <IconButton 
+            size="small" 
+            onClick={() => {
+              const prevMonth = new Date(currentYear, currentMonth - 1, 1);
+              setSelectedDate(prevMonth);
+              if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.gotoDate(prevMonth);
+              }
+              loadMonthlyReservations(prevMonth);
+            }}
+          >
+            <ChevronLeft />
+          </IconButton>
+          
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            {monthNames[currentMonth]} {currentYear}
+          </Typography>
+          
+          <IconButton 
+            size="small"
+            onClick={() => {
+              const nextMonth = new Date(currentYear, currentMonth + 1, 1);
+              setSelectedDate(nextMonth);
+              if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.gotoDate(nextMonth);
+              }
+              loadMonthlyReservations(nextMonth);
+            }}
+          >
+            <ChevronRight />
+          </IconButton>
+        </Box>
+        
+        {/* Day Names Header */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, mb: 1 }}>
+          {dayNames.map((dayName) => (
+            <Box key={dayName} sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              height: 32,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: theme.palette.text.secondary
+            }}>
+              {dayName}
+            </Box>
+          ))}
+        </Box>
+        
+        {/* Calendar Days */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0 }}>
+          {days}
+        </Box>
+        
+        {/* Today Button */}
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+          <Button 
+            size="small" 
+            onClick={() => {
+              const today = new Date();
+              setSelectedDate(today);
+              if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.gotoDate(today);
+              }
+              handleCalendarClose();
+            }}
+            startIcon={<Today />}
+          >
+            Today
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
   const loadData = React.useCallback(async () => {
     const [empRes, resRes] = await Promise.all([
       api.get('/employees/').catch(() => ({ data: { results: [] } })),
@@ -85,6 +336,41 @@ export const StaffSchedulingCalendar: React.FC = () => {
   }, []);
 
   React.useEffect(() => { loadData(); }, [loadData]);
+
+  // Style the custom calendar button after the calendar renders
+  React.useEffect(() => {
+    const styleCalendarButton = () => {
+      const button = document.querySelector('.fc-calendarIcon-button');
+      if (button) {
+        button.innerHTML = '📅';
+        (button as HTMLElement).style.cssText = `
+          background: #1976d2 !important;
+          border: 1px solid #1976d2 !important;
+          color: white !important;
+          border-radius: 4px !important;
+          padding: 4px 8px !important;
+          font-size: 16px !important;
+          cursor: pointer !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          min-width: 32px !important;
+          height: 32px !important;
+        `;
+        button.addEventListener('mouseenter', () => {
+          (button as HTMLElement).style.background = '#1565c0 !important';
+        });
+        button.addEventListener('mouseleave', () => {
+          (button as HTMLElement).style.background = '#1976d2 !important';
+        });
+      }
+    };
+
+    // Style immediately and after a short delay to ensure the button is rendered
+    styleCalendarButton();
+    const timeout = setTimeout(styleCalendarButton, 100);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const resources = employees.map((e) => ({ id: String(e.id), title: getEmployeeDisplayName(e) }));
 
@@ -207,8 +493,10 @@ export const StaffSchedulingCalendar: React.FC = () => {
   return (
     <Box>
       <FullCalendar
+        ref={calendarRef}
         plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
         initialView="resourceTimeGridDay"
+        initialDate={selectedDate}
         resources={resources}
         events={events}
         nowIndicator
@@ -228,7 +516,20 @@ export const StaffSchedulingCalendar: React.FC = () => {
         }}
         slotMinTime={workingHours.start}
         slotMaxTime={workingHours.end}
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'resourceTimeGridDay,resourceTimeGridWeek' }}
+        headerToolbar={{ 
+          left: 'prev,next today', 
+          center: 'title', 
+          right: 'calendarIcon resourceTimeGridDay,resourceTimeGridWeek' 
+        }}
+        customButtons={{
+          calendarIcon: {
+            text: '',
+            click: (ev: MouseEvent, element: HTMLElement) => {
+              setCalendarAnchor(element);
+              loadMonthlyReservations(selectedDate);
+            }
+          }
+        }}
         select={handleSelect}
         eventDrop={handleEventDrop}
         eventResize={handleEventDrop}
@@ -264,6 +565,10 @@ export const StaffSchedulingCalendar: React.FC = () => {
           return { html };
         }}
         height="auto"
+        datesSet={(dateInfo) => {
+          // Update selected date when the calendar view changes
+          setSelectedDate(dateInfo.start);
+        }}
       />
 
       <Drawer anchor="right" open={drawer.open} onClose={closeDrawer} sx={{ '& .MuiDrawer-paper': { width: 360 } }}>
@@ -326,6 +631,32 @@ export const StaffSchedulingCalendar: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Mini Calendar Popover */}
+      <Popover
+        open={Boolean(calendarAnchor)}
+        anchorEl={calendarAnchor}
+        onClose={handleCalendarClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+        PaperProps={{
+          elevation: 8,
+          sx: {
+            mt: 1,
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }
+        }}
+      >
+        {renderMiniCalendar()}
+      </Popover>
     </Box>
   );
 };

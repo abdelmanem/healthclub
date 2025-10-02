@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import {
   Box,
   AppBar,
@@ -40,6 +40,23 @@ import {
   Today
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { api } from '../../services/api';
+
+// Create a context for sharing date state between SpaLayout and AppointmentSchedulingGrid
+interface DateContextType {
+  selectedDate: Date;
+  setSelectedDate: (date: Date) => void;
+}
+
+const DateContext = createContext<DateContextType | null>(null);
+
+export const useDateContext = () => {
+  const context = useContext(DateContext);
+  if (!context) {
+    throw new Error('useDateContext must be used within a DateProvider');
+  }
+  return context;
+};
 
 interface SpaLayoutProps {
   children: React.ReactNode;
@@ -71,6 +88,7 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
   const [tabValue, setTabValue] = useState(0);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [monthlyReservations, setMonthlyReservations] = useState<Record<string, number>>({});
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -96,6 +114,50 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
       newDate.setDate(newDate.getDate() + 1);
     }
     setSelectedDate(newDate);
+  };
+
+  const handleCalendarDateClick = (date: number) => {
+    const newDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), date);
+    setSelectedDate(newDate);
+    navigate('/reservations');
+  };
+
+  const handleCalendarMonthChange = (direction: 'prev' | 'next') => {
+    const newDate = new Date(selectedDate);
+    if (direction === 'prev') {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1);
+    }
+    setSelectedDate(newDate);
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const formatMonthYear = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+
+  const isToday = (date: number) => {
+    const today = new Date();
+    return today.getDate() === date && 
+           today.getMonth() === selectedDate.getMonth() && 
+           today.getFullYear() === selectedDate.getFullYear();
+  };
+
+  const isSelectedDate = (date: number) => {
+    return selectedDate.getDate() === date && 
+           selectedDate.getMonth() === selectedDate.getMonth() && 
+           selectedDate.getFullYear() === selectedDate.getFullYear();
   };
 
   const formatDate = (date: Date) => {
@@ -133,7 +195,8 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
   ];
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#f5f5f5' }}>
+    <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#f5f5f5' }}>
       {!hideTopBars && (
         <>
           <AppBar 
@@ -221,12 +284,12 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
                     }
                   }}
                   endIcon={<ChevronRight sx={{ fontSize: 16 }} />}
-                  onClick={() => {
-                    if (item === 'Appointments') {
-                      try { setTabValue(0); } catch {}
-                      navigate('/spa-scheduling');
-                    }
-                  }}
+                   onClick={() => {
+                     if (item === 'Appointments') {
+                       try { setTabValue(0); } catch {}
+                       navigate('/reservations');
+                     }
+                   }}
                 >
                   {item}
                 </Button>
@@ -248,8 +311,39 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
         </>
       )}
 
-      {/* Sub Navigation replaced by context menu (hidden) */}
-      <Box sx={{ display: 'none' }} />
+       {/* Sub Navigation for Appointments */}
+       <Box sx={{ backgroundColor: 'white', borderBottom: '1px solid #E5E7EB', px: 2, py: 1 }}>
+         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+           {subNavItems.map((item) => (
+             <Button
+               key={item.label}
+               onClick={() => {
+                 if (item.label === 'Calendar') {
+                   setTabValue(0);
+                   navigate('/reservations');
+                 } else if (item.label === 'New Appointment') {
+                   setTabValue(2);
+                   navigate('/reservations/new');
+                 } else {
+                   setTabValue(item.value);
+                 }
+               }}
+               sx={{
+                 textTransform: 'none',
+                 color: tabValue === item.value ? '#8B5CF6' : '#374151',
+                 fontWeight: 600,
+                 fontSize: '0.875rem',
+                 backgroundColor: tabValue === item.value ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                 '&:hover': { 
+                   backgroundColor: tabValue === item.value ? 'rgba(139, 92, 246, 0.15)' : '#F3F4F6' 
+                 }
+               }}
+             >
+               {item.label}
+             </Button>
+           ))}
+         </Box>
+       </Box>
 
       {/* Main Content Area */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -260,53 +354,76 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
           borderRight: '1px solid #E5E7EB',
           display: { xs: 'none', md: 'block' }
         }}>
-          {/* Calendar Widget */}
-          <Box sx={{ p: 1.5, borderBottom: '1px solid #E5E7EB' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                September 2025
-              </Typography>
-              <Box>
-                <IconButton size="small" sx={{ p: 0.25 }}>
-                  <ChevronLeft />
-                </IconButton>
-                <IconButton size="small" sx={{ p: 0.25 }}>
-                  <ChevronRight />
-                </IconButton>
-              </Box>
-            </Box>
-            
-            {/* Calendar Grid */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25, mb: 1.5 }}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                <Typography key={`day-${index}`} variant="caption" sx={{ textAlign: 'center', fontWeight: 600, py: 0.5, fontSize: '0.7rem' }}>
-                  {day}
-                </Typography>
-              ))}
-              {Array.from({ length: 30 }, (_, i) => i + 1).map((date) => (
-                <Box
-                  key={date}
-                  sx={{
-                    aspectRatio: '1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 1,
-                    backgroundColor: date === 29 ? '#8B5CF6' : 'transparent',
-                    color: date === 29 ? 'white' : 'inherit',
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: date === 29 ? '#7C3AED' : '#F3F4F6',
-                    }
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontWeight: date === 29 ? 600 : 400, fontSize: '0.7rem' }}>
-                    {date}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
+           {/* Calendar Widget */}
+           <Box sx={{ p: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+               <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                 {formatMonthYear(selectedDate)}
+               </Typography>
+               <Box>
+                 <IconButton 
+                   size="small" 
+                   sx={{ p: 0.25 }}
+                   onClick={() => handleCalendarMonthChange('prev')}
+                 >
+                   <ChevronLeft />
+                 </IconButton>
+                 <IconButton 
+                   size="small" 
+                   sx={{ p: 0.25 }}
+                   onClick={() => handleCalendarMonthChange('next')}
+                 >
+                   <ChevronRight />
+                 </IconButton>
+               </Box>
+             </Box>
+             
+             {/* Calendar Grid */}
+             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25, mb: 1.5 }}>
+               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                 <Typography key={`day-${index}`} variant="caption" sx={{ textAlign: 'center', fontWeight: 600, py: 0.5, fontSize: '0.7rem' }}>
+                   {day}
+                 </Typography>
+               ))}
+               
+               {/* Empty cells for days before the first day of the month */}
+               {Array.from({ length: getFirstDayOfMonth(selectedDate) }, (_, i) => (
+                 <Box key={`empty-${i}`} sx={{ aspectRatio: '1' }} />
+               ))}
+               
+               {/* Days of the month */}
+               {Array.from({ length: getDaysInMonth(selectedDate) }, (_, i) => {
+                 const date = i + 1;
+                 const isTodayDate = isToday(date);
+                 const isSelected = isSelectedDate(date);
+                 
+                 return (
+                   <Box
+                     key={date}
+                     onClick={() => handleCalendarDateClick(date)}
+                     sx={{
+                       aspectRatio: '1',
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                       borderRadius: 1,
+                       backgroundColor: isSelected ? '#8B5CF6' : 'transparent',
+                       color: isSelected ? 'white' : isTodayDate ? '#8B5CF6' : 'inherit',
+                       border: isTodayDate && !isSelected ? '1px solid #8B5CF6' : 'none',
+                       cursor: 'pointer',
+                       '&:hover': {
+                         backgroundColor: isSelected ? '#7C3AED' : '#F3F4F6',
+                       }
+                     }}
+                   >
+                     <Typography variant="caption" sx={{ fontWeight: isSelected || isTodayDate ? 600 : 400, fontSize: '0.7rem' }}>
+                       {date}
+                     </Typography>
+                   </Box>
+                 );
+               })}
+             </Box>
+           </Box>
 
           {/* Walk-ins Section */}
           <Box sx={{ p: 1.5 }}>
@@ -380,7 +497,8 @@ export const SpaLayout: React.FC<SpaLayoutProps> = ({ children, hideTopBars }) =
             <Typography>Class Schedule - Coming Soon</Typography>
           </TabPanel>
         </Box>
-      </Box>
-    </Box>
-  );
-};
+       </Box>
+     </Box>
+    </DateContext.Provider>
+   );
+ };
