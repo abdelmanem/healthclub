@@ -18,6 +18,7 @@ import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
 import { NewReservation } from './pages/NewReservation';
 import { theme } from './theme';
+import GuestProfilePage from './pages/GuestProfilePage';
 
 // Lazy load ConfigurationPage to avoid circular dependency
 const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
@@ -55,6 +56,13 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="guests">
                   <Layout>
                     <GuestManagement />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/guests/profile" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="guests">
+                  <Layout>
+                    <GuestProfilePage />
                   </Layout>
                 </ProtectedRoute>
               } />

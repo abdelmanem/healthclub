@@ -40,6 +40,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';
+import { notificationsService, NotificationItem } from '../../services/notifications';
 
 const drawerWidth = 240;
 const collapsedDrawerWidth = 64;
@@ -63,8 +64,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [subNavActive, setSubNavActive] = useState<string>('Calendar');
   const [showAppointmentsSubNav, setShowAppointmentsSubNav] = useState<boolean>(false);
+  const [showCustomersSubNav, setShowCustomersSubNav] = useState<boolean>(false);
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -87,6 +91,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setAnchorEl(null);
   };
 
+  const handleNotifOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setNotifAnchorEl(event.currentTarget);
+  };
+
+  const handleNotifClose = () => {
+    setNotifAnchorEl(null);
+  };
+
+  const clearNotifications = async () => {
+    await notificationsService.markAllRead();
+    const list = await notificationsService.list();
+    setNotifications(list);
+  };
+
   const handleNavigation = (path: string) => {
     navigate(path);
     if (isMobile) {
@@ -97,7 +115,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Hide Appointments sub-nav on any route change
   useEffect(() => {
     setShowAppointmentsSubNav(false);
+    setShowCustomersSubNav(false);
   }, [location.pathname]);
+
+  // Load notifications and poll every 60s
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const list = await notificationsService.list();
+      if (mounted) setNotifications(list);
+    };
+    load();
+    const intervalId = setInterval(load, 60000);
+    return () => { mounted = false; clearInterval(intervalId); };
+  }, []);
 
   const drawer = (
     <Box>
@@ -212,11 +243,35 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               + Pro Tools
             </Button>
-            <IconButton sx={{ color: 'white', display: { xs: 'none', md: 'inline-flex' } }}>
-              <Badge badgeContent={3} color="error">
+            <IconButton sx={{ color: 'white', display: { xs: 'none', md: 'inline-flex' } }} onClick={handleNotifOpen}>
+              <Badge badgeContent={notifications.length} color="error">
                 <Notifications />
               </Badge>
             </IconButton>
+            <Menu
+              anchorEl={notifAnchorEl}
+              open={Boolean(notifAnchorEl)}
+              onClose={handleNotifClose}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              PaperProps={{ sx: { minWidth: 280 } }}
+            >
+              {notifications.length === 0 ? (
+                <MenuItem disabled>No notifications</MenuItem>
+              ) : (
+                <>
+                  {notifications.map((n) => (
+                    <MenuItem key={n.id} onClick={handleNotifClose}>
+                      {n.text}
+                    </MenuItem>
+                  ))}
+                  <Divider />
+                  <MenuItem onClick={() => { clearNotifications(); handleNotifClose(); }} sx={{ color: 'error.main', fontWeight: 600 }}>
+                    Clear all
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
             <IconButton
               size="large"
               aria-label="account of current user"
@@ -242,7 +297,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <AccountCircle sx={{ mr: 1 }} />
                 Profile
               </MenuItem>
-              <MenuItem onClick={handleMenuClose}>
+              <MenuItem onClick={() => { handleMenuClose(); navigate('/config'); }}>
                 <Settings sx={{ mr: 1 }} />
                 Settings
               </MenuItem>
@@ -272,14 +327,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     setSubNavActive('Calendar');
                     return;
                   }
+                  if (label === 'Customers') {
+                    setShowCustomersSubNav((v) => !v);
+                    setSubNavActive('Customers');
+                    return;
+                  }
                   setShowAppointmentsSubNav(false);
+                  setShowCustomersSubNav(false);
                 }}
               >
                 {label}
               </Button>
             ))}
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton sx={{ color: 'white' }}>
+            <IconButton sx={{ color: 'white' }} onClick={() => navigate('/config')}>
               <Settings />
             </IconButton>
           </Box>
@@ -300,6 +361,39 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       if (label === 'Calendar') navigate('/reservations');
                       if (label === 'New Appointment') navigate('/reservations/new');
                       setShowAppointmentsSubNav(false);
+                    }}
+                    sx={{
+                      textTransform: 'none',
+                      color: '#374151',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      backgroundColor: subNavActive === label ? '#E5E7EB' : 'transparent',
+                      '&:hover': { backgroundColor: '#F3F4F6' }
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Box>
+            </Box>
+          );
+        })()}
+
+        {/* Sub navigation for Customers */}
+        {(() => {
+          if (!showCustomersSubNav) return null;
+          const items = ['Customers List','Guest Profile'];
+          return (
+            <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {items.map((label) => (
+                  <Button
+                    key={label}
+                    onClick={() => {
+                      setSubNavActive(label);
+                      if (label === 'Customers List') navigate('/guests');
+                      if (label === 'Guest Profile') navigate('/guests/profile');
+                      setShowCustomersSubNav(false);
                     }}
                     sx={{
                       textTransform: 'none',
