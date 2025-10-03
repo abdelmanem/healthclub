@@ -16,7 +16,6 @@ import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
-import { SpaScheduling } from './pages/SpaScheduling';
 import { NewReservation } from './pages/NewReservation';
 import { theme } from './theme';
 
@@ -109,20 +108,7 @@ function App() {
                 </ProtectedRoute>
               } />
               
-              <Route path="/spa-scheduling" element={
-                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
-                  <Layout>
-                    <SpaScheduling />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/spa-scheduling/new" element={
-                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
-                  <Layout>
-                    <NewReservation />
-                  </Layout>
-                </ProtectedRoute>
-              } />
+              {/* Spa Scheduling routes removed */}
               
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/" replace />} />

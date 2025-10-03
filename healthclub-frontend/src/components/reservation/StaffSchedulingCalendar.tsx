@@ -21,7 +21,6 @@ import {
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { api } from '../../services/api';
 import { CalendarToday, ChevronLeft, ChevronRight, Today } from '@mui/icons-material';
-import { useDateContext } from '../common/SpaLayout';
 
 type Reservation = {
   id: number;
@@ -61,26 +60,16 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
-  const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '08:00:00', end: '22:00:00' });
+  const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '10:00:00', end: '23:30:00' });
   const [calendarAnchor, setCalendarAnchor] = React.useState<null | HTMLElement>(null);
   const [monthlyReservations, setMonthlyReservations] = React.useState<Record<string, number>>({});
   const [localDate, setLocalDate] = React.useState(new Date());
   const theme = useTheme();
   const calendarRef = React.useRef<FullCalendar>(null);
 
-  // Try to use shared date context from SpaLayout, fallback to local state
-  let selectedDate: Date;
-  let setSelectedDate: (date: Date) => void;
-  
-  try {
-    const dateContext = useDateContext();
-    selectedDate = dateContext.selectedDate;
-    setSelectedDate = dateContext.setSelectedDate;
-  } catch {
-    // Fallback to local state if not within SpaLayout
-    selectedDate = localDate;
-    setSelectedDate = setLocalDate;
-  }
+  // Use local state for date management
+  const selectedDate = localDate;
+  const setSelectedDate = setLocalDate;
   const firstReservationIdSet = React.useMemo(() => {
     const map: Record<number, { id: number; start: string }> = {};
     for (const r of reservations) {
@@ -517,9 +506,9 @@ export const StaffSchedulingCalendar: React.FC = () => {
         slotMinTime={workingHours.start}
         slotMaxTime={workingHours.end}
         headerToolbar={{ 
-          left: 'prev,next today', 
+          left: 'prev,next calendarIcon today', 
           center: 'title', 
-          right: 'calendarIcon resourceTimeGridDay,resourceTimeGridWeek' 
+          right: 'resourceTimeGridDay,resourceTimeGridWeek' 
         }}
         customButtons={{
           calendarIcon: {
