@@ -11,6 +11,7 @@ router.register(r'training-types', views.TrainingTypeViewSet)
 router.register(r'product-types', views.ProductTypeViewSet)
 router.register(r'business-rules', views.BusinessRuleViewSet)
 router.register(r'notification-templates', views.NotificationTemplateViewSet)
+router.register(r'cancellation-reasons', views.CancellationReasonViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

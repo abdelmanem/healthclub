@@ -10,6 +10,7 @@ interface ConfigurationContextType {
   trainingTypes: any[];
   productTypes: any[];
   notificationTemplates: any[];
+  cancellationReasons: any[];
   isLoading: boolean;
   getConfigValue: (key: string, defaultValue?: any) => any;
   refreshConfigurations: () => Promise<void>;
@@ -26,6 +27,7 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [trainingTypes, setTrainingTypes] = useState<any[]>([]);
   const [productTypes, setProductTypes] = useState<any[]>([]);
   const [notificationTemplates, setNotificationTemplates] = useState<any[]>([]);
+  const [cancellationReasons, setCancellationReasons] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const loadAllConfigurations = async () => {
     try {
-      const [configs, tiers, genders, rules, commissions, trainings, products, templates] = await Promise.all([
+      const [configs, tiers, genders, rules, commissions, trainings, products, templates, reasons] = await Promise.all([
         configService.getSystemConfigs().catch(() => []),
         configService.getMembershipTiers().catch(() => []),
         configService.getGenderOptions().catch(() => []),
@@ -48,7 +50,8 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
         configService.getCommissionTypes().catch(() => []),
         configService.getTrainingTypes().catch(() => []),
         configService.getProductTypes().catch(() => []),
-        configService.getNotificationTemplates().catch(() => [])
+        configService.getNotificationTemplates().catch(() => []),
+        configService.getCancellationReasons().catch(() => [])
       ]);
 
       // Convert configs to key-value object
@@ -79,6 +82,8 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
       setTrainingTypes(Array.isArray(trainings) ? trainings.filter(training => training.is_active) : []);
       setProductTypes(Array.isArray(products) ? products.filter(product => product.is_active) : []);
       setNotificationTemplates(Array.isArray(templates) ? templates.filter(template => template.is_active) : []);
+      setCancellationReasons(Array.isArray(reasons) ? reasons.filter(reason => reason.is_active) : []);
+      setIsLoading(false);
     } catch (error: any) {
       // Ignore unauthorized during unauthenticated states
       if (error?.response?.status !== 401) {
@@ -107,6 +112,7 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
       trainingTypes,
       productTypes,
       notificationTemplates,
+      cancellationReasons,
       isLoading,
       getConfigValue,
       refreshConfigurations

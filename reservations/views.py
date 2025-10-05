@@ -151,7 +151,18 @@ class HousekeepingTaskViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         task.status = HousekeepingTask.STATUS_CANCELLED
         task.cancelled_at = timezone.now()
-        task.save(update_fields=["status", "cancelled_at"])
+        
+        # Handle cancellation reason if provided
+        reason_id = request.data.get('cancellation_reason')
+        if reason_id:
+            try:
+                from config.models import CancellationReason
+                reason = CancellationReason.objects.get(id=reason_id, is_active=True)
+                task.cancellation_reason = reason
+            except Exception:
+                pass
+                
+        task.save(update_fields=["status", "cancelled_at", "cancellation_reason"])
         return response.Response({"status": task.status, "cancelled_at": task.cancelled_at})
 
     @decorators.action(detail=True, methods=["post"], url_path="mark-vacant")
@@ -303,6 +314,25 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @decorators.action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        reservation = self.get_object()
+        reservation.status = Reservation.STATUS_CANCELLED
+        reservation.cancelled_at = timezone.now()
+        
+        # Handle cancellation reason if provided
+        reason_id = request.data.get('cancellation_reason')
+        if reason_id:
+            try:
+                from config.models import CancellationReason
+                reason = CancellationReason.objects.get(id=reason_id, is_active=True)
+                reservation.cancellation_reason = reason
+            except Exception:
+                pass
+                
+        reservation.save()
+        return response.Response({"status": reservation.status, "cancelled_at": reservation.cancelled_at})
+        
     @decorators.action(detail=True, methods=["post"], url_path="create-invoice")
     def create_invoice(self, request, pk=None):
         reservation = self.get_object()

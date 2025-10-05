@@ -36,7 +36,7 @@ import {
   ListItemText,
   useTheme,
 } from '@mui/material';
-import { Add, Check, DirectionsRun, DoneAll, Logout, Edit } from '@mui/icons-material';
+import { Add, Check, DirectionsRun, DoneAll, Logout, Edit, Cancel } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -50,6 +50,7 @@ import { api } from '../services/api';
 import { PageWrapper } from '../components/common/PageWrapper';
 import { locationsApi, Location } from '../services/locations';
 import { StaffSchedulingCalendar } from '../components/reservation/StaffSchedulingCalendar';
+import { CancellationDialog } from '../components/reservation/CancellationDialog';
 
 dayjs.extend(isBetween);
 
@@ -99,6 +100,10 @@ export const ReservationManagement: React.FC = () => {
   // New reservation form
   const [editing, setEditing] = useState<Reservation | null | undefined>(undefined);
   const [formVersion, setFormVersion] = useState<number>(0);
+
+  // Cancellation dialog
+  const [isCancellationDialogOpen, setIsCancellationDialogOpen] = useState<boolean>(false);
+  const [reservationToCancel, setReservationToCancel] = useState<number | null>(null);
 
   // Drag and drop state
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -640,6 +645,23 @@ export const ReservationManagement: React.FC = () => {
                     </Button>
                   )}
                   
+                  {/* Cancel button - available for booked and checked_in statuses */}
+                  {(selectedReservation.status === 'booked' || selectedReservation.status === 'checked_in') && (
+                    <Button 
+                      variant="outlined" 
+                      color="error"
+                      onClick={() => {
+                        setReservationToCancel(selectedReservation.id);
+                        setIsCancellationDialogOpen(true);
+                      }}
+                      startIcon={<Cancel />}
+                      fullWidth
+                      sx={{ justifyContent: 'flex-start' }}
+                    >
+                      Cancel Reservation
+                    </Button>
+                  )}
+                  
                   <Divider sx={{ my: 1 }} />
                   
                   <Button 
@@ -831,6 +853,18 @@ export const ReservationManagement: React.FC = () => {
           }}>Assign</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Cancellation Dialog */}
+      <CancellationDialog
+        open={isCancellationDialogOpen}
+        onClose={() => setIsCancellationDialogOpen(false)}
+        reservationId={reservationToCancel}
+        onCancelled={async () => {
+          await loadReservations();
+          setSnackbar({ open: true, message: 'Reservation cancelled successfully', severity: 'success' });
+          setDrawerOpen(false);
+        }}
+      />
     </PageWrapper>
   );
 };

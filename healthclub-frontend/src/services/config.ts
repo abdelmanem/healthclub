@@ -7,7 +7,8 @@ import {
   CommissionType,
   TrainingType,
   ProductType,
-  NotificationTemplate
+  NotificationTemplate,
+  CancellationReason
 } from '../types/config';
 
 export const configService = {
@@ -166,9 +167,11 @@ export const configService = {
         {
           id: 1,
           name: 'percentage',
+          code: 'PCT',
           description: 'Percentage-based commission',
           percentage: 10,
-          is_active: true
+          is_active: true,
+          sort_order: 1
         }
       ];
     }
@@ -231,6 +234,72 @@ export const configService = {
         }
       ];
     }
+  },
+
+  // Cancellation Reasons
+  getCancellationReasons: async (): Promise<CancellationReason[]> => {
+    try {
+      const response = await api.get('/config/cancellation-reasons/');
+      return configService._unwrapList<CancellationReason>(response);
+    } catch (error) {
+      console.warn('Backend not available, using mock data for cancellation reasons');
+      return [
+        {
+          id: 1,
+          code: 'GUEST_REQ',
+          name: 'Guest Request',
+          description: 'Cancelled at guest request',
+          sort_order: 10,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: 2,
+          code: 'NO_SHOW',
+          name: 'No Show',
+          description: 'Guest did not arrive for appointment',
+          sort_order: 20,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: 3,
+          code: 'STAFF_UNAVAIL',
+          name: 'Staff Unavailable',
+          description: 'Staff member became unavailable',
+          sort_order: 30,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: 4,
+          code: 'OTHER',
+          name: 'Other',
+          description: 'Other reason',
+          sort_order: 40,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+    }
+  },
+
+  createCancellationReason: async (data: Partial<CancellationReason>): Promise<CancellationReason> => {
+    const response = await api.post('/config/cancellation-reasons/', data);
+    return response.data;
+  },
+
+  updateCancellationReason: async (id: number, data: Partial<CancellationReason>): Promise<CancellationReason> => {
+    const response = await api.patch(`/config/cancellation-reasons/${id}/`, data);
+    return response.data;
+  },
+
+  deleteCancellationReason: async (id: number): Promise<void> => {
+    await api.delete(`/config/cancellation-reasons/${id}/`);
   },
 
   // Utility functions

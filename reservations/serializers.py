@@ -99,6 +99,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "completed_at",
             "checked_out_at",
             "cancelled_at",
+            "cancellation_reason",
             "no_show_recorded_at",
             "location_is_out_of_service",
         ]

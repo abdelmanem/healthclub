@@ -7,7 +7,8 @@ from rest_framework.permissions import SAFE_METHODS
 
 from .models import (
     SystemConfiguration, MembershipTier, GenderOption, 
-    CommissionType, TrainingType, ProductType, BusinessRule, NotificationTemplate
+    CommissionType, TrainingType, ProductType, BusinessRule, NotificationTemplate,
+    CancellationReason
 )
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 
@@ -46,6 +47,12 @@ class TrainingTypeSerializer(serializers.ModelSerializer):
 class ProductTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductType
+        fields = '__all__'
+
+
+class CancellationReasonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CancellationReason
         fields = '__all__'
 
 
@@ -304,6 +311,16 @@ class NotificationTemplateViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description', 'template_type']
     ordering_fields = ['name', 'template_type', 'created_at']
     filterset_fields = ['template_type', 'is_active']
+
+
+class CancellationReasonViewSet(viewsets.ModelViewSet):
+    queryset = CancellationReason.objects.all().order_by('sort_order', 'name')
+    serializer_class = CancellationReasonSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['code', 'name', 'description']
+    ordering_fields = ['name', 'sort_order', 'created_at']
+    filterset_fields = ['is_active']
 
     def get_queryset(self):
         qs = super().get_queryset()

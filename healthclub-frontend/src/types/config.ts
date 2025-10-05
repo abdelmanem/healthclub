@@ -48,9 +48,22 @@ export interface BusinessRule {
 export interface CommissionType {
   id: number;
   name: string;
+  code: string;
   description: string;
   percentage: number;
   is_active: boolean;
+  sort_order: number;
+}
+
+export interface CancellationReason {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TrainingType {

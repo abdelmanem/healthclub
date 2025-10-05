@@ -32,6 +32,8 @@ import { Edit, Add, Save, Cancel } from '@mui/icons-material';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
 import { PermissionGate } from '../common/PermissionGate';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CancellationReasonForm } from './CancellationReasonForm';
+import { CancellationReason } from '../../types/config';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -58,6 +60,8 @@ export const ConfigurationManager: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingCancellationReason, setEditingCancellationReason] = useState<CancellationReason | null>(null);
+  const [isCancellationReasonFormOpen, setIsCancellationReasonFormOpen] = useState(false);
   const { 
     systemConfigs, 
     membershipTiers, 
@@ -67,17 +71,33 @@ export const ConfigurationManager: React.FC = () => {
     trainingTypes,
     productTypes,
     notificationTemplates,
-    isLoading 
+    cancellationReasons,
+    isLoading,
+    refreshConfigurations
   } = useConfiguration();
 
-  const handleEdit = (item: any) => {
-    setEditingItem(item);
-    setIsDialogOpen(true);
+  const handleEdit = (item: any, tabIndex?: number) => {
+    if (tabIndex === 8) {
+      // Handle cancellation reason edit
+      setEditingCancellationReason(item as CancellationReason);
+      setIsCancellationReasonFormOpen(true);
+    } else {
+      // Handle other configuration types
+      setEditingItem(item);
+      setIsDialogOpen(true);
+    }
   };
 
-  const handleAdd = () => {
-    setEditingItem(null);
-    setIsDialogOpen(true);
+  const handleAdd = (tabIndex?: number) => {
+    if (tabIndex === 8) {
+      // Handle cancellation reason add
+      setEditingCancellationReason(null);
+      setIsCancellationReasonFormOpen(true);
+    } else {
+      // Handle other configuration types
+      setEditingItem(null);
+      setIsDialogOpen(true);
+    }
   };
 
   const handleSave = async () => {
@@ -85,6 +105,7 @@ export const ConfigurationManager: React.FC = () => {
     console.log('Save configuration:', editingItem);
     setIsDialogOpen(false);
     setEditingItem(null);
+    await refreshConfigurations();
   };
 
   const handleCancel = () => {
@@ -112,6 +133,7 @@ export const ConfigurationManager: React.FC = () => {
           <Tab label="Training Types" />
           <Tab label="Product Types" />
           <Tab label="Notification Templates" />
+          <Tab label="Cancellation Reasons" />
         </Tabs>
       </Box>
 
@@ -124,7 +146,7 @@ export const ConfigurationManager: React.FC = () => {
                 <Button
                   variant="contained"
                   startIcon={<Add />}
-                  onClick={handleAdd}
+                  onClick={() => handleAdd()}
                 >
                   Add Configuration
                 </Button>
@@ -503,56 +525,167 @@ export const ConfigurationManager: React.FC = () => {
         </Card>
       </TabPanel>
 
+      <TabPanel value={tabValue} index={8}>
+        <Card>
+          <CardContent>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">Cancellation Reasons</Typography>
+              <PermissionGate permission="add" model="config">
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => handleAdd(8)}
+                >
+                  Add Cancellation Reason
+                </Button>
+              </PermissionGate>
+            </Box>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cancellationReasons.map((reason) => (
+                    <TableRow key={reason.id}>
+                      <TableCell>{reason.code}</TableCell>
+                      <TableCell>{reason.name}</TableCell>
+                      <TableCell>{reason.description}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={reason.is_active ? 'Active' : 'Inactive'} 
+                          color={reason.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PermissionGate permission="change" model="config">
+                          <IconButton onClick={() => handleEdit(reason, 8)}>
+                            <Edit />
+                          </IconButton>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+        
+        {/* Cancellation Reason Form Dialog */}
+        <CancellationReasonForm
+          open={isCancellationReasonFormOpen}
+          onClose={() => setIsCancellationReasonFormOpen(false)}
+          editingReason={editingCancellationReason}
+        />
+      </TabPanel>
+
       <Dialog open={isDialogOpen} onClose={handleCancel} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingItem ? 'Edit Configuration' : 'Add Configuration'}
         </DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            label="Key"
-            value={editingItem?.key || ''}
-            onChange={(e) => setEditingItem({...editingItem, key: e.target.value})}
-            margin="normal"
-          />
-          <TextField
-            fullWidth
-            label="Value"
-            value={editingItem?.value || ''}
-            onChange={(e) => setEditingItem({...editingItem, value: e.target.value})}
-            margin="normal"
-          />
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Data Type</InputLabel>
-            <Select
-              value={editingItem?.data_type || 'string'}
-              onChange={(e) => setEditingItem({...editingItem, data_type: e.target.value})}
-            >
-              <MenuItem value="string">String</MenuItem>
-              <MenuItem value="integer">Integer</MenuItem>
-              <MenuItem value="decimal">Decimal</MenuItem>
-              <MenuItem value="boolean">Boolean</MenuItem>
-              <MenuItem value="json">JSON</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            fullWidth
-            label="Description"
-            value={editingItem?.description || ''}
-            onChange={(e) => setEditingItem({...editingItem, description: e.target.value})}
-            margin="normal"
-            multiline
-            rows={3}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={editingItem?.is_active ?? true}
-                onChange={(e) => setEditingItem({...editingItem, is_active: e.target.checked})}
+          {tabValue === 8 ? (
+            // Cancellation Reason Form
+            <>
+              <TextField
+                fullWidth
+                label="Code"
+                value={editingItem?.code || ''}
+                onChange={(e) => setEditingItem({...editingItem, code: e.target.value})}
+                margin="normal"
               />
-            }
-            label="Active"
-          />
+              <TextField
+                fullWidth
+                label="Name"
+                value={editingItem?.name || ''}
+                onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
+                margin="normal"
+              />
+              <TextField
+                fullWidth
+                label="Description"
+                value={editingItem?.description || ''}
+                onChange={(e) => setEditingItem({...editingItem, description: e.target.value})}
+                margin="normal"
+                multiline
+                rows={3}
+              />
+              <TextField
+                fullWidth
+                label="Sort Order"
+                type="number"
+                value={editingItem?.sort_order || 0}
+                onChange={(e) => setEditingItem({...editingItem, sort_order: parseInt(e.target.value)})}
+                margin="normal"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editingItem?.is_active ?? true}
+                    onChange={(e) => setEditingItem({...editingItem, is_active: e.target.checked})}
+                  />
+                }
+                label="Active"
+              />
+            </>
+          ) : (
+            // Default Form
+            <>
+              <TextField
+                fullWidth
+                label="Key"
+                value={editingItem?.key || ''}
+                onChange={(e) => setEditingItem({...editingItem, key: e.target.value})}
+                margin="normal"
+              />
+              <TextField
+                fullWidth
+                label="Value"
+                value={editingItem?.value || ''}
+                onChange={(e) => setEditingItem({...editingItem, value: e.target.value})}
+                margin="normal"
+              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Data Type</InputLabel>
+                <Select
+                  value={editingItem?.data_type || 'string'}
+                  onChange={(e) => setEditingItem({...editingItem, data_type: e.target.value})}
+                >
+                  <MenuItem value="string">String</MenuItem>
+                  <MenuItem value="integer">Integer</MenuItem>
+                  <MenuItem value="decimal">Decimal</MenuItem>
+                  <MenuItem value="boolean">Boolean</MenuItem>
+                  <MenuItem value="json">JSON</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Description"
+                value={editingItem?.description || ''}
+                onChange={(e) => setEditingItem({...editingItem, description: e.target.value})}
+                margin="normal"
+                multiline
+                rows={3}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editingItem?.is_active ?? true}
+                    onChange={(e) => setEditingItem({...editingItem, is_active: e.target.checked})}
+                  />
+                }
+                label="Active"
+              />
+            </>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCancel} startIcon={<Cancel />}>

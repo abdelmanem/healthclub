@@ -160,6 +160,13 @@ class Reservation(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     checked_out_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.ForeignKey(
+        'config.CancellationReason',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reservations'
+    )
     no_show_recorded_at = models.DateTimeField(null=True, blank=True)
 
     history = HistoricalRecords()

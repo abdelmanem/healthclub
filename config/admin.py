@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     SystemConfiguration, MembershipTier, GenderOption, CommissionType,
-    TrainingType, ProductType, BusinessRule, NotificationTemplate
+    TrainingType, ProductType, BusinessRule, NotificationTemplate, CancellationReason
 )
 
 
@@ -49,6 +49,14 @@ class TrainingTypeAdmin(admin.ModelAdmin):
 class ProductTypeAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'requires_tracking', 'default_tax_rate', 'is_active', 'sort_order')
     list_filter = ('is_active', 'requires_tracking')
+    search_fields = ('code', 'name', 'description')
+    ordering = ['sort_order', 'name']
+
+
+@admin.register(CancellationReason)
+class CancellationReasonAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'is_active', 'sort_order')
+    list_filter = ('is_active',)
     search_fields = ('code', 'name', 'description')
     ordering = ['sort_order', 'name']
 
