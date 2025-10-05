@@ -474,17 +474,24 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const openDrawer = (r: Reservation) => setDrawer({ open: true, reservation: r });
   const closeDrawer = () => setDrawer({ open: false, reservation: null });
 
+  const [isActing, setIsActing] = React.useState(false);
+
   const act = async (action: 'check_in'|'in_service'|'complete'|'cancel') => {
-    const r = drawer.reservation;
+    if (isActing) return;
+    const r = menuAnchor?.reservation || drawer.reservation;
     if (!r) return;
+    setIsActing(true);
     try {
       // Map actions to endpoints in reservations views (adjust to your API if different)
       const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
       await api.post(`/reservations/${r.id}/${endpoint}/`, {});
       await loadData();
       closeDrawer();
+      setMenuAnchor(null);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsActing(false);
     }
   };
 
