@@ -18,7 +18,8 @@ import {
   Popover,
   useTheme,
   Menu,
-  MenuItem
+  MenuItem,
+  Paper
 } from '@mui/material';
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { api } from '../../services/api';
@@ -68,6 +69,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [localDate, setLocalDate] = React.useState(new Date());
   const theme = useTheme();
   const calendarRef = React.useRef<FullCalendar>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   // Use local state for date management
   const selectedDate = localDate;
@@ -316,16 +318,55 @@ export const StaffSchedulingCalendar: React.FC = () => {
     );
   };
 
+  // const loadData = React.useCallback(async () => {
+  //   setIsLoading(true);
+  //   try {
+  //     const dateStr = selectedDate.toISOString().split('T')[0];
+  //     const [empRes, resRes] = await Promise.all([
+  //       api.get('/employees/').catch(() => ({ data: { results: [] } })),
+  //       api.get(`/reservations/?start_time__date=${dateStr}`).catch(() => ({ data: { results: [] } })),
+  //     ]);
+  //     const emp = (empRes.data.results ?? empRes.data ?? []) as Employee[];
+  //     const res = (resRes.data.results ?? resRes.data ?? []) as Reservation[];
+  //     setEmployees(emp);
+  //     setReservations(res);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // }, [selectedDate]);
   const loadData = React.useCallback(async () => {
-    const [empRes, resRes] = await Promise.all([
-      api.get('/employees/').catch(() => ({ data: { results: [] } })),
-      api.get('/reservations/').catch(() => ({ data: { results: [] } })),
-    ]);
-    const emp = (empRes.data.results ?? empRes.data ?? []) as Employee[];
-    const res = (resRes.data.results ?? resRes.data ?? []) as Reservation[];
-    setEmployees(emp);
-    setReservations(res);
-  }, []);
+    setIsLoading(true);
+    try {
+      // Get the current view's date range from FullCalendar
+      const calendarApi = calendarRef.current?.getApi();
+      let startDate: string;
+      let endDate: string;
+      
+      if (calendarApi) {
+        const view = calendarApi.view;
+        startDate = dayjs(view.activeStart).format('YYYY-MM-DD');
+        endDate = dayjs(view.activeEnd).format('YYYY-MM-DD');
+      } else {
+        // Fallback: use selected date with buffer
+        const start = dayjs(selectedDate).startOf('week');
+        const end = dayjs(selectedDate).endOf('week');
+        startDate = start.format('YYYY-MM-DD');
+        endDate = end.format('YYYY-MM-DD');
+      }
+      
+      const [empRes, resRes] = await Promise.all([
+        api.get('/employees/').catch(() => ({ data: { results: [] } })),
+        api.get(`/reservations/?start_time__gte=${startDate}&start_time__lte=${endDate}`).catch(() => ({ data: { results: [] } })),
+      ]);
+      
+      const emp = (empRes.data.results ?? empRes.data ?? []) as Employee[];
+      const res = (resRes.data.results ?? resRes.data ?? []) as Reservation[];
+      setEmployees(emp);
+      setReservations(res);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDate]);
 
   React.useEffect(() => { loadData(); }, [loadData]);
 
@@ -349,19 +390,24 @@ export const StaffSchedulingCalendar: React.FC = () => {
           min-width: 32px !important;
           height: 32px !important;
         `;
-        button.addEventListener('mouseenter', () => {
+        const handleMouseEnter = () => {
           (button as HTMLElement).style.background = '#1565c0 !important';
-        });
-        button.addEventListener('mouseleave', () => {
+        };
+        const handleMouseLeave = () => {
           (button as HTMLElement).style.background = '#1976d2 !important';
-        });
+        };
+        button.addEventListener('mouseenter', handleMouseEnter);
+        button.addEventListener('mouseleave', handleMouseLeave);
+        return () => {
+          button.removeEventListener('mouseenter', handleMouseEnter);
+          button.removeEventListener('mouseleave', handleMouseLeave);
+        };
       }
+      return undefined;
     };
 
-    // Style immediately and after a short delay to ensure the button is rendered
-    styleCalendarButton();
-    const timeout = setTimeout(styleCalendarButton, 100);
-    return () => clearTimeout(timeout);
+    const cleanup = styleCalendarButton();
+    return cleanup;
   }, []);
 
   const resources = employees.map((e) => ({ id: String(e.id), title: getEmployeeDisplayName(e) }));
@@ -482,7 +528,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
     if (!r) return;
     setIsActing(true);
     try {
-      // Map actions to endpoints in reservations views (adjust to your API if different)
       const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
       await api.post(`/reservations/${r.id}/${endpoint}/`, {});
       await loadData();
@@ -490,91 +535,94 @@ export const StaffSchedulingCalendar: React.FC = () => {
       setMenuAnchor(null);
     } catch (e) {
       console.error(e);
+      alert(`Failed to ${action.replace('_', ' ')} reservation. Please try again.`);
     } finally {
       setIsActing(false);
     }
   };
 
   return (
-    <Box>
-      <FullCalendar
-        ref={calendarRef}
-        plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
-        initialView="resourceTimeGridDay"
-        initialDate={selectedDate}
-        resources={resources}
-        events={events}
-        nowIndicator
-        selectable
-        selectMirror
-        editable
-        eventResourceEditable
-        snapDuration="00:01:00"
-        slotDuration="00:30:00"
-        slotLabelInterval="00:30"
-        slotLabelContent={(arg: any) => {
-          const d = new Date(arg.date);
-          const mins = d.getMinutes();
-          if (mins === 30) return ':30';
-          const hh = String(d.getHours()).padStart(2, '0');
-          return `${hh}:00`;
-        }}
-        slotMinTime={workingHours.start}
-        slotMaxTime={workingHours.end}
-        headerToolbar={{ 
-          left: 'prev,next calendarIcon today', 
-          center: 'title', 
-          right: 'resourceTimeGridDay,resourceTimeGridWeek' 
-        }}
-        customButtons={{
-          calendarIcon: {
-            text: '',
-            click: (ev: MouseEvent, element: HTMLElement) => {
-              setCalendarAnchor(element);
-              loadMonthlyReservations(selectedDate);
+    <Box sx={{ p: 3 }}>
+      <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
+          initialView="resourceTimeGridDay"
+          initialDate={selectedDate}
+          resources={resources}
+          events={events}
+          nowIndicator
+          selectable
+          selectMirror
+          editable
+          eventResourceEditable
+          snapDuration="00:01:00"
+          slotDuration="00:30:00"
+          slotLabelInterval="00:30"
+          slotLabelContent={(arg: any) => {
+            const d = new Date(arg.date);
+            const mins = d.getMinutes();
+            if (mins === 30) return ':30';
+            const hh = String(d.getHours()).padStart(2, '0');
+            return `${hh}:00`;
+          }}
+          slotMinTime={workingHours.start}
+          slotMaxTime={workingHours.end}
+          headerToolbar={{ 
+            left: 'prev,next calendarIcon today', 
+            center: 'title', 
+            right: 'resourceTimeGridDay,resourceTimeGridWeek' 
+          }}
+          customButtons={{
+            calendarIcon: {
+              text: '',
+              click: (ev: MouseEvent, element: HTMLElement) => {
+                setCalendarAnchor(element);
+                loadMonthlyReservations(selectedDate);
+              }
             }
-          }
-        }}
-        select={handleSelect}
-        eventDrop={handleEventDrop}
-        eventResize={handleEventDrop}
-        eventClick={(arg:any) => {
-          const r: Reservation | undefined = arg.event.extendedProps?.reservation;
-          if (r) setMenuAnchor({ element: arg.el, reservation: r });
-        }}
-        eventDidMount={(info:any) => {
-          try {
-            info.el.style.border = '1px solid #000';
-            info.el.style.boxShadow = 'none';
-          } catch {}
-        }}
-        eventContent={(arg:any) => {
-          const ev = arg.event;
-          const start = ev.start ? dayjs(ev.start).format('h:mm A') : '';
-          const end = ev.end ? dayjs(ev.end).format('h:mm A') : '';
-          const title = ev.title || '';
-          const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
-          const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
-          const servicesLines = servicesText ? String(servicesText).split(', ') : [];
-          const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
-          const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
-          const servicesHtml = servicesLines.length > 0 ? `<div style=\"font-size:11px;opacity:.95;\">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
-          const html = `
-            <div style="padding:3px 4px;line-height:1.15;">
-              <div style="font-size:11px;opacity:.95;">${start}</div>
-              <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
-              ${servicesHtml}
-              ${typeof totalDurationMin === 'number' ? `<div style=\"font-size:11px;opacity:.95;\"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
-              <div style="font-size:11px;opacity:.95;">${end}</div>
-            </div>`;
-          return { html };
-        }}
-        height="auto"
-        datesSet={(dateInfo) => {
-          // Update selected date when the calendar view changes
-          setSelectedDate(dateInfo.start);
-        }}
-      />
+          }}
+          select={handleSelect}
+          eventDrop={handleEventDrop}
+          eventResize={handleEventDrop}
+          eventClick={(arg:any) => {
+            const r: Reservation | undefined = arg.event.extendedProps?.reservation;
+            if (r) setMenuAnchor({ element: arg.el, reservation: r });
+          }}
+          eventDidMount={(info:any) => {
+            try {
+              info.el.style.border = '1px solid #000';
+              info.el.style.boxShadow = 'none';
+            } catch {}
+          }}
+          eventContent={(arg:any) => {
+            const ev = arg.event;
+            const start = ev.start ? dayjs(ev.start).format('h:mm A') : '';
+            const end = ev.end ? dayjs(ev.end).format('h:mm A') : '';
+            const title = ev.title || '';
+            const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
+            const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
+            const servicesLines = servicesText ? String(servicesText).split(', ') : [];
+            const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
+            const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
+            const servicesHtml = servicesLines.length > 0 ? `<div style=\"font-size:11px;opacity:.95;\">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
+            const html = `
+              <div style="padding:3px 4px;line-height:1.15;">
+                <div style="font-size:11px;opacity:.95;">${start}</div>
+                <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
+                ${servicesHtml}
+                ${typeof totalDurationMin === 'number' ? `<div style=\"font-size:11px;opacity:.95;\"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
+                <div style="font-size:11px;opacity:.95;">${end}</div>
+              </div>`;
+            return { html };
+          }}
+          height="auto"
+          datesSet={(dateInfo) => {
+            // Update selected date when the calendar view changes
+            setSelectedDate(dateInfo.start);
+          }}
+        />
+      </Paper>
 
       <Drawer anchor="right" open={drawer.open} onClose={closeDrawer} sx={{ '& .MuiDrawer-paper': { width: 360 } }}>
         <Box p={2} display="flex" flexDirection="column" gap={2}>
@@ -606,16 +654,16 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
               <Stack spacing={1}>
                 {drawer.reservation.status === 'booked' && (
-                  <Button variant="contained" onClick={() => act('check_in')}>Check-in</Button>
+                  <Button variant="contained" onClick={() => act('check_in')} disabled={isActing}>Check-in</Button>
                 )}
                 {drawer.reservation.status === 'checked_in' && (
-                  <Button variant="contained" color="warning" onClick={() => act('in_service')}>Start Service</Button>
+                  <Button variant="contained" color="warning" onClick={() => act('in_service')} disabled={isActing}>Start Service</Button>
                 )}
                 {drawer.reservation.status === 'in_service' && (
-                  <Button variant="contained" color="success" onClick={() => act('complete')}>Complete</Button>
+                  <Button variant="contained" color="success" onClick={() => act('complete')} disabled={isActing}>Complete</Button>
                 )}
                 {drawer.reservation.status !== 'completed' && (
-                  <Button variant="outlined" color="error" onClick={() => act('cancel')}>Cancel</Button>
+                  <Button variant="outlined" color="error" onClick={() => act('cancel')} disabled={isActing}>Cancel</Button>
                 )}
               </Stack>
             </>
@@ -665,6 +713,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
       {/* Context Menu for reservation actions */}
       <Menu
+        aria-label="Reservation actions"
         anchorEl={menuAnchor?.element || null}
         open={Boolean(menuAnchor)}
         onClose={() => setMenuAnchor(null)}
@@ -679,15 +728,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
         <Divider />
         {(() => {
           const status = menuAnchor?.reservation?.status;
-          if (status === 'booked') return (<MenuItem onClick={() => act('check_in')}>Check-in Guest</MenuItem>);
-          if (status === 'checked_in') return (<MenuItem onClick={() => act('in_service')}>Start Service</MenuItem>);
-          if (status === 'in_service') return (<MenuItem onClick={() => act('complete')}>Mark Complete</MenuItem>);
+          if (status === 'booked') return (<MenuItem onClick={() => act('check_in')} disabled={isActing}>Check-in Guest</MenuItem>);
+          if (status === 'checked_in') return (<MenuItem onClick={() => act('in_service')} disabled={isActing}>Start Service</MenuItem>);
+          if (status === 'in_service') return (<MenuItem onClick={() => act('complete')} disabled={isActing}>Mark Complete</MenuItem>);
           return null;
         })()}
         {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && (
           <>
             <Divider />
-            <MenuItem onClick={() => act('cancel')} sx={{ color: 'error.main' }}>Cancel Reservation</MenuItem>
+            <MenuItem onClick={() => act('cancel')} sx={{ color: 'error.main' }} disabled={isActing}>Cancel Reservation</MenuItem>
           </>
         )}
       </Menu>
