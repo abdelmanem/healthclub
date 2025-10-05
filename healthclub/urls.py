@@ -25,7 +25,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from guests.views import GuestViewSet
 from services.views import ServiceViewSet, ServiceCategoryViewSet
 from reservations.views import LocationViewSet, ReservationViewSet, HousekeepingTaskViewSet
-from reservations.spa_scheduling_views import SpaSchedulingViewSet
+# from reservations.spa_scheduling_views import SpaSchedulingViewSet
 from pos.views import InvoiceViewSet, PaymentViewSet
 from employees.views import (
     EmployeeViewSet,
@@ -60,7 +60,7 @@ router.register(r'services', ServiceViewSet, basename='service')
 router.register(r'service-categories', ServiceCategoryViewSet, basename='service-category')
 router.register(r'locations', LocationViewSet, basename='location')
 router.register(r'reservations', ReservationViewSet, basename='reservation')
-router.register(r'spa-scheduling', SpaSchedulingViewSet, basename='spa-scheduling')
+# router.register(r'spa-scheduling', SpaSchedulingViewSet, basename='spa-scheduling')
 router.register(r'housekeeping-tasks', HousekeepingTaskViewSet, basename='housekeeping-task')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payments', PaymentViewSet, basename='payment')
