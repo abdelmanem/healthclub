@@ -16,7 +16,9 @@ import {
   DialogContent,
   IconButton,
   Popover,
-  useTheme
+  useTheme,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { api } from '../../services/api';
@@ -85,6 +87,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
     return ids;
   }, [reservations]);
   const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
+  const [menuAnchor, setMenuAnchor] = React.useState<{ element: HTMLElement; reservation: Reservation } | null>(null);
 
   // Mini calendar helper functions
   const handleCalendarClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -530,7 +533,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
         eventResize={handleEventDrop}
         eventClick={(arg:any) => {
           const r: Reservation | undefined = arg.event.extendedProps?.reservation;
-          if (r) openDrawer(r);
+          if (r) setMenuAnchor({ element: arg.el, reservation: r });
         }}
         eventDidMount={(info:any) => {
           try {
@@ -652,6 +655,35 @@ export const StaffSchedulingCalendar: React.FC = () => {
       >
         {renderMiniCalendar()}
       </Popover>
+
+      {/* Context Menu for reservation actions */}
+      <Menu
+        anchorEl={menuAnchor?.element || null}
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+      >
+        <MenuItem onClick={() => {
+          const r = menuAnchor?.reservation;
+          if (r) openDrawer(r);
+          setMenuAnchor(null);
+        }}>View Details</MenuItem>
+        <Divider />
+        {(() => {
+          const status = menuAnchor?.reservation?.status;
+          if (status === 'booked') return (<MenuItem onClick={() => act('check_in')}>Check-in Guest</MenuItem>);
+          if (status === 'checked_in') return (<MenuItem onClick={() => act('in_service')}>Start Service</MenuItem>);
+          if (status === 'in_service') return (<MenuItem onClick={() => act('complete')}>Mark Complete</MenuItem>);
+          return null;
+        })()}
+        {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && (
+          <>
+            <Divider />
+            <MenuItem onClick={() => act('cancel')} sx={{ color: 'error.main' }}>Cancel Reservation</MenuItem>
+          </>
+        )}
+      </Menu>
     </Box>
   );
 };
