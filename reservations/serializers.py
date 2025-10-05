@@ -186,15 +186,58 @@ class ReservationSerializer(serializers.ModelSerializer):
         return attrs
 
     def get_employee(self, obj):
-        """Get the primary employee assigned to this reservation"""
-        assignment = obj.employee_assignments.first()
-        return assignment.employee.id if assignment else None
+        """Determine the reservation's employee.
+
+        Preference order:
+        1) Explicit reservation.employee_id if present (source of truth when set)
+        2) Primary Therapist assignment
+        3) Any existing assignment
+        """
+        try:
+            # 1) Prefer explicit FK on Reservation if present
+            explicit_employee_id = getattr(obj, 'employee_id', None)
+            if explicit_employee_id:
+                return explicit_employee_id
+
+            # 2) Primary assignment
+            assignment = obj.employee_assignments.filter(role_in_service='Primary Therapist').first()
+            if assignment:
+                return assignment.employee.id
+
+            # 3) Any assignment
+            any_assignment = obj.employee_assignments.first()
+            return any_assignment.employee.id if any_assignment else None
+        except Exception:
+            return None
 
     def get_employee_name(self, obj):
-        """Get the name of the primary employee assigned to this reservation"""
-        assignment = obj.employee_assignments.first()
-        if assignment:
-            return f"{assignment.employee.user.first_name} {assignment.employee.user.last_name}".strip()
+        """Resolve employee's display name using the same precedence as get_employee."""
+        try:
+            # 1) If explicit FK is set, use it
+            explicit_employee = getattr(obj, 'employee', None)
+            if explicit_employee:
+                first = getattr(getattr(explicit_employee, 'user', None), 'first_name', '') or ''
+                last = getattr(getattr(explicit_employee, 'user', None), 'last_name', '') or ''
+                full = f"{first} {last}".strip()
+                return full or None
+
+            # 2) Primary assignment
+            assignment = obj.employee_assignments.filter(role_in_service='Primary Therapist').first()
+            if assignment and getattr(assignment.employee, 'user', None):
+                first = getattr(assignment.employee.user, 'first_name', '') or ''
+                last = getattr(assignment.employee.user, 'last_name', '') or ''
+                full = f"{first} {last}".strip()
+                return full or None
+
+            # 3) Any assignment
+            any_assignment = obj.employee_assignments.first()
+            if any_assignment and getattr(any_assignment.employee, 'user', None):
+                first = getattr(any_assignment.employee.user, 'first_name', '') or ''
+                last = getattr(any_assignment.employee.user, 'last_name', '') or ''
+                full = f"{first} {last}".strip()
+                return full or None
+        except Exception:
+            pass
         return None
 
     def get_total_duration_minutes(self, obj):

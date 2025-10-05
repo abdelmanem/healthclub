@@ -404,22 +404,27 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const handleEventDrop = async (dropInfo: any) => {
     const r: Reservation | undefined = dropInfo?.event?.extendedProps?.reservation;
     if (!r) return;
+    
     try {
       const body: any = {
         start_time: dayjs(dropInfo.event.start).toISOString(),
         end_time: dayjs(dropInfo.event.end).toISOString(),
       };
       const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
+      
       // Update times first (employee may not be writable on reservation serializer)
       await api.patch(`/reservations/${r.id}/`, body);
+      
       // If resource (employee) changed, use assignment endpoint
       if (resource) {
         const newEmployeeId = Number(resource.id);
+        
         try {
           // Load existing assignments for this reservation (client-side filter for safety)
           const listResp = await api.get('/reservation-assignments/');
           const allAssignments = (listResp.data?.results ?? listResp.data ?? []) as Array<any>;
-          const primaryForReservation = allAssignments.filter((a) => a.reservation === r.id && a.role_in_service === 'Primary');
+          
+          const primaryForReservation = allAssignments.filter((a) => a.reservation === r.id && a.role_in_service === 'Primary Therapist');
           const existingPrimary = primaryForReservation[0];
           const targetPrimaryForNew = primaryForReservation.find((a) => a.employee === newEmployeeId);
 
@@ -439,11 +444,11 @@ export const StaffSchedulingCalendar: React.FC = () => {
             await api.post('/reservation-assignments/', {
               reservation: r.id,
               employee: newEmployeeId,
-              role_in_service: 'Primary',
+              role_in_service: 'Primary Therapist',
             });
           }
         } catch (assignErr: any) {
-          console.warn('Employee reassignment failed:', assignErr);
+          console.error('Employee reassignment failed:', assignErr);
           const serverMsg = assignErr?.response?.data;
           try {
             const msg = typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg);
@@ -455,6 +460,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           return;
         }
       }
+      
       await loadData();
     } catch (e) {
       console.error('Failed to update reservation', e);

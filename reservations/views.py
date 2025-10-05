@@ -181,7 +181,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         "guest", 
         "location"
     ).prefetch_related(
-        "reservation_services__service__category"
+        "reservation_services__service__category",
+        "employee_assignments__employee__user"
     ).order_by("-start_time")
     serializer_class = ReservationSerializer
     permission_classes = [ObjectPermissionsOrReadOnly]

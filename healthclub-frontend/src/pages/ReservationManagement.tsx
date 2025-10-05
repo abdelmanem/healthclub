@@ -326,7 +326,7 @@ export const ReservationManagement: React.FC = () => {
           await api.post('/reservation-assignments/', {
             reservation: reservation.id,
             employee: Number(newResource.id),
-            role_in_service: 'Primary',
+            role_in_service: 'Primary Therapist',
           });
         } catch (assignErr) {
           console.warn('Employee assignment failed:', assignErr);
