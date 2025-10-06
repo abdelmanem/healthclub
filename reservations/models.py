@@ -210,18 +210,24 @@ class Reservation(models.Model):
                 raise ValidationError("This time slot conflicts with an existing reservation")
         
         # Gender separation validation removed - allowing all guests to use any location
-        
-def save(self, *args, **kwargs):
-    # Auto-set end_time if missing or mismatched
-    if self.start_time and self.reservation_services.exists():
-        total_minutes = sum(
-            s.service.duration_minutes * s.quantity
-            for s in self.reservation_services.all()
-        )
-        self.end_time = self.start_time + timedelta(minutes=total_minutes)
 
-    self.full_clean()
-    super().save(*args, **kwargs)
+    def save(self, *args, **kwargs):
+        # Auto-set end_time if missing or mismatched
+        # Accessing reverse relation requires a primary key
+        if getattr(self, 'pk', None) and self.start_time:
+            try:
+                if self.reservation_services.exists():
+                    total_minutes = sum(
+                        s.service.duration_minutes * s.quantity
+                        for s in self.reservation_services.all()
+                    )
+                    self.end_time = self.start_time + timedelta(minutes=total_minutes)
+            except Exception:
+                pass
+
+        # Run model validation consistently before save
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 def mark_guest_in_house(guest):
     """Mark guest as in house"""

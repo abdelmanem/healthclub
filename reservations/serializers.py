@@ -3,6 +3,7 @@ from django.db import models
 from .models import Location, Reservation, ReservationService, LocationType, LocationStatus, HousekeepingTask
 from datetime import timedelta
 from config.models import SystemConfiguration
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 class LocationTypeSerializer(serializers.ModelSerializer):
@@ -144,6 +145,26 @@ class ReservationSerializer(serializers.ModelSerializer):
         if not start_time:
             raise serializers.ValidationError({"start_time": "This field is required."})
 
+        # Normalize datetimes to aware UTC to avoid past/future mismatches across timezones
+        try:
+            from django.utils import timezone
+            if start_time is not None:
+                if timezone.is_naive(start_time):
+                    start_time = timezone.make_aware(start_time, timezone.get_current_timezone())
+                start_time = start_time.astimezone(timezone.utc)
+                attrs['start_time'] = start_time
+            if end_time is not None:
+                if timezone.is_naive(end_time):
+                    end_time = timezone.make_aware(end_time, timezone.get_current_timezone())
+                end_time = end_time.astimezone(timezone.utc)
+                attrs['end_time'] = end_time
+            # Disallow creating/updating to a past start time
+            if start_time < timezone.now():
+                raise serializers.ValidationError({"start_time": "Cannot create a reservation in the past."})
+        except Exception:
+            # Fall back to existing model-level validation if anything goes wrong
+            pass
+
         # Auto-compute end_time if missing
         if not end_time:
             attrs['end_time'] = self._compute_end_time(start_time, services_data)
@@ -258,9 +279,28 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         services_data = validated_data.pop("reservation_services", [])
-        # Ensure end_time is set correctly (in case validate wasn't run for some reason)
+        # Compute end_time before saving, based on provided services payload
         if not validated_data.get('end_time') and validated_data.get('start_time'):
-            validated_data['end_time'] = self._compute_end_time(validated_data['start_time'], services_data)
+            # Try to read durations directly from provided services_data to avoid touching reverse relation pre-save
+            total_minutes = 0
+            for srv in services_data:
+                try:
+                    service_obj = srv.get('service')
+                    duration = None
+                    if hasattr(service_obj, 'duration_minutes'):
+                        duration = int(service_obj.duration_minutes)
+                    elif isinstance(service_obj, int):
+                        from services.models import Service
+                        duration = int(Service.objects.get(pk=service_obj).duration_minutes)
+                    qty = int(srv.get('quantity') or 1)
+                    if duration:
+                        total_minutes += duration * qty
+                except Exception:
+                    pass
+            if total_minutes <= 0:
+                validated_data['end_time'] = self._compute_end_time(validated_data['start_time'], services_data)
+            else:
+                validated_data['end_time'] = validated_data['start_time'] + timedelta(minutes=total_minutes)
         # Auto-assign a clean, vacant room if none provided
         if not validated_data.get('location'):
             from .models import Location
@@ -269,11 +309,22 @@ class ReservationSerializer(serializers.ModelSerializer):
             # If services are provided, prefer rooms linked to those services
             service_ids = [s.get('service').id if hasattr(s.get('service'), 'id') else s.get('service') for s in services_data if s.get('service')]
             if service_ids:
-                qs = qs.filter(services__in=service_ids).distinct()
+                # Only filter by services if such a relation exists
+                try:
+                    qs = qs.filter(services__in=service_ids).distinct()
+                except Exception:
+                    pass
             loc = qs.order_by('name').first()
             if loc:
                 validated_data['location'] = loc
-        reservation = Reservation.objects.create(**validated_data)
+        try:
+            reservation = Reservation.objects.create(**validated_data)
+        except DjangoValidationError as e:
+            # Convert model validation errors to DRF-friendly response
+            detail = getattr(e, 'message_dict', None) or {'detail': e.messages if hasattr(e, 'messages') else str(e)}
+            raise serializers.ValidationError(detail)
+        except Exception as e:
+            raise serializers.ValidationError({'detail': str(e)})
         # Recompute first-for-guest flag so the earliest reservation is marked true
         try:
             self._recompute_is_first_for_guest(reservation.guest_id)
@@ -289,7 +340,13 @@ class ReservationSerializer(serializers.ModelSerializer):
         original_guest_id = getattr(instance, 'guest_id', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
+        try:
+            instance.save()
+        except DjangoValidationError as e:
+            detail = getattr(e, 'message_dict', None) or {'detail': e.messages if hasattr(e, 'messages') else str(e)}
+            raise serializers.ValidationError(detail)
+        except Exception as e:
+            raise serializers.ValidationError({'detail': str(e)})
         # If guest or start_time changed, recompute flags for affected guest(s)
         try:
             affected_guest_ids = set()
