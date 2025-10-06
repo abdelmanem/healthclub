@@ -274,20 +274,55 @@ class ReservationSerializer(serializers.ModelSerializer):
             if loc:
                 validated_data['location'] = loc
         reservation = Reservation.objects.create(**validated_data)
+        # Recompute first-for-guest flag so the earliest reservation is marked true
+        try:
+            self._recompute_is_first_for_guest(reservation.guest_id)
+        except Exception:
+            pass
         for srv in services_data:
             ReservationService.objects.create(reservation=reservation, **srv)
         return reservation
 
     def update(self, instance, validated_data):
         services_data = validated_data.pop("reservation_services", None)
+        # track original guest before changes
+        original_guest_id = getattr(instance, 'guest_id', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        # If guest or start_time changed, recompute flags for affected guest(s)
+        try:
+            affected_guest_ids = set()
+            if original_guest_id and original_guest_id != getattr(instance, 'guest_id', None):
+                affected_guest_ids.add(original_guest_id)
+            affected_guest_ids.add(getattr(instance, 'guest_id', None))
+            for gid in list(affected_guest_ids):
+                if gid:
+                    self._recompute_is_first_for_guest(gid)
+        except Exception:
+            pass
         if services_data is not None:
             instance.reservation_services.all().delete()
             for srv in services_data:
                 ReservationService.objects.create(reservation=instance, **srv)
         return instance
+
+    @staticmethod
+    def _recompute_is_first_for_guest(guest_id: int):
+        """Ensure exactly one reservation per guest has is_first_for_guest=True (earliest by start_time)."""
+        from .models import Reservation
+        qs = Reservation.objects.filter(guest_id=guest_id).order_by('start_time', 'id')
+        first_id = None
+        to_update = []
+        for idx, r in enumerate(qs):
+            should_be_first = idx == 0
+            if r.is_first_for_guest != should_be_first:
+                r.is_first_for_guest = should_be_first
+                to_update.append(r)
+            if should_be_first:
+                first_id = r.id
+        if to_update:
+            Reservation.objects.bulk_update(to_update, ['is_first_for_guest'])
 
 
 class HousekeepingTaskSerializer(serializers.ModelSerializer):
