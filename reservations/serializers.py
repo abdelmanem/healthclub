@@ -102,6 +102,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "cancellation_reason",
             "no_show_recorded_at",
             "location_is_out_of_service",
+            "is_first_for_guest",
         ]
         read_only_fields = [
             "checked_in_at",

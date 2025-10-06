@@ -22,6 +22,7 @@ import {
   Paper
 } from '@mui/material';
 import { ReservationBookingForm } from './ReservationBookingForm';
+import { CancellationDialog } from './CancellationDialog';
 import { api } from '../../services/api';
 import { CalendarToday, ChevronLeft, ChevronRight, Today } from '@mui/icons-material';
 
@@ -33,6 +34,7 @@ type Reservation = {
   end_time: string;
   status: 'booked'|'checked_in'|'in_service'|'completed'|'cancelled';
   employee: number | null;
+  is_first_for_guest?: boolean;
   reservation_services?: Array<{
     service: number;
     service_details?: { name?: string; duration_minutes?: number };
@@ -74,22 +76,11 @@ export const StaffSchedulingCalendar: React.FC = () => {
   // Use local state for date management
   const selectedDate = localDate;
   const setSelectedDate = setLocalDate;
-  const firstReservationIdSet = React.useMemo(() => {
-    const map: Record<number, { id: number; start: string }> = {};
-    for (const r of reservations) {
-      const g = (r as any).guest;
-      if (!g) continue;
-      const existing = map[g];
-      if (!existing || dayjs(r.start_time).isBefore(existing.start)) {
-        map[g] = { id: r.id, start: r.start_time };
-      }
-    }
-    const ids = new Set<number>();
-    Object.values(map).forEach(v => ids.add(v.id));
-    return ids;
-  }, [reservations]);
+  // Backend now provides is_first_for_guest; no local heuristic needed
   const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
   const [menuAnchor, setMenuAnchor] = React.useState<{ element: HTMLElement; reservation: Reservation } | null>(null);
+  const [isCancellationDialogOpen, setIsCancellationDialogOpen] = React.useState<boolean>(false);
+  const [reservationToCancel, setReservationToCancel] = React.useState<number | null>(null);
 
   // Mini calendar helper functions
   const handleCalendarClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -423,7 +414,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
     textColor: '#fff',
     extendedProps: {
       reservation: r,
-      isFirst: firstReservationIdSet.has(r.id),
+      isFirst: !!r.is_first_for_guest,
       servicesText: (r.reservation_services || []).map((s: any) => {
         const name = s.service_details?.name || `Service #${s.service}`;
         const dur = s.service_duration_minutes || s.service_details?.duration_minutes;
@@ -526,6 +517,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
     if (isActing) return;
     const r = menuAnchor?.reservation || drawer.reservation;
     if (!r) return;
+    if (action === 'cancel') {
+      // Open cancellation dialog to collect reason
+      setReservationToCancel(r.id);
+      setIsCancellationDialogOpen(true);
+      setMenuAnchor(null);
+      return;
+    }
     setIsActing(true);
     try {
       const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
@@ -733,13 +731,24 @@ export const StaffSchedulingCalendar: React.FC = () => {
           if (status === 'in_service') return (<MenuItem onClick={() => act('complete')} disabled={isActing}>Mark Complete</MenuItem>);
           return null;
         })()}
-        {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && (
-          <>
-            <Divider />
-            <MenuItem onClick={() => act('cancel')} sx={{ color: 'error.main' }} disabled={isActing}>Cancel Reservation</MenuItem>
-          </>
-        )}
+        {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && [
+          <Divider key="menu-divider-cancel" />,
+          <MenuItem key="menu-item-cancel" onClick={() => act('cancel')} sx={{ color: 'error.main' }} disabled={isActing}>Cancel Reservation</MenuItem>
+        ]}
       </Menu>
+
+      {/* Cancellation Dialog */}
+      <CancellationDialog
+        open={isCancellationDialogOpen}
+        onClose={() => setIsCancellationDialogOpen(false)}
+        reservationId={reservationToCancel}
+        onCancelled={async () => {
+          await loadData();
+          setIsCancellationDialogOpen(false);
+          setReservationToCancel(null);
+          closeDrawer();
+        }}
+      />
     </Box>
   );
 };

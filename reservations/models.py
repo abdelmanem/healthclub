@@ -168,6 +168,8 @@ class Reservation(models.Model):
         related_name='reservations'
     )
     no_show_recorded_at = models.DateTimeField(null=True, blank=True)
+    # Whether this reservation is the guest's first ever reservation
+    is_first_for_guest = models.BooleanField(default=False, db_index=True)
 
     history = HistoricalRecords()
 

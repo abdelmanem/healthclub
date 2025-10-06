@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
+from django.db.models import OuterRef, Subquery
 
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
@@ -327,11 +328,21 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 from config.models import CancellationReason
                 reason = CancellationReason.objects.get(id=reason_id, is_active=True)
                 reservation.cancellation_reason = reason
+                # If the reason is NO_SHOW, record the no-show timestamp as well
+                try:
+                    if (getattr(reason, 'code', None) or '').upper() == 'NO_SHOW':
+                        reservation.no_show_recorded_at = timezone.now()
+                except Exception:
+                    pass
             except Exception:
                 pass
                 
         reservation.save()
-        return response.Response({"status": reservation.status, "cancelled_at": reservation.cancelled_at})
+        return response.Response({
+            "status": reservation.status,
+            "cancelled_at": reservation.cancelled_at,
+            "no_show_recorded_at": getattr(reservation, 'no_show_recorded_at', None)
+        })
         
     @decorators.action(detail=True, methods=["post"], url_path="create-invoice")
     def create_invoice(self, request, pk=None):
