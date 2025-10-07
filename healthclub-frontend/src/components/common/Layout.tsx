@@ -22,21 +22,7 @@ import {
   Divider,
   Badge
 } from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Dashboard,
-  People,
-  Event,
-  Business,
-  Assessment,
-  Settings,
-  AccountCircle,
-  CleaningServices,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Notifications
-} from '@mui/icons-material';
+import { Menu as MenuIcon, Settings, AccountCircle, ChevronLeft, ChevronRight, Search, Notifications } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';
@@ -49,16 +35,55 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const menuItems = [
-  { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', permission: 'view', model: 'dashboard' },
-  { text: 'Guests', icon: <People />, path: '/guests', permission: 'view', model: 'guests' },
-  { text: 'Reservations', icon: <Event />, path: '/reservations', permission: 'view', model: 'reservations' },
-  { text: 'Spa Scheduling', icon: <Event />, path: '/spa-scheduling', permission: 'view', model: 'reservations' },
-  { text: 'Housekeeping Management', icon: <CleaningServices />, path: '/housekeeping', permission: 'view', model: 'reservations' },
-  { text: 'Services', icon: <Business />, path: '/services', permission: 'view', model: 'services' },
-  { text: 'Analytics', icon: <Assessment />, path: '/analytics', permission: 'view', model: 'analytics' },
-  { text: 'Configuration', icon: <Settings />, path: '/config', permission: 'view', model: 'config' },
+interface SubNavConfig {
+  items: Array<{ label: string; path: string }>;
+}
+
+interface SideMenuItem {
+  text: string;
+  icon: React.ReactNode;
+  path: string;
+  permission: string;
+  model: string;
+}
+
+const menuItems: SideMenuItem[] = [
+  
 ];
+
+const subNavConfigs: Record<string, SubNavConfig> = {
+  'Appointments': {
+    items: [
+      { label: 'Calendar', path: '/reservations' },
+      { label: 'Find Appointment', path: '/reservations/find' },
+      { label: 'New Appointment', path: '/reservations/new' },
+      { label: 'Manage Waitlist', path: '/reservations/waitlist' },
+      { label: 'Class Schedule', path: '/reservations/classes' },
+    ]
+  },
+  'Customers': {
+    items: [
+      { label: 'Customers List', path: '/guests' },
+      { label: 'Guest Profile', path: '/guests/profile' },
+    ]
+  },
+  'Products': {
+    items: [
+      { label: 'service', path: '/services' }
+    ]
+  },
+  'Reports': {
+    items: [
+      { label: 'Analytics', path: '/analytics' },
+      { label: 'Dashboard', path: '/dashboard' }
+    ]
+  },
+  'Housekeeping': {
+    items: [
+      { label: 'Housekeeping Management', path: '/housekeeping' }
+    ]
+  }
+};
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -66,9 +91,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [subNavActive, setSubNavActive] = useState<string>('Calendar');
-  const [showAppointmentsSubNav, setShowAppointmentsSubNav] = useState<boolean>(false);
-  const [showCustomersSubNav, setShowCustomersSubNav] = useState<boolean>(false);
+  const [activeSubNav, setActiveSubNav] = useState<string | null>(null);
+  const [searchValue, setSearchValue] = useState('');
+  
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -112,10 +137,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
-  // Hide Appointments sub-nav on any route change
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchValue.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`);
+    }
+  };
+
+  const toggleSubNav = (navKey: string) => {
+    setActiveSubNav(activeSubNav === navKey ? null : navKey);
+  };
+
+  // Hide sub-nav on route change
   useEffect(() => {
-    setShowAppointmentsSubNav(false);
-    setShowCustomersSubNav(false);
+    setActiveSubNav(null);
   }, [location.pathname]);
 
   // Load notifications and poll every 60s
@@ -190,6 +224,38 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     </Box>
   );
 
+  const renderSubNav = () => {
+    if (!activeSubNav || !subNavConfigs[activeSubNav]) return null;
+    
+    const config = subNavConfigs[activeSubNav];
+    
+    return (
+      <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {config.items.map((item) => (
+            <Button
+              key={item.label}
+              onClick={() => {
+                navigate(item.path);
+                setActiveSubNav(null);
+              }}
+              sx={{
+                textTransform: 'none',
+                color: '#374151',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                backgroundColor: location.pathname === item.path ? '#E5E7EB' : 'transparent',
+                '&:hover': { backgroundColor: '#F3F4F6' }
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
       <AppBar position="fixed" sx={{ width: '100%', backgroundColor: '#8B5CF6', boxShadow: 'none' }}>
@@ -212,6 +278,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               size="small"
               placeholder="scan ID or type name"
               variant="outlined"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={handleSearch}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   backgroundColor: 'white',
@@ -240,6 +309,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 py: 0.5,
                 '&:hover': { backgroundColor: '#f3f4f6' }
               }}
+              onClick={() => navigate('/pro-tools')}
             >
               + Pro Tools
             </Button>
@@ -310,35 +380,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Toolbar>
         <Box sx={{ backgroundColor: '#8B5CF6', px: 2, py: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {['Appointments','Customers','Orders','Schedules','Marketing','Products','Reports'].map((label) => (
-              <Button
-                key={label}
-                sx={{
-                  color: 'white',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.85rem',
-                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
-                }}
-                endIcon={<ChevronRight sx={{ fontSize: 16 }} />}
-                onClick={() => {
-                  if (label === 'Appointments') {
-                    setShowAppointmentsSubNav((v) => !v);
-                    setSubNavActive('Calendar');
-                    return;
-                  }
-                  if (label === 'Customers') {
-                    setShowCustomersSubNav((v) => !v);
-                    setSubNavActive('Customers');
-                    return;
-                  }
-                  setShowAppointmentsSubNav(false);
-                  setShowCustomersSubNav(false);
-                }}
-              >
-                {label}
-              </Button>
-            ))}
+            {['Appointments','Customers','Housekeeping','Orders','Schedules','Marketing','Products','Reports'].map((label) => {
+              const hasSubNav = !!subNavConfigs[label];
+              return (
+                <Button
+                  key={label}
+                  sx={{
+                    color: 'white',
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    fontSize: '0.85rem',
+                    backgroundColor: activeSubNav === label ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
+                  }}
+                  endIcon={hasSubNav ? <ChevronRight sx={{ fontSize: 16 }} /> : undefined}
+                  onClick={() => hasSubNav ? toggleSubNav(label) : null}
+                >
+                  {label}
+                </Button>
+              );
+            })}
             <Box sx={{ flexGrow: 1 }} />
             <IconButton sx={{ color: 'white' }} onClick={() => navigate('/config')}>
               <Settings />
@@ -346,74 +407,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Box>
         </Box>
 
-        {/* Sub navigation for Appointments */}
-        {(() => {
-          if (!showAppointmentsSubNav) return null;
-          const items = ['Calendar','Find Appointment','New Appointment','Manage Waitlist','Class Schedule'];
-          return (
-            <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {items.map((label) => (
-                  <Button
-                    key={label}
-                    onClick={() => {
-                      setSubNavActive(label);
-                      if (label === 'Calendar') navigate('/reservations');
-                      if (label === 'New Appointment') navigate('/reservations/new');
-                      setShowAppointmentsSubNav(false);
-                    }}
-                    sx={{
-                      textTransform: 'none',
-                      color: '#374151',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      backgroundColor: subNavActive === label ? '#E5E7EB' : 'transparent',
-                      '&:hover': { backgroundColor: '#F3F4F6' }
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </Box>
-            </Box>
-          );
-        })()}
-
-        {/* Sub navigation for Customers */}
-        {(() => {
-          if (!showCustomersSubNav) return null;
-          const items = ['Customers List','Guest Profile'];
-          return (
-            <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {items.map((label) => (
-                  <Button
-                    key={label}
-                    onClick={() => {
-                      setSubNavActive(label);
-                      if (label === 'Customers List') navigate('/guests');
-                      if (label === 'Guest Profile') navigate('/guests/profile');
-                      setShowCustomersSubNav(false);
-                    }}
-                    sx={{
-                      textTransform: 'none',
-                      color: '#374151',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      backgroundColor: subNavActive === label ? '#E5E7EB' : 'transparent',
-                      '&:hover': { backgroundColor: '#F3F4F6' }
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </Box>
-            </Box>
-          );
-        })()}
+        {renderSubNav()}
       </AppBar>
 
-      <Box component="nav" sx={{ width: { md: 0 }, flexShrink: { md: 0 } }}>
+      <Box component="nav" sx={{ width: { md: desktopCollapsed ? collapsedDrawerWidth : drawerWidth }, flexShrink: { md: 0 } }}>
+        {/* Mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -447,9 +445,67 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         >
           {drawer}
         </Drawer>
+
+        {/* Desktop drawer */}
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: desktopCollapsed ? collapsedDrawerWidth : drawerWidth,
+              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
+              color: '#ffffff',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+              transition: theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+              overflowX: 'hidden',
+              '& .MuiTypography-root': {
+                color: '#ffffff',
+                fontWeight: 500,
+              },
+              '& .MuiIconButton-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItem-root': {
+                color: '#ffffff',
+              },
+              '& .MuiListItemButton-root': {
+                color: '#ffffff',
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                },
+              },
+              '& .MuiListItemIcon-root': {
+                color: '#ffffff',
+              },
+            },
+          }}
+          open
+        >
+          {drawer}
+        </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 2, width: '100%', mt: 12, minHeight: 'calc(100vh - 96px)', background: theme.palette.background.content }}>
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          p: 2, 
+          width: { 
+            xs: '100%', 
+            md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` 
+          }, 
+          mt: 12, 
+          minHeight: 'calc(100vh - 96px)', 
+          background: theme.palette.background.content 
+        }}
+      >
         {children}
       </Box>
     </Box>
