@@ -8,28 +8,20 @@ import {
   TextField,
   InputAdornment,
   Button,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemButton,
   useTheme,
-  useMediaQuery,
   Avatar,
   Menu,
   MenuItem,
   Divider,
   Badge
 } from '@mui/material';
-import { Menu as MenuIcon, Settings, AccountCircle, ChevronLeft, ChevronRight, Search, Notifications } from '@mui/icons-material';
+import { Settings, AccountCircle, ChevronRight, Search, Notifications } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';
 import { notificationsService, NotificationItem } from '../../services/notifications';
 
-const drawerWidth = 240;
-const collapsedDrawerWidth = 64;
+// Sidebar removed; full-width layout constants not needed
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -86,8 +78,6 @@ const subNavConfigs: Record<string, SubNavConfig> = {
 };
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -97,16 +87,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, hasPermission } = usePermissions();
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleDesktopDrawerToggle = () => {
-    setDesktopCollapsed(!desktopCollapsed);
-  };
+  
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -132,9 +114,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleNavigation = (path: string) => {
     navigate(path);
-    if (isMobile) {
-      setMobileOpen(false);
-    }
   };
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -164,65 +143,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return () => { mounted = false; clearInterval(intervalId); };
   }, []);
 
-  const drawer = (
-    <Box>
-      <Toolbar sx={{ justifyContent: 'space-between', px: 2 }}>
-        {!desktopCollapsed && (
-          <Typography variant="h6" noWrap component="div">
-            Health Club
-          </Typography>
-        )}
-        {!isMobile && (
-          <IconButton onClick={handleDesktopDrawerToggle} size="small">
-            {desktopCollapsed ? <ChevronRight /> : <ChevronLeft />}
-          </IconButton>
-        )}
-      </Toolbar>
-      <Divider />
-      <List>
-        {menuItems.map((item) => {
-          if (!hasPermission(item.permission, item.model)) {
-            return null;
-          }
-          
-          const isActive = location.pathname === item.path;
-          
-          return (
-            <ListItem key={item.text} disablePadding>
-              <ListItemButton
-                onClick={() => handleNavigation(item.path)}
-                selected={isActive}
-                sx={{
-                  minHeight: 48,
-                  justifyContent: desktopCollapsed && !isMobile ? 'center' : 'initial',
-                  px: desktopCollapsed && !isMobile ? 1.5 : 2,
-                }}
-                title={desktopCollapsed && !isMobile ? item.text : ''}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: desktopCollapsed && !isMobile ? 'auto' : 56,
-                    justifyContent: 'center',
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                {(!desktopCollapsed || isMobile) && (
-                  <ListItemText 
-                    primary={item.text} 
-                    sx={{ 
-                      opacity: desktopCollapsed && !isMobile ? 0 : 1,
-                      transition: 'opacity 0.2s',
-                    }} 
-                  />
-                )}
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
-    </Box>
-  );
+  // Sidebar removed
 
   const renderSubNav = () => {
     if (!activeSubNav || !subNavConfigs[activeSubNav]) return null;
@@ -260,15 +181,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
       <AppBar position="fixed" sx={{ width: '100%', backgroundColor: '#8B5CF6', boxShadow: 'none' }}>
         <Toolbar sx={{ minHeight: '40px !important', py: 0.5 }}>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { md: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
+          
           
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600, fontSize: '1rem' }}>
             Health Club Management System
@@ -410,97 +323,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         {renderSubNav()}
       </AppBar>
 
-      <Box component="nav" sx={{ width: { md: desktopCollapsed ? collapsedDrawerWidth : drawerWidth }, flexShrink: { md: 0 } }}>
-        {/* Mobile drawer */}
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true,
-          }}
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { 
-              boxSizing: 'border-box', 
-              width: drawerWidth,
-              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
-              color: '#ffffff',
-              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
-              '& .MuiTypography-root': {
-                color: '#ffffff',
-                fontWeight: 500,
-              },
-              '& .MuiIconButton-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItem-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItemButton-root': {
-                color: '#ffffff',
-              },
-            },
-          }}
-        >
-          {drawer}
-        </Drawer>
-
-        {/* Desktop drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: desktopCollapsed ? collapsedDrawerWidth : drawerWidth,
-              background: 'linear-gradient(180deg, #1e3a8a 0%, #1e40af 30%, #3b82f6 70%, #60a5fa 100%)',
-              color: '#ffffff',
-              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
-              transition: theme.transitions.create('width', {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
-              overflowX: 'hidden',
-              '& .MuiTypography-root': {
-                color: '#ffffff',
-                fontWeight: 500,
-              },
-              '& .MuiIconButton-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItem-root': {
-                color: '#ffffff',
-              },
-              '& .MuiListItemButton-root': {
-                color: '#ffffff',
-                '&.Mui-selected': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                },
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                },
-              },
-              '& .MuiListItemIcon-root': {
-                color: '#ffffff',
-              },
-            },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+      {/* Sidebar removed */}
 
       <Box 
         component="main" 
         sx={{ 
           flexGrow: 1, 
           p: 2, 
-          width: { 
-            xs: '100%', 
-            md: `calc(100% - ${desktopCollapsed ? collapsedDrawerWidth : drawerWidth}px)` 
-          }, 
+          width: '100%', 
           mt: 12, 
           minHeight: 'calc(100vh - 96px)', 
           background: theme.palette.background.content 
