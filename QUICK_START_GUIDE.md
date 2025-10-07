@@ -22,6 +22,7 @@ npm install @fullcalendar/react
 npm install @fullcalendar/timegrid
 npm install @fullcalendar/daygrid
 npm install @fullcalendar/interaction
+npm install @mui/material@5 @mui/icons-material@5
 ```
 
 ### **2. Project Structure Setup**
