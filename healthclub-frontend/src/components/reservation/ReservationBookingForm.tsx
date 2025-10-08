@@ -38,6 +38,31 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [notes, setNotes] = React.useState<string>('');
   const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
 
+  const resetForm = React.useCallback(() => {
+    setGuestId('' as any);
+    setGuestName('');
+    setSelectedServiceId('' as any);
+    setSelectedServices([]);
+    setEmployeeId((initialEmployeeId as any) ?? ('' as any));
+    setLocationId((initialLocationId as any) ?? ('' as any));
+    setStart(initialStart || dayjs().add(1, 'hour').minute(0).second(0).toISOString());
+    setTotalPrice(0);
+    setSlots([]);
+    setConflicts([]);
+    setError(null);
+    setSuccess(null);
+    setAvailabilityStatus('unknown');
+    setAvailabilityReason(null);
+    setSource('');
+    setContactName('');
+    setEmail('');
+    setCountry('');
+    setPhone('');
+    setPhoneType('Mobile');
+    setNotes('');
+    setMarkConfirmed(false);
+  }, [initialEmployeeId, initialLocationId, initialStart]);
+
   React.useEffect(() => {
     (async () => {
       const [svc, emp, loc] = await Promise.all([
@@ -504,9 +529,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       </Box>
 
       <Box mt={2} display="flex" gap={2}>
-        <Button variant="text" onClick={() => {
-          setSource(''); setContactName(''); setEmail(''); setCountry(''); setPhone(''); setNotes(''); setMarkConfirmed(false);
-        }}>Cancel</Button>
+        <Button variant="text" onClick={resetForm}>Reset</Button>
         <Button variant="contained" onClick={handleSubmit}>Save</Button>
       </Box>
     </Box>
