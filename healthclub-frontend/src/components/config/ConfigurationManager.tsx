@@ -149,13 +149,13 @@ export const ConfigurationManager: React.FC = () => {
     setLoading(true);
     try {
       // TODO: Implement actual save functionality
-      console.log('Save configuration:', editingItem);
+    console.log('Save configuration:', editingItem);
       await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
       
       showSuccess('Configuration saved successfully!');
-      setIsDialogOpen(false);
-      setEditingItem(null);
-      await refreshConfigurations();
+    setIsDialogOpen(false);
+    setEditingItem(null);
+    await refreshConfigurations();
     } catch (error) {
       showError('Failed to save configuration');
     } finally {
@@ -358,26 +358,7 @@ export const ConfigurationManager: React.FC = () => {
       p: 2
     }}>
       <Container maxWidth="xl">
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Typography 
-            variant="h3" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 700,
-              background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              textAlign: 'center'
-            }}
-          >
-            System Configuration
-          </Typography>
-          <Typography variant="h6" color="text.secondary" textAlign="center" sx={{ mb: 3 }}>
-            Manage your system settings and configurations
-          </Typography>
-        </Box>
+        {/* Header removed per request */}
 
         {/* Enhanced Tabs */}
         <Paper sx={{ borderRadius: 3, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)' }}>
@@ -421,8 +402,8 @@ export const ConfigurationManager: React.FC = () => {
                   }
                 />
               ))}
-            </Tabs>
-          </Box>
+        </Tabs>
+      </Box>
 
           {/* Tab Content */}
           <Box sx={{ p: 3 }}>
@@ -471,7 +452,7 @@ export const ConfigurationManager: React.FC = () => {
                 </Button>
               </PermissionGate>
             </Box>
-
+            
             {/* Enhanced Table */}
             <EnhancedTable
               columns={getColumnsForTab(tabValue)}
@@ -511,7 +492,7 @@ export const ConfigurationManager: React.FC = () => {
             variant="dialog"
           />
         </EnhancedDialog>
-
+        
         {/* Cancellation Reason Form Dialog */}
         <CancellationReasonForm
           open={isCancellationReasonFormOpen}
