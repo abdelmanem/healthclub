@@ -31,6 +31,7 @@ from employees.views import (
     EmployeeViewSet,
     EmployeeShiftViewSet,
     ReservationEmployeeAssignmentViewSet,
+    EmployeeWeeklyScheduleViewSet,
 )
 from inventory.views import (
     SupplierViewSet, ProductCategoryViewSet, ProductViewSet,
@@ -66,6 +67,7 @@ router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'employees', EmployeeViewSet, basename='employee')
 router.register(r'shifts', EmployeeShiftViewSet, basename='shift')
+router.register(r'employee-weekly-schedules', EmployeeWeeklyScheduleViewSet, basename='employee-weekly-schedule')
 router.register(r'reservation-assignments', ReservationEmployeeAssignmentViewSet, basename='reservation-assignment')
 router.register(r'suppliers', SupplierViewSet, basename='supplier')
 router.register(r'product-categories', ProductCategoryViewSet, basename='product-category')

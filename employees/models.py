@@ -61,6 +61,52 @@ class EmployeeShift(models.Model):
         return f"{self.employee} {self.shift_date} {self.start_time}-{self.end_time}"
 
 
+class EmployeeWeeklySchedule(models.Model):
+    """Default weekly schedule template per employee.
+    Optionally effective from a given date; if null, it's considered the current default.
+    """
+    DAYS_OF_WEEK = (
+        (0, 'Sunday'),
+        (1, 'Monday'),
+        (2, 'Tuesday'),
+        (3, 'Wednesday'),
+        (4, 'Thursday'),
+        (5, 'Friday'),
+        (6, 'Saturday'),
+    )
+
+    employee = models.ForeignKey(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='weekly_schedules',
+    )
+    day_of_week = models.IntegerField(choices=DAYS_OF_WEEK)
+    is_day_off = models.BooleanField(default=False)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    lunch_start_time = models.TimeField(null=True, blank=True)
+    lunch_end_time = models.TimeField(null=True, blank=True)
+    effective_from = models.DateField(null=True, blank=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        unique_together = ('employee', 'day_of_week', 'effective_from')
+        ordering = ['employee_id', 'day_of_week']
+
+    def clean(self):
+        # If it's not a day off, enforce times
+        if not self.is_day_off:
+            if not self.start_time or not self.end_time:
+                from django.core.exceptions import ValidationError
+                raise ValidationError('Start and end times are required unless day is off.')
+            if self.end_time <= self.start_time:
+                from django.core.exceptions import ValidationError
+                raise ValidationError('End time must be after start time.')
+
+    def __str__(self) -> str:
+        return f"{self.employee} D{self.day_of_week} {'Off' if self.is_day_off else f'{self.start_time}-{self.end_time}'}"
+
 class ReservationEmployeeAssignment(models.Model):
     reservation = models.ForeignKey(
         'reservations.Reservation',

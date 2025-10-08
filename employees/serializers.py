@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, EmployeeShift, ReservationEmployeeAssignment
+from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule
 from services.models import Service
 
 
@@ -46,6 +46,16 @@ class EmployeeShiftSerializer(serializers.ModelSerializer):
             "location",
             "check_in_time",
             "check_out_time",
+        ]
+
+
+class EmployeeWeeklyScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeWeeklySchedule
+        fields = [
+            'id', 'employee', 'day_of_week', 'is_day_off',
+            'start_time', 'end_time', 'lunch_start_time', 'lunch_end_time',
+            'effective_from',
         ]
 
 

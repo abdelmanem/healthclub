@@ -1,10 +1,11 @@
 from rest_framework import viewsets, decorators, response, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Employee, EmployeeShift, ReservationEmployeeAssignment
+from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule
 from .serializers import (
     EmployeeSerializer,
     EmployeeShiftSerializer,
     ReservationEmployeeAssignmentSerializer,
+    EmployeeWeeklyScheduleSerializer,
 )
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 
@@ -84,6 +85,28 @@ class EmployeeShiftViewSet(viewsets.ModelViewSet):
         shift.check_out_time = timezone.now()
         shift.save(update_fields=["check_out_time"])
         return response.Response({"check_out_time": shift.check_out_time})
+
+
+class EmployeeWeeklyScheduleViewSet(viewsets.ModelViewSet):
+    queryset = EmployeeWeeklySchedule.objects.all().select_related('employee').order_by('employee_id', 'day_of_week')
+    serializer_class = EmployeeWeeklyScheduleSerializer
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["employee__user__username"]
+    ordering_fields = ["employee", "day_of_week", "effective_from"]
+    filterset_fields = {
+        'employee': ['exact', 'in'],
+        'day_of_week': ['exact', 'in'],
+        'effective_from': ['isnull', 'exact', 'gte', 'lte'],
+    }
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return qs
+        from guardian.shortcuts import get_objects_for_user
+        return get_objects_for_user(user, 'employees.view_employeeweeklyschedule', qs)
 
 
 class ReservationEmployeeAssignmentViewSet(viewsets.ModelViewSet):

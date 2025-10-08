@@ -1,11 +1,14 @@
 import React from 'react';
 import { Box, Paper, Typography, Grid, MenuItem, TextField, Button, Checkbox, FormControlLabel } from '@mui/material';
+import { api } from '../services/api';
 
 const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const workTypes = ['Workday','Day Off'];
 const timeOptions = Array.from({ length: 24 }, (_, h) => [h, '00']).concat(Array.from({ length: 24 }, (_, h) => [h, '30'])).map(([h, m]) => `${String(h).padStart(2, '0')}:${m}`);
 
 export const EmployeeSchedules: React.FC = () => {
+  const [employees, setEmployees] = React.useState<any[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | ''>('' as any);
   const [preservePto, setPreservePto] = React.useState(true);
   const [ignoreConflicts, setIgnoreConflicts] = React.useState(false);
   const [schedule, setSchedule] = React.useState(() => days.map((d) => ({
@@ -26,9 +29,37 @@ export const EmployeeSchedules: React.FC = () => {
     setSchedule((prev) => prev.map((row, i) => (i === idx ? { ...prev[i - 1], day: row.day } : row)));
   };
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/employees/');
+        setEmployees(res.data.results ?? res.data ?? []);
+      } catch (e) {
+        setEmployees([]);
+      }
+    })();
+  }, []);
+
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
       <Typography variant="h6" sx={{ mb: 2 }}>Employee Weekly Schedules</Typography>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+        <TextField
+          select
+          size="small"
+          label="Select Employee"
+          value={selectedEmployeeId}
+          onChange={(e) => setSelectedEmployeeId(Number(e.target.value) as any)}
+          sx={{ minWidth: 280 }}
+        >
+          <MenuItem value="">Select...</MenuItem>
+          {employees.map((emp: any) => (
+            <MenuItem key={emp.id} value={emp.id}>
+              {(emp.full_name ?? (`${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim())) || `Employee #${emp.id}`}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Box>
       <Paper sx={{ p: 2 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Week 1</Typography>
         <Grid container spacing={1} sx={{ fontSize: '0.9rem' }}>
@@ -46,32 +77,32 @@ export const EmployeeSchedules: React.FC = () => {
                 <Typography sx={{ lineHeight: '40px' }}>{row.day}</Typography>
               </Grid>
               <Grid item xs={12} md={2}>
-                <TextField select fullWidth size="small" value={row.type} onChange={(e) => updateRow(idx, 'type', e.target.value)}>
+                <TextField select fullWidth size="small" value={row.type} onChange={(e) => updateRow(idx, 'type', e.target.value)} disabled={!selectedEmployeeId}>
                   {workTypes.map((wt) => <MenuItem key={wt} value={wt}>{wt}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)}>
+                <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} disabled={!selectedEmployeeId}>
                   {timeOptions.map((t) => <MenuItem key={`s-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)}>
+                <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} disabled={!selectedEmployeeId}>
                   {timeOptions.map((t) => <MenuItem key={`e-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)}>
+                <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)} disabled={!selectedEmployeeId}>
                   {timeOptions.map((t) => <MenuItem key={`ls-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)}>
+                <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)} disabled={!selectedEmployeeId}>
                   {timeOptions.map((t) => <MenuItem key={`le-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={1}>
-                <Button variant="text" size="small" onClick={() => copyPrevious(idx)}>Copy Previous Day</Button>
+                <Button variant="text" size="small" onClick={() => copyPrevious(idx)} disabled={!selectedEmployeeId}>Copy Previous Day</Button>
               </Grid>
             </React.Fragment>
           ))}
@@ -92,7 +123,7 @@ export const EmployeeSchedules: React.FC = () => {
 
         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
           <Button variant="outlined">Cancel</Button>
-          <Button variant="contained">Save</Button>
+          <Button variant="contained" disabled={!selectedEmployeeId}>Save</Button>
         </Box>
       </Paper>
     </Box>

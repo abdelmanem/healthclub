@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Employee, EmployeeShift, ReservationEmployeeAssignment
+from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule
 
 
 @admin.register(Employee)
@@ -13,6 +13,12 @@ class EmployeeAdmin(admin.ModelAdmin):
 class EmployeeShiftAdmin(admin.ModelAdmin):
     list_display = ("employee", "shift_date", "start_time", "end_time", "location")
     list_filter = ("shift_date", "location")
+
+
+@admin.register(EmployeeWeeklySchedule)
+class EmployeeWeeklyScheduleAdmin(admin.ModelAdmin):
+    list_display = ("employee", "day_of_week", "is_day_off", "start_time", "end_time", "effective_from")
+    list_filter = ("day_of_week", "is_day_off", "effective_from")
     search_fields = ("employee__user__username",)
     list_select_related = ("employee", "location")
 
