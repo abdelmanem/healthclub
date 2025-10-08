@@ -6,9 +6,10 @@ import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
 import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, initialStart, initialEmployeeId, initialLocationId }) => {
+export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; onClose?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, onClose, initialStart, initialEmployeeId, initialLocationId }) => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
@@ -529,6 +530,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       </Box>
 
       <Box mt={2} display="flex" gap={2}>
+        <Button variant="outlined" color="inherit" onClick={() => { if (onClose) { onClose(); } else { navigate(-1); } }}>Close</Button>
         <Button variant="text" onClick={resetForm}>Reset</Button>
         <Button variant="contained" onClick={handleSubmit}>Save</Button>
       </Box>

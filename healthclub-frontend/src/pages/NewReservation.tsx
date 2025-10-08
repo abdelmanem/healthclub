@@ -13,6 +13,7 @@ export const NewReservation: React.FC = () => {
           onCreated={() => {
             navigate('/reservations');
           }}
+          onClose={() => navigate('/reservations')}
         />
       </DialogContent>
     </Box>
