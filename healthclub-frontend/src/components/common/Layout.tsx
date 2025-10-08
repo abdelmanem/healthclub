@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   AppBar,
@@ -21,8 +21,6 @@ import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';
 import { notificationsService, NotificationItem } from '../../services/notifications';
 
-// Sidebar removed; full-width layout constants not needed
-
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -30,18 +28,6 @@ interface LayoutProps {
 interface SubNavConfig {
   items: Array<{ label: string; path: string }>;
 }
-
-interface SideMenuItem {
-  text: string;
-  icon: React.ReactNode;
-  path: string;
-  permission: string;
-  model: string;
-}
-
-const menuItems: SideMenuItem[] = [
-  
-];
 
 const subNavConfigs: Record<string, SubNavConfig> = {
   'Appointments': {
@@ -61,7 +47,7 @@ const subNavConfigs: Record<string, SubNavConfig> = {
   },
   'Products': {
     items: [
-      { label: 'service', path: '/services' }
+      { label: 'Service', path: '/services' }
     ]
   },
   'Reports': {
@@ -77,6 +63,17 @@ const subNavConfigs: Record<string, SubNavConfig> = {
   }
 };
 
+const mainNavItems = [
+  'Appointments',
+  'Customers',
+  'Housekeeping',
+  'Orders',
+  'Schedules',
+  'Marketing',
+  'Products',
+  'Reports'
+];
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
@@ -89,7 +86,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const theme = useTheme();
   const { user, hasPermission } = usePermissions();
   
-
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
@@ -106,24 +102,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setNotifAnchorEl(null);
   };
 
-  const clearNotifications = async () => {
-    await notificationsService.markAllRead();
-    const list = await notificationsService.list();
-    setNotifications(list);
-  };
-
-  const handleNavigation = (path: string) => {
-    navigate(path);
-  };
+  const clearNotifications = useCallback(async () => {
+    try {
+      await notificationsService.markAllRead();
+      const list = await notificationsService.list();
+      setNotifications(list);
+    } catch (error) {
+      console.error('Failed to clear notifications:', error);
+    }
+  }, []);
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchValue.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`);
+      setSearchValue('');
     }
   };
 
   const toggleSubNav = (navKey: string) => {
-    setActiveSubNav(activeSubNav === navKey ? null : navKey);
+    setActiveSubNav(prev => prev === navKey ? null : navKey);
   };
 
   // Hide sub-nav on route change
@@ -134,16 +131,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Load notifications and poll every 60s
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
-      const list = await notificationsService.list();
-      if (mounted) setNotifications(list);
+    
+    const loadNotifications = async () => {
+      try {
+        const list = await notificationsService.list();
+        if (mounted) setNotifications(list);
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
     };
-    load();
-    const intervalId = setInterval(load, 60000);
-    return () => { mounted = false; clearInterval(intervalId); };
+    
+    loadNotifications();
+    const intervalId = setInterval(loadNotifications, 60000);
+    
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
   }, []);
-
-  // Sidebar removed
 
   const renderSubNav = () => {
     if (!activeSubNav || !subNavConfigs[activeSubNav]) return null;
@@ -151,7 +156,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const config = subNavConfigs[activeSubNav];
     
     return (
-      <Box sx={{ backgroundColor: '#ffffff', px: 2, py: 0.5, borderBottom: '1px solid #E5E7EB' }}>
+      <Box 
+        sx={{ 
+          backgroundColor: '#ffffff', 
+          px: 2, 
+          py: 0.5, 
+          borderBottom: '1px solid #E5E7EB' 
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {config.items.map((item) => (
             <Button
@@ -177,19 +189,37 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     );
   };
 
+  const unreadCount = notifications.length;
+  const userInitial = user?.user.first_name?.[0] || user?.user.username?.[0] || 'U';
+
   return (
     <Box sx={{ display: 'flex', width: '100%', height: '100vh' }}>
-      <AppBar position="fixed" sx={{ width: '100%', backgroundColor: '#8B5CF6', boxShadow: 'none' }}>
+      <AppBar 
+        position="fixed" 
+        sx={{ 
+          width: '100%', 
+          backgroundColor: '#8B5CF6', 
+          boxShadow: 'none' 
+        }}
+      >
         <Toolbar sx={{ minHeight: '40px !important', py: 0.5 }}>
-          
-          
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 600, fontSize: '1rem' }}>
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1, 
+              fontWeight: 600, 
+              fontSize: '1rem' 
+            }}
+          >
             Health Club Management System
           </Typography>
+          
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <TextField
               size="small"
-              placeholder="scan ID or type name"
+              placeholder="Scan ID or type name"
               variant="outlined"
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
@@ -212,6 +242,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ),
               }}
             />
+            
             <Button
               variant="contained"
               sx={{
@@ -226,47 +257,65 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               + Pro Tools
             </Button>
-            <IconButton sx={{ color: 'white', display: { xs: 'none', md: 'inline-flex' } }} onClick={handleNotifOpen}>
-              <Badge badgeContent={notifications.length} color="error">
+            
+            <IconButton 
+              sx={{ color: 'white', display: { xs: 'none', md: 'inline-flex' } }} 
+              onClick={handleNotifOpen}
+              aria-label="notifications"
+            >
+              <Badge badgeContent={unreadCount} color="error">
                 <Notifications />
               </Badge>
             </IconButton>
+            
             <Menu
               anchorEl={notifAnchorEl}
               open={Boolean(notifAnchorEl)}
               onClose={handleNotifClose}
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              PaperProps={{ sx: { minWidth: 280 } }}
+              PaperProps={{ sx: { minWidth: 280, maxHeight: 400 } }}
             >
               {notifications.length === 0 ? (
                 <MenuItem disabled>No notifications</MenuItem>
               ) : (
                 <>
                   {notifications.map((n) => (
-                    <MenuItem key={n.id} onClick={handleNotifClose}>
+                    <MenuItem 
+                      key={n.id} 
+                      onClick={handleNotifClose}
+                      sx={{ whiteSpace: 'normal' }}
+                    >
                       {n.text}
                     </MenuItem>
                   ))}
                   <Divider />
-                  <MenuItem onClick={() => { clearNotifications(); handleNotifClose(); }} sx={{ color: 'error.main', fontWeight: 600 }}>
+                  <MenuItem 
+                    onClick={() => { 
+                      clearNotifications(); 
+                      handleNotifClose(); 
+                    }} 
+                    sx={{ color: 'error.main', fontWeight: 600 }}
+                  >
                     Clear all
                   </MenuItem>
                 </>
               )}
             </Menu>
+            
             <IconButton
               size="large"
-              aria-label="account of current user"
+              aria-label="account menu"
               aria-controls="menu-appbar"
               aria-haspopup="true"
               onClick={handleMenuOpen}
               sx={{ color: 'white' }}
             >
               <Avatar sx={{ width: 32, height: 32, backgroundColor: '#A855F7' }}>
-                {user?.user.first_name?.[0] || user?.user.username?.[0] || 'U'}
+                {userInitial}
               </Avatar>
             </IconButton>
+            
             <Menu
               id="menu-appbar"
               anchorEl={anchorEl}
@@ -280,7 +329,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <AccountCircle sx={{ mr: 1 }} />
                 Profile
               </MenuItem>
-              <MenuItem onClick={() => { handleMenuClose(); navigate('/config'); }}>
+              <MenuItem onClick={() => { 
+                handleMenuClose(); 
+                navigate('/config'); 
+              }}>
                 <Settings sx={{ mr: 1 }} />
                 Settings
               </MenuItem>
@@ -291,9 +343,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </Menu>
           </Box>
         </Toolbar>
+        
         <Box sx={{ backgroundColor: '#8B5CF6', px: 2, py: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {['Appointments','Customers','Housekeeping','Orders','Schedules','Marketing','Products','Reports'].map((label) => {
+            {mainNavItems.map((label) => {
               const hasSubNav = !!subNavConfigs[label];
               return (
                 <Button
@@ -307,14 +360,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
                   }}
                   endIcon={hasSubNav ? <ChevronRight sx={{ fontSize: 16 }} /> : undefined}
-                  onClick={() => hasSubNav ? toggleSubNav(label) : null}
+                  onClick={() => hasSubNav && toggleSubNav(label)}
                 >
                   {label}
                 </Button>
               );
             })}
             <Box sx={{ flexGrow: 1 }} />
-            <IconButton sx={{ color: 'white' }} onClick={() => navigate('/config')}>
+            <IconButton 
+              sx={{ color: 'white' }} 
+              onClick={() => navigate('/config')}
+              aria-label="settings"
+            >
               <Settings />
             </IconButton>
           </Box>
@@ -322,8 +379,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {renderSubNav()}
       </AppBar>
-
-      {/* Sidebar removed */}
 
       <Box 
         component="main" 
