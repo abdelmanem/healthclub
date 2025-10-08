@@ -101,6 +101,17 @@ type StatusMessage = {
   msg: string;
 };
 
+type ShiftConfiguration = {
+  id?: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  lunch_start_time: string;
+  lunch_end_time: string;
+  is_active: boolean;
+  is_default: boolean;
+};
+
 type ScheduleApiRow = {
   id?: number;
   employee: number;
@@ -170,6 +181,14 @@ const isCurrentWeek = (weekStartDate: string): boolean => {
   return weekStartDate === currentWeekStart;
 };
 
+const convertShiftConfigToTemplate = (config: ShiftConfiguration) => ({
+  name: config.name,
+  start: config.start_time,
+  end: config.end_time,
+  lunchStart: config.lunch_start_time,
+  lunchEnd: config.lunch_end_time
+});
+
 const detectShiftType = (schedule: Omit<DaySchedule, 'day' | 'type' | 'shift'>): ShiftType => {
   // Check if times match any predefined shift
   for (const [key, template] of Object.entries(SHIFT_TEMPLATES)) {
@@ -212,6 +231,9 @@ export const EmployeeSchedules: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [weekRefDate, setWeekRefDate] = useState<string>(getTodayDateString);
   const [schedule, setSchedule] = useState<DaySchedule[]>(createDefaultSchedule);
+  const [shiftConfigurations, setShiftConfigurations] = useState<ShiftConfiguration[]>([]);
+  const [showShiftConfig, setShowShiftConfig] = useState(false);
+  const [editingShift, setEditingShift] = useState<ShiftConfiguration | null>(null);
 
   // ============================================================================
   // Callbacks
@@ -274,6 +296,29 @@ export const EmployeeSchedules: React.FC = () => {
     });
   }, []);
 
+  const getCurrentShiftTemplates = useCallback(() => {
+    const templates: Record<string, any> = {};
+    
+    // Add custom shift template
+    templates.custom = {
+      name: 'Custom',
+      start: '11:00',
+      end: '23:00',
+      lunchStart: '18:00',
+      lunchEnd: '18:30'
+    };
+    
+    // Add configured shift templates
+    shiftConfigurations.forEach((config, index) => {
+      if (config.is_active) {
+        const key = `config_${config.id || index}`;
+        templates[key] = convertShiftConfigToTemplate(config);
+      }
+    });
+    
+    return templates;
+  }, [shiftConfigurations]);
+
   
 
   // ============================================================================
@@ -319,6 +364,28 @@ export const EmployeeSchedules: React.FC = () => {
     } else {
       await api.post('/employee-weekly-schedules/', payload);
     }
+  };
+
+  const fetchShiftConfigurations = async (): Promise<ShiftConfiguration[]> => {
+    try {
+      const res = await api.get('/shift-configurations/');
+      return res.data?.results ?? res.data ?? [];
+    } catch (error) {
+      console.error('Failed to fetch shift configurations:', error);
+      return [];
+    }
+  };
+
+  const saveShiftConfiguration = async (config: ShiftConfiguration): Promise<void> => {
+    if (config.id) {
+      await api.patch(`/shift-configurations/${config.id}/`, config);
+    } else {
+      await api.post('/shift-configurations/', config);
+    }
+  };
+
+  const deleteShiftConfiguration = async (id: number): Promise<void> => {
+    await api.delete(`/shift-configurations/${id}/`);
   };
 
   const createSchedulePayload = (
@@ -404,18 +471,23 @@ export const EmployeeSchedules: React.FC = () => {
   // Effects
   // ============================================================================
 
-  // Load employees on mount
+  // Load employees and shift configurations on mount
   useEffect(() => {
-    const loadEmployees = async () => {
+    const loadInitialData = async () => {
       try {
-        const res = await api.get('/employees/');
-        setEmployees(res.data.results ?? res.data ?? []);
+        const [employeesRes, shiftConfigsRes] = await Promise.all([
+          api.get('/employees/'),
+          fetchShiftConfigurations()
+        ]);
+        setEmployees(employeesRes.data.results ?? employeesRes.data ?? []);
+        setShiftConfigurations(shiftConfigsRes);
       } catch (error) {
-        console.error('Failed to load employees:', error);
+        console.error('Failed to load initial data:', error);
         setEmployees([]);
+        setShiftConfigurations([]);
       }
     };
-    loadEmployees();
+    loadInitialData();
   }, []);
 
   // Load schedule when employee or week changes
@@ -543,21 +615,237 @@ export const EmployeeSchedules: React.FC = () => {
 
         {/* Quick Apply Shifts */}
         <Box sx={{ mb: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-            Quick Apply Shift to All Workdays:
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Quick Apply Shift to All Workdays:
+            </Typography>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setShowShiftConfig(!showShiftConfig)}
+              sx={{ textTransform: 'none' }}
+            >
+              {showShiftConfig ? 'Hide' : 'Manage'} Shift Configurations
+            </Button>
+          </Box>
           <ButtonGroup variant="outlined" size="small">
-            <Button onClick={() => applyShiftToAll('morning')}>
-              Morning (7:00-15:00)
-            </Button>
-            <Button onClick={() => applyShiftToAll('afternoon')}>
-              Afternoon (15:00-23:00)
-            </Button>
-            <Button onClick={() => applyShiftToAll('night')}>
-              Night (23:00-7:00)
-            </Button>
+            {Object.entries(getCurrentShiftTemplates()).map(([key, template]) => (
+              <Button key={key} onClick={() => applyShiftToAll(key as any)}>
+                {template.name} ({template.start}-{template.end})
+              </Button>
+            ))}
           </ButtonGroup>
         </Box>
+
+        {/* Shift Configuration Management */}
+        {showShiftConfig && (
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              Shift Configuration Management
+            </Typography>
+            
+            {/* Add New Shift Button */}
+            <Box sx={{ mb: 2 }}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => setEditingShift({
+                  name: '',
+                  start_time: '09:00',
+                  end_time: '17:00',
+                  lunch_start_time: '12:00',
+                  lunch_end_time: '12:30',
+                  is_active: true,
+                  is_default: false
+                })}
+              >
+                Add New Shift Configuration
+              </Button>
+            </Box>
+
+            {/* Shift Configurations List */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {shiftConfigurations.map((config) => (
+                <Box
+                  key={config.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    p: 1,
+                    bgcolor: 'white',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'grey.200'
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      {config.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {config.start_time} - {config.end_time} | Lunch: {config.lunch_start_time} - {config.lunch_end_time}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {config.is_default && (
+                      <Box
+                        sx={{
+                          px: 1,
+                          py: 0.5,
+                          bgcolor: 'primary.main',
+                          color: 'primary.contrastText',
+                          borderRadius: 1,
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        DEFAULT
+                      </Box>
+                    )}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setEditingShift(config)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="error"
+                      onClick={async () => {
+                        if (config.id && window.confirm('Are you sure you want to delete this shift configuration?')) {
+                          try {
+                            await deleteShiftConfiguration(config.id);
+                            setShiftConfigurations(prev => prev.filter(c => c.id !== config.id));
+                            setStatus({ type: 'success', msg: 'Shift configuration deleted successfully!' });
+                          } catch (error) {
+                            setStatus({ type: 'error', msg: 'Failed to delete shift configuration' });
+                          }
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Edit Shift Configuration Dialog */}
+            {editingShift && (
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  bgcolor: 'white',
+                  borderRadius: 1,
+                  border: '2px solid',
+                  borderColor: 'primary.main'
+                }}
+              >
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  {editingShift.id ? 'Edit' : 'Add'} Shift Configuration
+                </Typography>
+                
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField
+                    label="Shift Name"
+                    value={editingShift.name}
+                    onChange={(e) => setEditingShift(prev => prev ? { ...prev, name: e.target.value } : null)}
+                    size="small"
+                    fullWidth
+                  />
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField
+                      label="Start Time"
+                      type="time"
+                      value={editingShift.start_time}
+                      onChange={(e) => setEditingShift(prev => prev ? { ...prev, start_time: e.target.value } : null)}
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="End Time"
+                      type="time"
+                      value={editingShift.end_time}
+                      onChange={(e) => setEditingShift(prev => prev ? { ...prev, end_time: e.target.value } : null)}
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField
+                      label="Lunch Start"
+                      type="time"
+                      value={editingShift.lunch_start_time}
+                      onChange={(e) => setEditingShift(prev => prev ? { ...prev, lunch_start_time: e.target.value } : null)}
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TextField
+                      label="Lunch End"
+                      type="time"
+                      value={editingShift.lunch_end_time}
+                      onChange={(e) => setEditingShift(prev => prev ? { ...prev, lunch_end_time: e.target.value } : null)}
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={editingShift.is_active}
+                          onChange={(e) => setEditingShift(prev => prev ? { ...prev, is_active: e.target.checked } : null)}
+                        />
+                      }
+                      label="Active"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={editingShift.is_default}
+                          onChange={(e) => setEditingShift(prev => prev ? { ...prev, is_default: e.target.checked } : null)}
+                        />
+                      }
+                      label="Default"
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                      variant="contained"
+                      onClick={async () => {
+                        try {
+                          await saveShiftConfiguration(editingShift);
+                          const updatedConfigs = await fetchShiftConfigurations();
+                          setShiftConfigurations(updatedConfigs);
+                          setEditingShift(null);
+                          setStatus({ type: 'success', msg: 'Shift configuration saved successfully!' });
+                        } catch (error) {
+                          setStatus({ type: 'error', msg: 'Failed to save shift configuration' });
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => setEditingShift(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        )}
 
         {/* Loading Indicator */}
         {loading && (
@@ -620,7 +908,7 @@ export const EmployeeSchedules: React.FC = () => {
                         disabled={isDisabled || isDayOff}
                         sx={{ opacity: isDayOff ? 0.5 : 1 }}
                       >
-                        {Object.entries(SHIFT_TEMPLATES).map(([key, template]) => (
+                        {Object.entries(getCurrentShiftTemplates()).map(([key, template]) => (
                           <MenuItem key={key} value={key}>
                             {template.name}
                           </MenuItem>
