@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography, Grid, MenuItem, TextField, Button, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Paper, Typography, Grid, MenuItem, TextField, Button, Checkbox, FormControlLabel, Alert } from '@mui/material';
 import { api } from '../services/api';
 
 const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -11,6 +11,15 @@ export const EmployeeSchedules: React.FC = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | ''>('' as any);
   const [preservePto, setPreservePto] = React.useState(true);
   const [ignoreConflicts, setIgnoreConflicts] = React.useState(false);
+  const [status, setStatus] = React.useState<{type: 'success' | 'error'; msg: string} | null>(null);
+  const [weekRefDate, setWeekRefDate] = React.useState<string>(() => {
+    const d = new Date();
+    // yyyy-mm-dd in local time
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [schedule, setSchedule] = React.useState(() => days.map((d) => ({
     day: d,
     type: 'Workday',
@@ -27,6 +36,80 @@ export const EmployeeSchedules: React.FC = () => {
   const copyPrevious = (idx: number) => {
     if (idx <= 0) return;
     setSchedule((prev) => prev.map((row, i) => (i === idx ? { ...prev[i - 1], day: row.day } : row)));
+  };
+
+  const getWeekStartLocal = (ref: string) => {
+    // ref is yyyy-mm-dd in local timezone
+    const [y, m, d] = ref.split('-').map((v) => parseInt(v, 10));
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0..6, Sunday=0
+    const start = new Date(date);
+    start.setDate(date.getDate() - day); // move back to Sunday
+    const yyyy = start.getFullYear();
+    const mm = String(start.getMonth() + 1).padStart(2, '0');
+    const dd = String(start.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`; // date only
+  };
+
+  const getWeekEndLocal = (startIsoDateOnly: string) => {
+    const [y, m, d] = startIsoDateOnly.split('-').map((v) => parseInt(v, 10));
+    const start = new Date(y, m - 1, d);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const yyyy = end.getFullYear();
+    const mm = String(end.getMonth() + 1).padStart(2, '0');
+    const dd = String(end.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const formatRange = (startIso: string, endIso: string) => {
+    const fmt = (iso: string) => {
+      const [y, m, d] = iso.split('-').map((v) => parseInt(v, 10));
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+    };
+    const startStr = fmt(startIso);
+    const endStr = fmt(endIso);
+    return `${startStr} - ${endStr}`;
+  };
+
+  const shiftWeek = (direction: -1 | 1) => {
+    const start = getWeekStartLocal(weekRefDate);
+    const [y, m, d] = start.split('-').map((v) => parseInt(v, 10));
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + (7 * direction));
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    // keep ref date as the new week start (so label remains correct and saves correctly)
+    setWeekRefDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleSave = async () => {
+    setStatus(null);
+    if (!selectedEmployeeId) return;
+    const effectiveFrom = getWeekStartLocal(weekRefDate);
+    try {
+      const payloads = schedule.map((row, idx) => {
+        const isDayOff = row.type !== 'Workday';
+        return {
+          employee: Number(selectedEmployeeId),
+          day_of_week: idx, // 0=Sunday
+          is_day_off: isDayOff,
+          start_time: isDayOff ? null : row.start,
+          end_time: isDayOff ? null : row.end,
+          lunch_start_time: isDayOff ? null : row.lunchStart,
+          lunch_end_time: isDayOff ? null : row.lunchEnd,
+          effective_from: effectiveFrom,
+        };
+      });
+      // Send sequentially or in parallel
+      await Promise.all(payloads.map((p) => api.post('/employee-weekly-schedules/', p)));
+      setStatus({ type: 'success', msg: 'Schedule saved.' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Failed to save schedule';
+      setStatus({ type: 'error', msg });
+    }
   };
 
   React.useEffect(() => {
@@ -61,6 +144,9 @@ export const EmployeeSchedules: React.FC = () => {
         </TextField>
       </Box>
       <Paper sx={{ p: 2 }}>
+        {status && (
+          <Alert severity={status.type} sx={{ mb: 2 }}>{status.msg}</Alert>
+        )}
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Week 1</Typography>
         <Grid container spacing={1} sx={{ fontSize: '0.9rem' }}>
           <Grid item xs={12} md={3} sx={{ fontWeight: 600 }}>Day</Grid>
@@ -109,9 +195,24 @@ export const EmployeeSchedules: React.FC = () => {
         </Grid>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, flexWrap: 'wrap' }}>
-          <TextField select size="small" label="Update schedule starting the week of" value={"28 Sep - 4 Oct"} sx={{ minWidth: 220 }}>
-            <MenuItem value={"28 Sep - 4 Oct"}>28 Sep - 4 Oct</MenuItem>
-          </TextField>
+          {(() => {
+            const weekStart = getWeekStartLocal(weekRefDate);
+            const weekEnd = getWeekEndLocal(weekStart);
+            const label = `Update schedule starting the week of`;
+            const display = formatRange(weekStart, weekEnd);
+            return (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TextField
+                  size="small"
+                  label={label}
+                  value={display}
+                  InputProps={{ readOnly: true }}
+                />
+                <Button variant="outlined" size="small" onClick={() => shiftWeek(-1)}>Previous</Button>
+                <Button variant="outlined" size="small" onClick={() => shiftWeek(1)}>Next</Button>
+              </Box>
+            );
+          })()}
           <FormControlLabel control={<Checkbox checked={preservePto} onChange={(e) => setPreservePto(e.target.checked)} />} label="Preserve Vacation and Personal days" />
         </Box>
 
@@ -122,8 +223,8 @@ export const EmployeeSchedules: React.FC = () => {
         <FormControlLabel sx={{ mt: 1 }} control={<Checkbox checked={ignoreConflicts} onChange={(e) => setIgnoreConflicts(e.target.checked)} />} label="Ignore Schedule Conflicts" />
 
         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-          <Button variant="outlined">Cancel</Button>
-          <Button variant="contained" disabled={!selectedEmployeeId}>Save</Button>
+          <Button variant="outlined" onClick={() => { setStatus(null); }}>Cancel</Button>
+          <Button variant="contained" disabled={!selectedEmployeeId} onClick={handleSave}>Save</Button>
         </Box>
       </Paper>
     </Box>
