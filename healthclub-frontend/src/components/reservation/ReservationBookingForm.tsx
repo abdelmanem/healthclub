@@ -34,6 +34,7 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [contactName, setContactName] = React.useState<string>('');
   const [email, setEmail] = React.useState<string>('');
   const [country, setCountry] = React.useState<string>('');
+  const [countries, setCountries] = React.useState<Array<{ code: string; name: string }>>([]);
   const [phone, setPhone] = React.useState<string>('');
   const [phoneType, setPhoneType] = React.useState<'Mobile' | 'Home' | 'Work'>('Mobile');
   const [notes, setNotes] = React.useState<string>('');
@@ -75,6 +76,37 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       setEmployees((emp.data.results ?? emp.data ?? []));
       setLocations((loc.data.results ?? loc.data ?? []));
     })();
+  }, []);
+
+  // Load country list: try Intl API first; fallback to REST Countries
+  React.useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const supported = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('region') : [];
+        if (Array.isArray(supported) && supported.length > 0) {
+          const dn = new (Intl as any).DisplayNames(undefined, { type: 'region' });
+          const items = supported
+            .filter((c: string) => /^[A-Z]{2,3}$/.test(c))
+            .map((code: string) => ({ code, name: dn.of(code) as string }))
+            .filter((x: any) => !!x.name)
+            .sort((a: any, b: any) => a.name.localeCompare(b.name));
+          setCountries(items);
+          return;
+        }
+      } catch {}
+      try {
+        const resp = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2');
+        const data = await resp.json();
+        const items = (Array.isArray(data) ? data : [])
+          .map((r: any) => ({ code: r.cca2, name: r?.name?.common }))
+          .filter((r: any) => r.code && r.name)
+          .sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setCountries(items);
+      } catch {
+        setCountries([]);
+      }
+    };
+    loadCountries();
   }, []);
 
   // Prefill fields in edit mode
@@ -473,9 +505,21 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
             <TextField label="Email" fullWidth value={email} onChange={(e) => setEmail(e.target.value)} />
           </Box>
         </Box>
-        {/* Country (optional, kept for parity) */}
+        {/* Country (optional, from Intl API) */}
         <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <TextField label="Country" fullWidth value={country} onChange={(e) => setCountry(e.target.value)} />
+          <TextField
+            select
+            label="Country"
+            fullWidth
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            SelectProps={{ native: false }}
+          >
+            <MenuItem value="">Select</MenuItem>
+            {countries.map((c) => (
+              <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
+            ))}
+          </TextField>
         </Box>
         {/* Notes */}
         <Box sx={{ gridColumn: 'span 12' }}>

@@ -20,6 +20,7 @@ class Guest(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
+    country = models.CharField(max_length=100, blank=True)
     medical_notes = models.TextField(blank=True)
     membership_id = models.CharField(max_length=64, unique=True)
     

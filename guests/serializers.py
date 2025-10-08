@@ -66,6 +66,7 @@ class GuestSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "email",
             "phone",
+            "country",
             "medical_notes",
             "membership_id",
             "membership_tier",
