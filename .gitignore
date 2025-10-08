@@ -11,3 +11,4 @@ staticfiles/
 media/
 node_modules
 *.pyc
+*.pyc
