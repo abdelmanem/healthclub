@@ -583,18 +583,33 @@ export const StaffSchedulingCalendar: React.FC = () => {
     if (!r) return;
     
     try {
+      // Validate against weekly schedule: prevent drops to day off or off-hours
+      const newStartDate: Date | null = dropInfo?.event?.start ? new Date(dropInfo.event.start) : null;
+      const newEndDate: Date | null = dropInfo?.event?.end ? new Date(dropInfo.event.end) : null;
+      const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
+      const targetEmployeeId = resource ? Number(resource.id) : (r.employee ?? null);
+      if (targetEmployeeId && newStartDate) {
+        const startOk = isWithinEmployeeShift(targetEmployeeId, newStartDate);
+        const endOk = newEndDate ? isWithinEmployeeShift(targetEmployeeId, newEndDate) : true;
+        if (!startOk || !endOk) {
+          window.alert("Cannot move reservation: outside employee's working hours or on a day off.");
+          dropInfo.revert();
+          return;
+        }
+      }
+
       const body: any = {
         start_time: dayjs(dropInfo.event.start).toISOString(),
         end_time: dayjs(dropInfo.event.end).toISOString(),
       };
-      const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
+      const resource2 = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
       
       // Update times first (employee may not be writable on reservation serializer)
       await api.patch(`/reservations/${r.id}/`, body);
       
       // If resource (employee) changed, use assignment endpoint
-      if (resource) {
-        const newEmployeeId = Number(resource.id);
+      if (resource2) {
+        const newEmployeeId = Number(resource2.id);
         
         try {
           // Load existing assignments for this reservation (client-side filter for safety)
