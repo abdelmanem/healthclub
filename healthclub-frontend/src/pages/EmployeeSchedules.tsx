@@ -11,6 +11,7 @@ export const EmployeeSchedules: React.FC = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<number | ''>('' as any);
   const [preservePto, setPreservePto] = React.useState(true);
   const [ignoreConflicts, setIgnoreConflicts] = React.useState(false);
+  const [alsoUpdateDefault, setAlsoUpdateDefault] = React.useState(false);
   const [status, setStatus] = React.useState<{type: 'success' | 'error'; msg: string} | null>(null);
   const [weekRefDate, setWeekRefDate] = React.useState<string>(() => {
     const d = new Date();
@@ -123,6 +124,34 @@ export const EmployeeSchedules: React.FC = () => {
           await api.post('/employee-weekly-schedules/', p);
         }
       }));
+      // Optionally mirror to default schedule (effective_from=null)
+      if (alsoUpdateDefault) {
+        const defaultRes = await api.get('/employee-weekly-schedules/', { params: { employee: Number(selectedEmployeeId), 'effective_from__isnull': 'true' } }).catch(() => ({ data: [] }));
+        const defaults = (defaultRes.data?.results ?? defaultRes.data ?? []) as any[];
+        const byDayDefault: Record<number, any> = {};
+        for (const r of defaults) byDayDefault[Number(r.day_of_week)] = r;
+        const defaultPayloads = schedule.map((row, idx) => {
+          const isDayOff = row.type !== 'Workday';
+          return {
+            employee: Number(selectedEmployeeId),
+            day_of_week: idx,
+            is_day_off: isDayOff,
+            start_time: isDayOff ? null : ensureSeconds(row.start),
+            end_time: isDayOff ? null : ensureSeconds(row.end),
+            lunch_start_time: isDayOff ? null : ensureSeconds(row.lunchStart),
+            lunch_end_time: isDayOff ? null : ensureSeconds(row.lunchEnd),
+            effective_from: null,
+          } as any;
+        });
+        await Promise.all(defaultPayloads.map(async (p) => {
+          const existingRow = byDayDefault[p.day_of_week];
+          if (existingRow && existingRow.id) {
+            await api.patch(`/employee-weekly-schedules/${existingRow.id}/`, p);
+          } else {
+            await api.post('/employee-weekly-schedules/', p);
+          }
+        }));
+      }
       setStatus({ type: 'success', msg: 'Schedule saved.' });
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Failed to save schedule';
@@ -140,6 +169,38 @@ export const EmployeeSchedules: React.FC = () => {
       }
     })();
   }, []);
+
+  // Load schedule for selected employee and current week; fallback to default
+  React.useEffect(() => {
+    const loadEmployeeWeek = async () => {
+      if (!selectedEmployeeId) return;
+      try {
+        const effectiveFrom = getWeekStartLocal(weekRefDate);
+        const [exactRes, defaultRes] = await Promise.all([
+          api.get('/employee-weekly-schedules/', { params: { employee: Number(selectedEmployeeId), effective_from: effectiveFrom } }).catch(() => ({ data: [] })),
+          api.get('/employee-weekly-schedules/', { params: { employee: Number(selectedEmployeeId), 'effective_from__isnull': 'true' } }).catch(() => ({ data: [] })),
+        ]);
+        const listA = (exactRes.data?.results ?? exactRes.data ?? []) as any[];
+        const listB = (defaultRes.data?.results ?? defaultRes.data ?? []) as any[];
+        const byDay: Record<number, any> = {};
+        for (const r of listB) byDay[Number(r.day_of_week)] = r;
+        for (const r of listA) byDay[Number(r.day_of_week)] = r;
+        const toTime = (t?: string | null) => {
+          if (!t) return '';
+          const parts = String(t).split(':');
+          return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}`;
+        };
+        const newSchedule = days.map((_, idx) => {
+          const row = byDay[idx];
+          if (!row) return { day: days[idx], type: 'Workday', start: '11:00', end: '23:00', lunchStart: '18:00', lunchEnd: '18:30' };
+          if (row.is_day_off) return { day: days[idx], type: 'Day Off', start: '11:00', end: '23:00', lunchStart: '18:00', lunchEnd: '18:30' };
+          return { day: days[idx], type: 'Workday', start: toTime(row.start_time) || '11:00', end: toTime(row.end_time) || '23:00', lunchStart: toTime(row.lunch_start_time) || '18:00', lunchEnd: toTime(row.lunch_end_time) || '18:30' };
+        });
+        setSchedule(newSchedule);
+      } catch {}
+    };
+    loadEmployeeWeek();
+  }, [selectedEmployeeId, weekRefDate]);
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
@@ -178,7 +239,7 @@ export const EmployeeSchedules: React.FC = () => {
           {schedule.map((row, idx) => (
             <React.Fragment key={row.day}>
               <Grid item xs={12} md={3}>
-                <Typography sx={{ lineHeight: '40px' }}>{row.day}</Typography>
+                <Typography sx={{ lineHeight: '40px', opacity: row.type === 'Day Off' ? 0.6 : 1 }}>{row.day}</Typography>
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField select fullWidth size="small" value={row.type} onChange={(e) => updateRow(idx, 'type', e.target.value)} disabled={!selectedEmployeeId}>
@@ -186,27 +247,27 @@ export const EmployeeSchedules: React.FC = () => {
                 </TextField>
               </Grid>
               <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} disabled={!selectedEmployeeId}>
+                <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
                   {timeOptions.map((t) => <MenuItem key={`s-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} disabled={!selectedEmployeeId}>
+                <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
                   {timeOptions.map((t) => <MenuItem key={`e-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)} disabled={!selectedEmployeeId}>
+                <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
                   {timeOptions.map((t) => <MenuItem key={`ls-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)} disabled={!selectedEmployeeId}>
+                <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
                   {timeOptions.map((t) => <MenuItem key={`le-${t}`} value={t}>{t}</MenuItem>)}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={1}>
-                <Button variant="text" size="small" onClick={() => copyPrevious(idx)} disabled={!selectedEmployeeId}>Copy Previous Day</Button>
+                <Button variant="text" size="small" onClick={() => copyPrevious(idx)} disabled={!selectedEmployeeId || row.type === 'Day Off'}>Copy Previous Day</Button>
               </Grid>
             </React.Fragment>
           ))}
@@ -232,6 +293,7 @@ export const EmployeeSchedules: React.FC = () => {
             );
           })()}
           <FormControlLabel control={<Checkbox checked={preservePto} onChange={(e) => setPreservePto(e.target.checked)} />} label="Preserve Vacation and Personal days" />
+          <FormControlLabel control={<Checkbox checked={alsoUpdateDefault} onChange={(e) => setAlsoUpdateDefault(e.target.checked)} />} label="Also update default template" />
         </Box>
 
         <Typography variant="body2" color="error" sx={{ mt: 2 }}>

@@ -401,6 +401,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
         const blocks: any[] = [];
         const startDate = view ? new Date(view.activeStart) : new Date(selectedDate);
         const endDate = view ? new Date(view.activeEnd) : new Date(selectedDate);
+        const toHms = (t: string | null | undefined, fallback: string) => {
+          if (!t) return fallback;
+          const parts = String(t).split(':');
+          if (parts.length === 2) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:00`;
+          if (parts.length >= 3) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:${parts[2].padStart(2,'0')}`;
+          return fallback;
+        };
         // iterate each day
         for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
           const dowIdx = d.getDay();
@@ -424,24 +431,24 @@ export const StaffSchedulingCalendar: React.FC = () => {
                 backgroundColor: 'rgba(239, 68, 68, 0.18)',
               });
             } else {
-              const start = row.start_time || '00:00';
-              const end = row.end_time || '23:59';
+              const start = toHms(row.start_time, '00:00:00');
+              const end = toHms(row.end_time, '23:59:59');
               // Before shift
-              if (start !== '00:00') {
+              if (start !== '00:00:00') {
                 blocks.push({
                   id: `pre-${resourceId}-${dayStr}`,
                   start: `${dayStr}T00:00:00`,
-                  end: `${dayStr}T${start}:00`,
+                  end: `${dayStr}T${start}`,
                   resourceIds: [resourceId],
                   display: 'background',
                   backgroundColor: 'rgba(107, 114, 128, 0.15)',
                 });
               }
               // After shift
-              if (end !== '23:59') {
+              if (end !== '23:59:59') {
                 blocks.push({
                   id: `post-${resourceId}-${dayStr}`,
-                  start: `${dayStr}T${end}:00`,
+                  start: `${dayStr}T${end}`,
                   end: `${dayStr}T23:59:59`,
                   resourceIds: [resourceId],
                   display: 'background',
@@ -460,6 +467,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
     };
     loadWeekly();
   }, [employees, selectedDate]);
+
+  // When the calendar changes date range (navigation/view change), recompute background blocks
+  const handleDatesSet = (dateInfo: any) => {
+    // trigger weekly schedules reload by updating selectedDate
+    setSelectedDate(dateInfo.start);
+  };
 
   const isWithinEmployeeShift = React.useCallback((employeeId?: number | string | null, when?: Date) => {
     if (!employeeId || !when) return true;
@@ -739,10 +752,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             return { html };
           }}
           height="auto"
-          datesSet={(dateInfo) => {
-            // Update selected date when the calendar view changes
-            setSelectedDate(dateInfo.start);
-          }}
+          datesSet={handleDatesSet}
         />
       </Paper>
 
