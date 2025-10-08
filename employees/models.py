@@ -376,4 +376,16 @@ class EmployeeAttendance(models.Model):
     def __str__(self) -> str:
         return f"{self.employee.user.username} - {self.date} - {self.get_attendance_type_display()}"
 
+class ShiftConfiguration(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    lunch_start_time = models.TimeField()
+    lunch_end_time = models.TimeField()
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
 # Create your models here.

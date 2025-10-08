@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule
+from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule, ShiftConfiguration
 from services.models import Service
 
 
@@ -64,3 +64,7 @@ class ReservationEmployeeAssignmentSerializer(serializers.ModelSerializer):
         model = ReservationEmployeeAssignment
         fields = ["id", "reservation", "employee", "role_in_service"]
 
+class ShiftConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShiftConfiguration
+        fields = '__all__'

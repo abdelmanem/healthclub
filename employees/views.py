@@ -1,11 +1,12 @@
 from rest_framework import viewsets, decorators, response, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule
+from .models import Employee, EmployeeShift, ReservationEmployeeAssignment, EmployeeWeeklySchedule, ShiftConfiguration
 from .serializers import (
     EmployeeSerializer,
     EmployeeShiftSerializer,
     ReservationEmployeeAssignmentSerializer,
     EmployeeWeeklyScheduleSerializer,
+    ShiftConfigurationSerializer,
 )
 from healthclub.permissions import ObjectPermissionsOrReadOnly
 
@@ -129,3 +130,7 @@ class ReservationEmployeeAssignmentViewSet(viewsets.ModelViewSet):
         users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
         result = {u.username: perms for u, perms in users.items()}
         return response.Response(result)
+
+class ShiftConfigurationViewSet(viewsets.ModelViewSet):
+    queryset = ShiftConfiguration.objects.all()
+    serializer_class = ShiftConfigurationSerializer

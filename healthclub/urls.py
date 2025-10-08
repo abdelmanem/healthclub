@@ -32,6 +32,7 @@ from employees.views import (
     EmployeeShiftViewSet,
     ReservationEmployeeAssignmentViewSet,
     EmployeeWeeklyScheduleViewSet,
+    ShiftConfigurationViewSet,
 )
 from inventory.views import (
     SupplierViewSet, ProductCategoryViewSet, ProductViewSet,
@@ -68,6 +69,7 @@ router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'employees', EmployeeViewSet, basename='employee')
 router.register(r'shifts', EmployeeShiftViewSet, basename='shift')
 router.register(r'employee-weekly-schedules', EmployeeWeeklyScheduleViewSet, basename='employee-weekly-schedule')
+router.register(r'shift-configurations', ShiftConfigurationViewSet)
 router.register(r'reservation-assignments', ReservationEmployeeAssignmentViewSet, basename='reservation-assignment')
 router.register(r'suppliers', SupplierViewSet, basename='supplier')
 router.register(r'product-categories', ProductCategoryViewSet, basename='product-category')
@@ -100,6 +102,9 @@ router.register(r'config/product-types', ProductTypeViewSet, basename='product-t
 router.register(r'config/business-rules', BusinessRuleViewSet, basename='business-rule')
 router.register(r'config/notification-templates', NotificationTemplateViewSet, basename='notification-template')
 router.register(r'config/cancellation-reasons', CancellationReasonViewSet, basename='cancellation-reason')
+
+
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
