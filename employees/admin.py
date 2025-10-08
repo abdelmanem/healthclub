@@ -20,7 +20,7 @@ class EmployeeWeeklyScheduleAdmin(admin.ModelAdmin):
     list_display = ("employee", "day_of_week", "is_day_off", "start_time", "end_time", "effective_from")
     list_filter = ("day_of_week", "is_day_off", "effective_from")
     search_fields = ("employee__user__username",)
-    list_select_related = ("employee", "location")
+    list_select_related = ("employee",)
 
 
 @admin.register(ReservationEmployeeAssignment)
