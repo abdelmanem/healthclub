@@ -164,6 +164,12 @@ const getEmployeeName = (emp: Employee): string => {
   );
 };
 
+const isCurrentWeek = (weekStartDate: string): boolean => {
+  const today = new Date();
+  const currentWeekStart = getWeekStartLocal(today.toISOString().split('T')[0]);
+  return weekStartDate === currentWeekStart;
+};
+
 const detectShiftType = (schedule: Omit<DaySchedule, 'day' | 'type' | 'shift'>): ShiftType => {
   // Check if times match any predefined shift
   for (const [key, template] of Object.entries(SHIFT_TEMPLATES)) {
@@ -261,11 +267,14 @@ export const EmployeeSchedules: React.FC = () => {
   }, []);
 
   const shiftWeek = useCallback((direction: -1 | 1) => {
-    const weekStart = getWeekStartLocal(weekRefDate);
-    const date = new Date(weekStart + 'T00:00:00');
-    date.setDate(date.getDate() + 7 * direction);
-    setWeekRefDate(date.toISOString().split('T')[0]);
-  }, [weekRefDate]);
+    setWeekRefDate((currentDate) => {
+      const date = new Date(currentDate + 'T00:00:00');
+      date.setDate(date.getDate() + 7 * direction);
+      return date.toISOString().split('T')[0];
+    });
+  }, []);
+
+  
 
   // ============================================================================
   // API Functions
@@ -495,6 +504,7 @@ export const EmployeeSchedules: React.FC = () => {
   const weekStart = getWeekStartLocal(weekRefDate);
   const weekEnd = getWeekEndLocal(weekStart);
   const weekDisplay = formatDateRange(weekStart, weekEnd);
+  const isCurrentWeekDisplayed = isCurrentWeek(weekStart);
 
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', p: 3 }}>
@@ -747,13 +757,51 @@ export const EmployeeSchedules: React.FC = () => {
         <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Week Selector */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-            <TextField
-              size="small"
-              label="Week of"
-              value={weekDisplay}
-              InputProps={{ readOnly: true }}
-              sx={{ minWidth: 200 }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                size="small"
+                label="Week of"
+                value={weekDisplay}
+                InputProps={{ readOnly: true }}
+                sx={{ 
+                  minWidth: 200,
+                  ...(isCurrentWeekDisplayed && {
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'primary.light',
+                      color: 'primary.contrastText',
+                      '& fieldset': {
+                        borderColor: 'primary.main',
+                        borderWidth: 2,
+                      },
+                      '&:hover fieldset': {
+                        borderColor: 'primary.dark',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'primary.main',
+                      fontWeight: 600,
+                    },
+                  })
+                }}
+              />
+              {isCurrentWeekDisplayed && (
+                <Box
+                  sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'primary.contrastText',
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: 1,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Current Week
+                </Box>
+              )}
+            </Box>
             <Button
               variant="outlined"
               size="small"
@@ -770,6 +818,20 @@ export const EmployeeSchedules: React.FC = () => {
             >
               Next Week →
             </Button>
+            {!isCurrentWeekDisplayed && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const today = new Date();
+                  setWeekRefDate(today.toISOString().split('T')[0]);
+                }}
+                disabled={loading}
+                sx={{ ml: 1 }}
+              >
+                Go to Current Week
+              </Button>
+            )}
           </Box>
 
           {/* Options */}
