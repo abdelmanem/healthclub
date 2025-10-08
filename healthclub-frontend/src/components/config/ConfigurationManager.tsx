@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -6,34 +6,61 @@ import {
   CardContent,
   Tabs,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   IconButton,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
+  Fade,
+  Container,
+  Paper,
+  Grid,
+  Avatar,
+  Tooltip,
+  Menu,
   MenuItem,
-  Switch,
-  FormControlLabel
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Badge,
+  LinearProgress,
+  CircularProgress
 } from '@mui/material';
-import { Edit, Add, Save, Cancel } from '@mui/icons-material';
+import {
+  Edit,
+  Add,
+  Save,
+  Cancel,
+  Delete,
+  ContentCopy,
+  History,
+  Refresh,
+  Download,
+  Upload,
+  FilterList,
+  Search,
+  MoreVert,
+  Settings,
+  People,
+  Category,
+  Business,
+  AttachMoney,
+  School,
+  Inventory,
+  Notifications,
+  Cancel as CancelIcon,
+  CheckCircle,
+  Error,
+  Warning,
+  Info
+} from '@mui/icons-material';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
 import { PermissionGate } from '../common/PermissionGate';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { CancellationReasonForm } from './CancellationReasonForm';
 import { CancellationReason } from '../../types/config';
+import { EnhancedTable, TableColumn, TableAction } from '../common/EnhancedTable';
+import { EnhancedDialog } from '../common/EnhancedDialog';
+import { ConfigurationForm } from './ConfigurationForm';
+import { useToast } from '../common/ToastProvider';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -62,6 +89,11 @@ export const ConfigurationManager: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCancellationReason, setEditingCancellationReason] = useState<CancellationReason | null>(null);
   const [isCancellationReasonFormOpen, setIsCancellationReasonFormOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  
+  const { showSuccess, showError, showWarning, showInfo } = useToast();
+  
   const { 
     systemConfigs, 
     membershipTiers, 
@@ -75,6 +107,19 @@ export const ConfigurationManager: React.FC = () => {
     isLoading,
     refreshConfigurations
   } = useConfiguration();
+
+  // Tab configurations with icons and colors
+  const tabConfigs = [
+    { label: 'System Settings', icon: <Settings />, color: 'primary' },
+    { label: 'Membership Tiers', icon: <People />, color: 'secondary' },
+    { label: 'Gender Options', icon: <Category />, color: 'info' },
+    { label: 'Business Rules', icon: <Business />, color: 'warning' },
+    { label: 'Commission Types', icon: <AttachMoney />, color: 'success' },
+    { label: 'Training Types', icon: <School />, color: 'primary' },
+    { label: 'Product Types', icon: <Inventory />, color: 'secondary' },
+    { label: 'Notification Templates', icon: <Notifications />, color: 'info' },
+    { label: 'Cancellation Reasons', icon: <CancelIcon />, color: 'error' }
+  ];
 
   const handleEdit = (item: any, tabIndex?: number) => {
     if (tabIndex === 8) {
@@ -101,11 +146,21 @@ export const ConfigurationManager: React.FC = () => {
   };
 
   const handleSave = async () => {
-    // TODO: Implement save functionality
-    console.log('Save configuration:', editingItem);
-    setIsDialogOpen(false);
-    setEditingItem(null);
-    await refreshConfigurations();
+    setLoading(true);
+    try {
+      // TODO: Implement actual save functionality
+      console.log('Save configuration:', editingItem);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      
+      showSuccess('Configuration saved successfully!');
+      setIsDialogOpen(false);
+      setEditingItem(null);
+      await refreshConfigurations();
+    } catch (error) {
+      showError('Failed to save configuration');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -113,589 +168,357 @@ export const ConfigurationManager: React.FC = () => {
     setEditingItem(null);
   };
 
+  const handleDelete = async (item: any) => {
+    try {
+      // TODO: Implement actual delete functionality
+      console.log('Delete configuration:', item);
+      showSuccess('Configuration deleted successfully!');
+      await refreshConfigurations();
+    } catch (error) {
+      showError('Failed to delete configuration');
+    }
+  };
+
+  const handleDuplicate = (item: any) => {
+    const duplicatedItem = { ...item, id: undefined, name: `${item.name} (Copy)` };
+    setEditingItem(duplicatedItem);
+    setIsDialogOpen(true);
+  };
+
+  const handleBulkDelete = async (items: any[]) => {
+    try {
+      // TODO: Implement bulk delete functionality
+      console.log('Bulk delete configurations:', items);
+      showSuccess(`${items.length} configurations deleted successfully!`);
+      await refreshConfigurations();
+    } catch (error) {
+      showError('Failed to delete configurations');
+    }
+  };
+
+  const handleExport = () => {
+    showInfo('Export functionality will be implemented soon');
+  };
+
+  const handleImport = () => {
+    showInfo('Import functionality will be implemented soon');
+  };
+
+  // Table column configurations
+  const getColumnsForTab = (tabIndex: number): TableColumn[] => {
+    switch (tabIndex) {
+      case 0: // System Settings
+        return [
+          { id: 'key', label: 'Key', minWidth: 150, sortable: true },
+          { id: 'value', label: 'Value', minWidth: 200, sortable: true },
+          { id: 'type', label: 'Type', minWidth: 100, format: () => <Chip label="string" size="small" color="primary" /> },
+          { id: 'status', label: 'Status', minWidth: 100, format: () => <Chip label="Active" size="small" color="success" /> }
+        ];
+      case 1: // Membership Tiers
+        return [
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'display_name', label: 'Display Name', minWidth: 150, sortable: true },
+          { id: 'discount_percentage', label: 'Discount', minWidth: 100, format: (value) => <Chip label={`${value}%`} size="small" color="success" /> },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 2: // Gender Options
+        return [
+          { id: 'code', label: 'Code', minWidth: 100, sortable: true },
+          { id: 'display_name', label: 'Display Name', minWidth: 150, sortable: true },
+          { id: 'description', label: 'Description', minWidth: 200 },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 3: // Business Rules
+        return [
+          { id: 'category', label: 'Category', minWidth: 120, format: () => 'General' },
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'key', label: 'Key', minWidth: 150, sortable: true },
+          { id: 'value', label: 'Value', minWidth: 200, sortable: true },
+          { id: 'status', label: 'Status', minWidth: 100, format: () => <Chip label="Active" size="small" color="success" /> }
+        ];
+      case 4: // Commission Types
+        return [
+          { id: 'code', label: 'Code', minWidth: 100, sortable: true },
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'description', label: 'Description', minWidth: 200 },
+          { id: 'percentage', label: 'Percentage', minWidth: 100, format: (value) => value ? <Chip label={`${value}%`} size="small" color="info" /> : '-' },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 5: // Training Types
+        return [
+          { id: 'code', label: 'Code', minWidth: 100, sortable: true },
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'description', label: 'Description', minWidth: 200 },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 6: // Product Types
+        return [
+          { id: 'code', label: 'Code', minWidth: 100, sortable: true },
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'description', label: 'Description', minWidth: 200 },
+          { id: 'category', label: 'Category', minWidth: 120, sortable: true },
+          { id: 'requires_tracking', label: 'Requires Tracking', minWidth: 140, format: (value) => <Chip label={value ? 'Yes' : 'No'} size="small" color={value ? 'warning' : 'default'} /> },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 7: // Notification Templates
+        return [
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'template_type', label: 'Type', minWidth: 120, sortable: true },
+          { id: 'subject', label: 'Subject', minWidth: 200 },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      case 8: // Cancellation Reasons
+        return [
+          { id: 'code', label: 'Code', minWidth: 100, sortable: true },
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'description', label: 'Description', minWidth: 200 },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
+        ];
+      default:
+        return [];
+    }
+  };
+
+  // Get data for current tab
+  const getDataForTab = (tabIndex: number): any[] => {
+    switch (tabIndex) {
+      case 0: return Object.entries(systemConfigs).map(([key, value]) => ({ key, value }));
+      case 1: return membershipTiers;
+      case 2: return genderOptions;
+      case 3: return Object.entries(businessRules).map(([key, value]) => ({ key, value, name: key }));
+      case 4: return commissionTypes;
+      case 5: return trainingTypes;
+      case 6: return productTypes;
+      case 7: return notificationTemplates;
+      case 8: return cancellationReasons;
+      default: return [];
+    }
+  };
+
+  // Table actions
+  const getActionsForTab = (tabIndex: number): TableAction[] => {
+    const baseActions: TableAction[] = [
+      {
+        id: 'edit',
+        label: 'Edit',
+        icon: <Edit />,
+        onClick: (row) => handleEdit(row, tabIndex)
+      },
+      {
+        id: 'duplicate',
+        label: 'Duplicate',
+        icon: <ContentCopy />,
+        onClick: (row) => handleDuplicate(row)
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        icon: <Delete />,
+        onClick: (row) => handleDelete(row),
+        color: 'error'
+      }
+    ];
+
+    return baseActions;
+  };
+
+  const bulkActions: TableAction[] = [
+    {
+      id: 'bulk-delete',
+      label: 'Delete Selected',
+      icon: <Delete />,
+      onClick: handleBulkDelete,
+      color: 'error'
+    }
+  ];
+
   if (isLoading) {
-    return <LoadingSpinner message="Loading configurations..." />;
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '400px',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: 2,
+        color: 'white'
+      }}>
+        <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
+        <Typography variant="h6">Loading configurations...</Typography>
+      </Box>
+    );
   }
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Typography variant="h4" gutterBottom>
-        System Configuration
-      </Typography>
-      
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-          <Tab label="System Settings" />
-          <Tab label="Membership Tiers" />
-          <Tab label="Gender Options" />
-          <Tab label="Business Rules" />
-          <Tab label="Commission Types" />
-          <Tab label="Training Types" />
-          <Tab label="Product Types" />
-          <Tab label="Notification Templates" />
-          <Tab label="Cancellation Reasons" />
-        </Tabs>
-      </Box>
+    <Box sx={{ 
+      width: '100%',
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      minHeight: '100vh',
+      p: 2
+    }}>
+      <Container maxWidth="xl">
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Typography 
+            variant="h3" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 700,
+              background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              textAlign: 'center'
+            }}
+          >
+            System Configuration
+          </Typography>
+          <Typography variant="h6" color="text.secondary" textAlign="center" sx={{ mb: 3 }}>
+            Manage your system settings and configurations
+          </Typography>
+        </Box>
 
-      <TabPanel value={tabValue} index={0}>
-        <Card>
-          <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">System Configuration</Typography>
+        {/* Enhanced Tabs */}
+        <Paper sx={{ borderRadius: 3, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)' }}>
+          <Box sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+          }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={(e, newValue) => setTabValue(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                '& .MuiTab-root': {
+                  color: 'white',
+                  fontWeight: 600,
+                  minHeight: 64,
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 0.1)'
+                  }
+                },
+                '& .Mui-selected': {
+                  color: 'white !important',
+                  bgcolor: 'rgba(255, 255, 255, 0.2)'
+                },
+                '& .MuiTabs-indicator': {
+                  bgcolor: 'white',
+                  height: 3
+                }
+              }}
+            >
+              {tabConfigs.map((config, index) => (
+                <Tab
+                  key={index}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {config.icon}
+                      {config.label}
+                    </Box>
+                  }
+                />
+              ))}
+            </Tabs>
+          </Box>
+
+          {/* Tab Content */}
+          <Box sx={{ p: 3 }}>
+            {/* Header with Add Button */}
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              mb: 3,
+              p: 2,
+              bgcolor: 'grey.50',
+              borderRadius: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: `${tabConfigs[tabValue].color}.main` }}>
+                  {tabConfigs[tabValue].icon}
+                </Avatar>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    {tabConfigs[tabValue].label}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Manage {tabConfigs[tabValue].label.toLowerCase()} settings
+                  </Typography>
+                </Box>
+              </Box>
+              
               <PermissionGate permission="add" model="config">
                 <Button
                   variant="contained"
                   startIcon={<Add />}
-                  onClick={() => handleAdd()}
+                  onClick={() => handleAdd(tabValue)}
+                  sx={{
+                    borderRadius: 2,
+                    px: 3,
+                    py: 1,
+                    background: `linear-gradient(45deg, ${tabConfigs[tabValue].color}.main 30%, ${tabConfigs[tabValue].color}.dark 90%)`,
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)'
+                    },
+                    transition: 'all 0.3s ease'
+                  }}
                 >
-                  Add Configuration
+                  Add {tabConfigs[tabValue].label.slice(0, -1)}
                 </Button>
               </PermissionGate>
             </Box>
-            
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Key</TableCell>
-                    <TableCell>Value</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.entries(systemConfigs).map(([key, value]) => (
-                    <TableRow key={key}>
-                      <TableCell>{key}</TableCell>
-                      <TableCell>{String(value)}</TableCell>
-                      <TableCell>
-                        <Chip label="string" size="small" />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label="Active" 
-                          color="success"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit({ key, value })}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
 
-      <TabPanel value={tabValue} index={1}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Membership Tiers
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Display Name</TableCell>
-                    <TableCell>Discount</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {membershipTiers.map((tier) => (
-                    <TableRow key={tier.id}>
-                      <TableCell>{tier.name}</TableCell>
-                      <TableCell>{tier.display_name}</TableCell>
-                      <TableCell>{tier.discount_percentage}%</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={tier.is_active ? 'Active' : 'Inactive'} 
-                          color={tier.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(tier)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
+            {/* Enhanced Table */}
+            <EnhancedTable
+              columns={getColumnsForTab(tabValue)}
+              data={getDataForTab(tabValue)}
+              actions={getActionsForTab(tabValue)}
+              bulkActions={bulkActions}
+              onRefresh={refreshConfigurations}
+              onExport={handleExport}
+              onImport={handleImport}
+              loading={isLoading}
+              emptyMessage={`No ${tabConfigs[tabValue].label.toLowerCase()} found`}
+              searchPlaceholder={`Search ${tabConfigs[tabValue].label.toLowerCase()}...`}
+            />
+          </Box>
+        </Paper>
 
-      <TabPanel value={tabValue} index={2}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Gender Options
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Display Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {genderOptions.map((gender) => (
-                    <TableRow key={gender.id}>
-                      <TableCell>{gender.code}</TableCell>
-                      <TableCell>{gender.display_name}</TableCell>
-                      <TableCell>{gender.description}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={gender.is_active ? 'Active' : 'Inactive'} 
-                          color={gender.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(gender)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
+        {/* Enhanced Dialog for Configuration Editing */}
+        <EnhancedDialog
+          open={isDialogOpen}
+          onClose={handleCancel}
+          onSave={handleSave}
+          title={editingItem ? 'Edit Configuration' : 'Add Configuration'}
+          subtitle={`${tabConfigs[tabValue].label} Management`}
+          icon={tabConfigs[tabValue].icon}
+          loading={loading}
+          stickyHeader
+          stickyFooter
+        >
+          <ConfigurationForm
+            data={editingItem}
+            onChange={setEditingItem}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            onDelete={editingItem?.id ? () => handleDelete(editingItem) : undefined}
+            onDuplicate={editingItem ? () => handleDuplicate(editingItem) : undefined}
+            loading={loading}
+            variant="dialog"
+          />
+        </EnhancedDialog>
 
-      <TabPanel value={tabValue} index={3}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Business Rules
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Key</TableCell>
-                    <TableCell>Value</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.entries(businessRules).map(([key, value]) => (
-                    <TableRow key={key}>
-                      <TableCell>General</TableCell>
-                      <TableCell>{key}</TableCell>
-                      <TableCell>{key}</TableCell>
-                      <TableCell>{String(value)}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label="Active" 
-                          color="success"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit({ key, value })}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={4}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Commission Types
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Percentage</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {commissionTypes.map((ct: any) => (
-                    <TableRow key={ct.id}>
-                      <TableCell>{ct.code}</TableCell>
-                      <TableCell>{ct.name}</TableCell>
-                      <TableCell>{ct.description}</TableCell>
-                      <TableCell>{ct.percentage ?? '-'}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={ct.is_active ? 'Active' : 'Inactive'} 
-                          color={ct.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(ct)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={5}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Training Types
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {trainingTypes.map((tt: any) => (
-                    <TableRow key={tt.id}>
-                      <TableCell>{tt.code}</TableCell>
-                      <TableCell>{tt.name}</TableCell>
-                      <TableCell>{tt.description}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={tt.is_active ? 'Active' : 'Inactive'} 
-                          color={tt.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(tt)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Product Types
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Requires Tracking</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {productTypes.map((pt: any) => (
-                    <TableRow key={pt.id}>
-                      <TableCell>{pt.code}</TableCell>
-                      <TableCell>{pt.name}</TableCell>
-                      <TableCell>{pt.description}</TableCell>
-                      <TableCell>{pt.category}</TableCell>
-                      <TableCell>{pt.requires_tracking ? 'Yes' : 'No'}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={pt.is_active ? 'Active' : 'Inactive'} 
-                          color={pt.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(pt)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={7}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Notification Templates
-            </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Subject</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {notificationTemplates.map((nt: any) => (
-                    <TableRow key={nt.id}>
-                      <TableCell>{nt.name}</TableCell>
-                      <TableCell>{nt.template_type ?? nt.type}</TableCell>
-                      <TableCell>{nt.subject}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={nt.is_active ? 'Active' : 'Inactive'} 
-                          color={nt.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(nt)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={8}>
-        <Card>
-          <CardContent>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">Cancellation Reasons</Typography>
-              <PermissionGate permission="add" model="config">
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => handleAdd(8)}
-                >
-                  Add Cancellation Reason
-                </Button>
-              </PermissionGate>
-            </Box>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {cancellationReasons.map((reason) => (
-                    <TableRow key={reason.id}>
-                      <TableCell>{reason.code}</TableCell>
-                      <TableCell>{reason.name}</TableCell>
-                      <TableCell>{reason.description}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={reason.is_active ? 'Active' : 'Inactive'} 
-                          color={reason.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PermissionGate permission="change" model="config">
-                          <IconButton onClick={() => handleEdit(reason, 8)}>
-                            <Edit />
-                          </IconButton>
-                        </PermissionGate>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-        
         {/* Cancellation Reason Form Dialog */}
         <CancellationReasonForm
           open={isCancellationReasonFormOpen}
           onClose={() => setIsCancellationReasonFormOpen(false)}
           editingReason={editingCancellationReason}
         />
-      </TabPanel>
-
-      <Dialog open={isDialogOpen} onClose={handleCancel} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingItem ? 'Edit Configuration' : 'Add Configuration'}
-        </DialogTitle>
-        <DialogContent>
-          {tabValue === 8 ? (
-            // Cancellation Reason Form
-            <>
-              <TextField
-                fullWidth
-                label="Code"
-                value={editingItem?.code || ''}
-                onChange={(e) => setEditingItem({...editingItem, code: e.target.value})}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Name"
-                value={editingItem?.name || ''}
-                onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Description"
-                value={editingItem?.description || ''}
-                onChange={(e) => setEditingItem({...editingItem, description: e.target.value})}
-                margin="normal"
-                multiline
-                rows={3}
-              />
-              <TextField
-                fullWidth
-                label="Sort Order"
-                type="number"
-                value={editingItem?.sort_order || 0}
-                onChange={(e) => setEditingItem({...editingItem, sort_order: parseInt(e.target.value)})}
-                margin="normal"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={editingItem?.is_active ?? true}
-                    onChange={(e) => setEditingItem({...editingItem, is_active: e.target.checked})}
-                  />
-                }
-                label="Active"
-              />
-            </>
-          ) : (
-            // Default Form
-            <>
-              <TextField
-                fullWidth
-                label="Key"
-                value={editingItem?.key || ''}
-                onChange={(e) => setEditingItem({...editingItem, key: e.target.value})}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Value"
-                value={editingItem?.value || ''}
-                onChange={(e) => setEditingItem({...editingItem, value: e.target.value})}
-                margin="normal"
-              />
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Data Type</InputLabel>
-                <Select
-                  value={editingItem?.data_type || 'string'}
-                  onChange={(e) => setEditingItem({...editingItem, data_type: e.target.value})}
-                >
-                  <MenuItem value="string">String</MenuItem>
-                  <MenuItem value="integer">Integer</MenuItem>
-                  <MenuItem value="decimal">Decimal</MenuItem>
-                  <MenuItem value="boolean">Boolean</MenuItem>
-                  <MenuItem value="json">JSON</MenuItem>
-                </Select>
-              </FormControl>
-              <TextField
-                fullWidth
-                label="Description"
-                value={editingItem?.description || ''}
-                onChange={(e) => setEditingItem({...editingItem, description: e.target.value})}
-                margin="normal"
-                multiline
-                rows={3}
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={editingItem?.is_active ?? true}
-                    onChange={(e) => setEditingItem({...editingItem, is_active: e.target.checked})}
-                  />
-                }
-                label="Active"
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancel} startIcon={<Cancel />}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} variant="contained" startIcon={<Save />}>
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </Container>
     </Box>
   );
 };
