@@ -6,9 +6,10 @@ import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
 import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, initialStart, initialEmployeeId, initialLocationId }) => {
+export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; onClose?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, onClose, initialStart, initialEmployeeId, initialLocationId }) => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
@@ -37,6 +38,31 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [phoneType, setPhoneType] = React.useState<'Mobile' | 'Home' | 'Work'>('Mobile');
   const [notes, setNotes] = React.useState<string>('');
   const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
+
+  const resetForm = React.useCallback(() => {
+    setGuestId('' as any);
+    setGuestName('');
+    setSelectedServiceId('' as any);
+    setSelectedServices([]);
+    setEmployeeId((initialEmployeeId as any) ?? ('' as any));
+    setLocationId((initialLocationId as any) ?? ('' as any));
+    setStart(initialStart || dayjs().add(1, 'hour').minute(0).second(0).toISOString());
+    setTotalPrice(0);
+    setSlots([]);
+    setConflicts([]);
+    setError(null);
+    setSuccess(null);
+    setAvailabilityStatus('unknown');
+    setAvailabilityReason(null);
+    setSource('');
+    setContactName('');
+    setEmail('');
+    setCountry('');
+    setPhone('');
+    setPhoneType('Mobile');
+    setNotes('');
+    setMarkConfirmed(false);
+  }, [initialEmployeeId, initialLocationId, initialStart]);
 
   React.useEffect(() => {
     (async () => {
@@ -504,9 +530,8 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       </Box>
 
       <Box mt={2} display="flex" gap={2}>
-        <Button variant="text" onClick={() => {
-          setSource(''); setContactName(''); setEmail(''); setCountry(''); setPhone(''); setNotes(''); setMarkConfirmed(false);
-        }}>Cancel</Button>
+        <Button variant="outlined" color="inherit" onClick={() => { if (onClose) { onClose(); } else { navigate(-1); } }}>Close</Button>
+        <Button variant="text" onClick={resetForm}>Reset</Button>
         <Button variant="contained" onClick={handleSubmit}>Save</Button>
       </Box>
     </Box>
