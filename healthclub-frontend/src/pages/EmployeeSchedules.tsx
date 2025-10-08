@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography, Grid, MenuItem, TextField, Button, Checkbox, FormControlLabel, Alert } from '@mui/material';
+import { Box, Paper, Typography, Grid, MenuItem, TextField, Button, Checkbox, FormControlLabel, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { api } from '../services/api';
 
 const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -226,52 +226,59 @@ export const EmployeeSchedules: React.FC = () => {
         {status && (
           <Alert severity={status.type} sx={{ mb: 2 }}>{status.msg}</Alert>
         )}
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Week 1</Typography>
-        <Grid container spacing={1} sx={{ fontSize: '0.9rem' }}>
-          <Grid item xs={12} md={3} sx={{ fontWeight: 600 }}>Day</Grid>
-          <Grid item xs={12} md={2} sx={{ fontWeight: 600 }}>Type</Grid>
-          <Grid item xs={6} md={2} sx={{ fontWeight: 600 }}>Start Time</Grid>
-          <Grid item xs={6} md={2} sx={{ fontWeight: 600 }}>End Time</Grid>
-          <Grid item xs={6} md={1} sx={{ fontWeight: 600 }}>Lunch Start</Grid>
-          <Grid item xs={6} md={1} sx={{ fontWeight: 600 }}>Lunch End</Grid>
-          <Grid item xs={12} md={1} sx={{ fontWeight: 600 }}></Grid>
-
-          {schedule.map((row, idx) => (
-            <React.Fragment key={row.day}>
-              <Grid item xs={12} md={3}>
-                <Typography sx={{ lineHeight: '40px', opacity: row.type === 'Day Off' ? 0.6 : 1 }}>{row.day}</Typography>
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <TextField select fullWidth size="small" value={row.type} onChange={(e) => updateRow(idx, 'type', e.target.value)} disabled={!selectedEmployeeId}>
-                  {workTypes.map((wt) => <MenuItem key={wt} value={wt}>{wt}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
-                  {timeOptions.map((t) => <MenuItem key={`s-${t}`} value={t}>{t}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid item xs={6} md={2}>
-                <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
-                  {timeOptions.map((t) => <MenuItem key={`e-${t}`} value={t}>{t}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
-                  {timeOptions.map((t) => <MenuItem key={`ls-${t}`} value={t}>{t}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid item xs={6} md={1}>
-                <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)} disabled={!selectedEmployeeId || row.type === 'Day Off'} sx={{ opacity: row.type === 'Day Off' ? 0.5 : 1 }}>
-                  {timeOptions.map((t) => <MenuItem key={`le-${t}`} value={t}>{t}</MenuItem>)}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={1}>
-                <Button variant="text" size="small" onClick={() => copyPrevious(idx)} disabled={!selectedEmployeeId || row.type === 'Day Off'}>Copy Previous Day</Button>
-              </Grid>
-            </React.Fragment>
-          ))}
-        </Grid>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Day</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Start Time</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>End Time</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Lunch Start</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Lunch End</TableCell>
+                <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {schedule.map((row, idx) => {
+                const isDayOff = row.type === 'Day Off';
+                return (
+                  <TableRow key={row.day} hover>
+                    <TableCell sx={{ opacity: isDayOff ? 0.6 : 1 }}>{row.day}</TableCell>
+                    <TableCell width={220}>
+                      <TextField select fullWidth size="small" value={row.type} onChange={(e) => updateRow(idx, 'type', e.target.value)} disabled={!selectedEmployeeId}>
+                        {workTypes.map((wt) => <MenuItem key={wt} value={wt}>{wt}</MenuItem>)}
+                      </TextField>
+                    </TableCell>
+                    <TableCell width={180}>
+                      <TextField select fullWidth size="small" value={row.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} disabled={!selectedEmployeeId || isDayOff} sx={{ opacity: isDayOff ? 0.5 : 1 }}>
+                        {timeOptions.map((t) => <MenuItem key={`s-${t}`} value={t}>{t}</MenuItem>)}
+                      </TextField>
+                    </TableCell>
+                    <TableCell width={180}>
+                      <TextField select fullWidth size="small" value={row.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} disabled={!selectedEmployeeId || isDayOff} sx={{ opacity: isDayOff ? 0.5 : 1 }}>
+                        {timeOptions.map((t) => <MenuItem key={`e-${t}`} value={t}>{t}</MenuItem>)}
+                      </TextField>
+                    </TableCell>
+                    <TableCell width={160}>
+                      <TextField select fullWidth size="small" value={row.lunchStart} onChange={(e) => updateRow(idx, 'lunchStart', e.target.value)} disabled={!selectedEmployeeId || isDayOff} sx={{ opacity: isDayOff ? 0.5 : 1 }}>
+                        {timeOptions.map((t) => <MenuItem key={`ls-${t}`} value={t}>{t}</MenuItem>)}
+                      </TextField>
+                    </TableCell>
+                    <TableCell width={160}>
+                      <TextField select fullWidth size="small" value={row.lunchEnd} onChange={(e) => updateRow(idx, 'lunchEnd', e.target.value)} disabled={!selectedEmployeeId || isDayOff} sx={{ opacity: isDayOff ? 0.5 : 1 }}>
+                        {timeOptions.map((t) => <MenuItem key={`le-${t}`} value={t}>{t}</MenuItem>)}
+                      </TextField>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button variant="text" size="small" onClick={() => copyPrevious(idx)} disabled={!selectedEmployeeId || isDayOff}>Copy Previous Day</Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, flexWrap: 'wrap' }}>
           {(() => {
