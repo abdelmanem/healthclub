@@ -56,6 +56,11 @@ const subNavConfigs: Record<string, SubNavConfig> = {
       { label: 'Dashboard', path: '/dashboard' }
     ]
   },
+  'Schedules': {
+    items: [
+      { label: 'Employee Schedules', path: '/schedules/employees' }
+    ]
+  },
   'Housekeeping': {
     items: [
       { label: 'Housekeeping Management', path: '/housekeeping' }

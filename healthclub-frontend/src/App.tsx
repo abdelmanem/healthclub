@@ -17,6 +17,7 @@ import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
 import Housekeeping from './pages/Housekeeping';
 import { NewReservation } from './pages/NewReservation';
+import { EmployeeSchedules } from './pages/EmployeeSchedules';
 import { theme } from './theme';
 import GuestProfilePage from './pages/GuestProfilePage';
 
@@ -109,6 +110,13 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="reservations">
                   <Layout>
                     <Housekeeping />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/schedules/employees" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="employees">
+                  <Layout>
+                    <EmployeeSchedules />
                   </Layout>
                 </ProtectedRoute>
               } />
