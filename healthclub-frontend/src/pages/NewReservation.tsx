@@ -11,7 +11,7 @@ export const NewReservation: React.FC = () => {
       <DialogContent>
         <ReservationBookingForm
           onCreated={() => {
-            navigate('/spa-scheduling');
+            navigate('/reservations');
           }}
         />
       </DialogContent>

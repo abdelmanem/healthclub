@@ -81,6 +81,13 @@ function App() {
                   </Layout>
                 </ProtectedRoute>
               } />
+              <Route path="/reservations/new" element={
+                <ProtectedRoute requiredPermission="add" requiredModel="reservations">
+                  <Layout>
+                    <NewReservation />
+                  </Layout>
+                </ProtectedRoute>
+              } />
               
               <Route path="/services" element={
                 <ProtectedRoute requiredPermission="view" requiredModel="services">
