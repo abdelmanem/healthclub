@@ -72,6 +72,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const theme = useTheme();
   const calendarRef = React.useRef<FullCalendar>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [weeklySchedules, setWeeklySchedules] = React.useState<Record<number, any[]>>({});
+  const [backgroundBlocks, setBackgroundBlocks] = React.useState<any[]>([]);
 
   // Use local state for date management
   const selectedDate = localDate;
@@ -361,6 +363,119 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   React.useEffect(() => { loadData(); }, [loadData]);
 
+  // Load weekly schedules and compute background blocks whenever view or employees change
+  React.useEffect(() => {
+    const loadWeekly = async () => {
+      try {
+        const calendarApi = calendarRef.current?.getApi();
+        const view = calendarApi?.view;
+        const rangeStart = view ? new Date(view.activeStart) : new Date(selectedDate);
+        // Compute local Sunday as effective_from
+        const dow = rangeStart.getDay();
+        const ws = new Date(rangeStart);
+        ws.setDate(rangeStart.getDate() - dow);
+        const ef = `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`;
+
+        const [exactRes, nullRes] = await Promise.all([
+          api.get('/employee-weekly-schedules/', { params: { effective_from: ef } }).catch(() => ({ data: [] })),
+          api.get('/employee-weekly-schedules/', { params: { 'effective_from__isnull': 'true' } }).catch(() => ({ data: [] })),
+        ]);
+        const listA = exactRes.data.results ?? exactRes.data ?? [];
+        const listB = nullRes.data.results ?? nullRes.data ?? [];
+        const merged = [...listB, ...listA];
+        const byEmp: Record<number, any[]> = {};
+        for (const row of merged) {
+          const empId = row.employee;
+          if (!byEmp[empId]) byEmp[empId] = [];
+          const existingIndex = byEmp[empId].findIndex((r: any) => r.day_of_week === row.day_of_week && (r.effective_from || null) === null && row.effective_from);
+          if (existingIndex >= 0) {
+            byEmp[empId][existingIndex] = row;
+          } else {
+            const hasExact = byEmp[empId].some((r: any) => r.day_of_week === row.day_of_week && !!r.effective_from);
+            if (!(hasExact && !row.effective_from)) byEmp[empId].push(row);
+          }
+        }
+        setWeeklySchedules(byEmp);
+
+        // Build background blocks for off-hours/day-off per resource for current view range
+        const blocks: any[] = [];
+        const startDate = view ? new Date(view.activeStart) : new Date(selectedDate);
+        const endDate = view ? new Date(view.activeEnd) : new Date(selectedDate);
+        // iterate each day
+        for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
+          const dowIdx = d.getDay();
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const dayStr = `${yyyy}-${mm}-${dd}`;
+          for (const e of employees) {
+            const rows = byEmp[e.id] || [];
+            const row = rows.find((r: any) => Number(r.day_of_week) === dowIdx);
+            const resourceId = String(e.id);
+            if (!row) continue;
+            if (row.is_day_off) {
+              // Block entire day
+              blocks.push({
+                id: `off-${resourceId}-${dayStr}`,
+                start: `${dayStr}T00:00:00`,
+                end: `${dayStr}T23:59:59`,
+                resourceIds: [resourceId],
+                display: 'background',
+                backgroundColor: 'rgba(239, 68, 68, 0.18)',
+              });
+            } else {
+              const start = row.start_time || '00:00';
+              const end = row.end_time || '23:59';
+              // Before shift
+              if (start !== '00:00') {
+                blocks.push({
+                  id: `pre-${resourceId}-${dayStr}`,
+                  start: `${dayStr}T00:00:00`,
+                  end: `${dayStr}T${start}:00`,
+                  resourceIds: [resourceId],
+                  display: 'background',
+                  backgroundColor: 'rgba(107, 114, 128, 0.15)',
+                });
+              }
+              // After shift
+              if (end !== '23:59') {
+                blocks.push({
+                  id: `post-${resourceId}-${dayStr}`,
+                  start: `${dayStr}T${end}:00`,
+                  end: `${dayStr}T23:59:59`,
+                  resourceIds: [resourceId],
+                  display: 'background',
+                  backgroundColor: 'rgba(107, 114, 128, 0.15)',
+                });
+              }
+            }
+          }
+        }
+        setBackgroundBlocks(blocks);
+      } catch (e) {
+        console.warn('Failed to load schedules for background blocks', e);
+        setWeeklySchedules({});
+        setBackgroundBlocks([]);
+      }
+    };
+    loadWeekly();
+  }, [employees, selectedDate]);
+
+  const isWithinEmployeeShift = React.useCallback((employeeId?: number | string | null, when?: Date) => {
+    if (!employeeId || !when) return true;
+    const empId = Number(employeeId);
+    const rows = weeklySchedules[empId] || [];
+    const dow = when.getDay();
+    const row = rows.find((r: any) => Number(r.day_of_week) === dow);
+    if (!row) return true;
+    if (row.is_day_off) return false;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const current = `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+    const start = row.start_time || '00:00';
+    const end = row.end_time || '23:59';
+    return current >= start && current <= end;
+  }, [weeklySchedules]);
+
   // Style the custom calendar button after the calendar renders
   React.useEffect(() => {
     const styleCalendarButton = () => {
@@ -431,12 +546,21 @@ export const StaffSchedulingCalendar: React.FC = () => {
       })(),
     },
   }));
+  const allEvents = React.useMemo(() => {
+    return [...backgroundBlocks, ...events];
+  }, [backgroundBlocks, events]);
 
   const handleSelect = (info: any) => {
+    const employeeId = info.resource?.id ? Number(info.resource.id) : undefined;
+    const startDate: Date | undefined = info?.start ? new Date(info.start) : undefined;
+    if (employeeId && startDate && !isWithinEmployeeShift(employeeId, startDate)) {
+      window.alert('Cannot create a reservation on a day off or outside this employee\'s working hours.');
+      return;
+    }
     setCreateDialog({
       open: true,
       start: dayjs(info.start).toISOString(),
-      employeeId: info.resource?.id ? Number(info.resource.id) : undefined,
+      employeeId,
       locationId: undefined,
     });
   };
@@ -548,7 +672,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           initialView="resourceTimeGridDay"
           initialDate={selectedDate}
           resources={resources}
-          events={events}
+          events={allEvents}
           nowIndicator
           selectable
           selectMirror

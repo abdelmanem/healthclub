@@ -90,21 +90,39 @@ export const EmployeeSchedules: React.FC = () => {
     if (!selectedEmployeeId) return;
     const effectiveFrom = getWeekStartLocal(weekRefDate);
     try {
+      // Load existing rows for this employee & week to avoid unique constraint errors (upsert)
+      const existingRes = await api.get('/employee-weekly-schedules/', { params: { employee: Number(selectedEmployeeId), effective_from: effectiveFrom } }).catch(() => ({ data: [] }));
+      const existing = (existingRes.data?.results ?? existingRes.data ?? []) as any[];
+      const byDay: Record<number, any> = {};
+      for (const r of existing) byDay[Number(r.day_of_week)] = r;
+
+      const ensureSeconds = (t?: string | null) => {
+        if (!t) return null as any;
+        return t.length === 5 ? `${t}:00` : t; // HH:MM -> HH:MM:00
+      };
+
       const payloads = schedule.map((row, idx) => {
         const isDayOff = row.type !== 'Workday';
         return {
           employee: Number(selectedEmployeeId),
           day_of_week: idx, // 0=Sunday
           is_day_off: isDayOff,
-          start_time: isDayOff ? null : row.start,
-          end_time: isDayOff ? null : row.end,
-          lunch_start_time: isDayOff ? null : row.lunchStart,
-          lunch_end_time: isDayOff ? null : row.lunchEnd,
+          start_time: isDayOff ? null : ensureSeconds(row.start),
+          end_time: isDayOff ? null : ensureSeconds(row.end),
+          lunch_start_time: isDayOff ? null : ensureSeconds(row.lunchStart),
+          lunch_end_time: isDayOff ? null : ensureSeconds(row.lunchEnd),
           effective_from: effectiveFrom,
         };
       });
-      // Send sequentially or in parallel
-      await Promise.all(payloads.map((p) => api.post('/employee-weekly-schedules/', p)));
+      // Upsert: patch if exists for that day, else create
+      await Promise.all(payloads.map(async (p) => {
+        const existingRow = byDay[p.day_of_week];
+        if (existingRow && existingRow.id) {
+          await api.patch(`/employee-weekly-schedules/${existingRow.id}/`, p);
+        } else {
+          await api.post('/employee-weekly-schedules/', p);
+        }
+      }));
       setStatus({ type: 'success', msg: 'Schedule saved.' });
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Failed to save schedule';

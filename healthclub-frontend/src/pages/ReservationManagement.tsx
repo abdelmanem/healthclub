@@ -72,6 +72,7 @@ export const ReservationManagement: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [weeklySchedules, setWeeklySchedules] = useState<Record<number, any[]>>({});
 
   // filters
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -122,6 +123,71 @@ export const ReservationManagement: React.FC = () => {
       }
     })();
   }, []);
+
+  // Load employee weekly schedules for the current week window
+  useEffect(() => {
+    const loadWeeklySchedules = async () => {
+      try {
+        // Determine week start (Sunday) from current dateFilter in local time
+        const ref = new Date(dateFilter);
+        const dow = ref.getDay();
+        const start = new Date(ref);
+        start.setDate(ref.getDate() - dow);
+        const yyyy = start.getFullYear();
+        const mm = String(start.getMonth() + 1).padStart(2, '0');
+        const dd = String(start.getDate()).padStart(2, '0');
+        const weekStart = `${yyyy}-${mm}-${dd}`;
+
+        // Fetch schedules effective for this week (either exact or null defaults)
+        // First fetch those with this effective_from
+        const [exactRes, nullRes] = await Promise.all([
+          api.get('/employee-weekly-schedules/', { params: { effective_from: weekStart } }).catch(() => ({ data: [] })),
+          api.get('/employee-weekly-schedules/', { params: { 'effective_from__isnull': 'true' } }).catch(() => ({ data: [] }))
+        ]);
+        const listA = exactRes.data.results ?? exactRes.data ?? [];
+        const listB = nullRes.data.results ?? nullRes.data ?? [];
+        // Prefer exact week over null defaults
+        const merged = [...listB, ...listA];
+        const byEmp: Record<number, any[]> = {};
+        for (const row of merged) {
+          const empId = row.employee;
+          if (!byEmp[empId]) byEmp[empId] = [];
+          // Ensure only one entry per day_of_week (exact overrides null)
+          const existingIndex = byEmp[empId].findIndex((r: any) => r.day_of_week === row.day_of_week && (r.effective_from || null) === null && row.effective_from);
+          if (existingIndex >= 0) {
+            byEmp[empId][existingIndex] = row;
+          } else {
+            // Only push if not already present for that day with exact
+            const hasExact = byEmp[empId].some((r: any) => r.day_of_week === row.day_of_week && !!r.effective_from);
+            if (!(hasExact && !row.effective_from)) byEmp[empId].push(row);
+          }
+        }
+        setWeeklySchedules(byEmp);
+      } catch (e) {
+        console.warn('Failed to load weekly schedules', e);
+        setWeeklySchedules({});
+      }
+    };
+    loadWeeklySchedules();
+  }, [dateFilter]);
+
+  const isWithinEmployeeShift = (employeeId: number | string | undefined, when: Date) => {
+    if (!employeeId) return true; // if unknown, don't block
+    const empIdNum = Number(employeeId);
+    const rows = weeklySchedules[empIdNum] || [];
+    const dow = when.getDay(); // 0..6
+    const row = rows.find((r: any) => Number(r.day_of_week) === dow);
+    if (!row) return true; // no data → allow
+    if (row.is_day_off) return false;
+    // compare local times HH:MM
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const hh = pad(when.getHours());
+    const mm = pad(when.getMinutes());
+    const current = `${hh}:${mm}`;
+    const start = row.start_time || '00:00';
+    const end = row.end_time || '23:59';
+    return current >= start && current <= end;
+  };
 
   const loadReservations = async () => {
     try {
@@ -318,6 +384,17 @@ export const ReservationManagement: React.FC = () => {
       
       const newStart = dayjs(event.start);
       const newEnd = newStart.add(totalDurationMinutes, 'minutes');
+
+      // Validate against employee weekly schedule when grouped by employee
+      const targetEmployeeId = groupBy === 'employee' ? (newResource ? newResource.id : reservation?.employee) : reservation?.employee;
+      const newStartDate = newStart.toDate();
+      if (!isWithinEmployeeShift(targetEmployeeId, newStartDate)) {
+        alert('Cannot schedule outside employee working hours or on a day off.');
+        event.setStart(reservation.start_time);
+        if (reservation.end_time) event.setEnd(reservation.end_time);
+        setIsDragging(false);
+        return;
+      }
 
       // Update the reservation time
       await reservationsService.update(reservation.id, {
