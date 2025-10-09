@@ -33,7 +33,7 @@ const subNavConfigs: Record<string, SubNavConfig> = {
   'Appointments': {
     items: [
       { label: 'Calendar', path: '/reservations' },
-      { label: 'Find Appointment', path: '/reservations/find' },
+      { label: 'Find Appointment', path: '/appointments/find' },
       { label: 'New Appointment', path: '/reservations/new' },
       { label: 'Manage Waitlist', path: '/reservations/waitlist' },
       { label: 'Class Schedule', path: '/reservations/classes' },

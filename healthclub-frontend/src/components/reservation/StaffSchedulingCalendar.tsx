@@ -19,12 +19,21 @@ import {
   useTheme,
   Menu,
   MenuItem,
-  Paper
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { CancellationDialog } from './CancellationDialog';
 import { api } from '../../services/api';
 import { CalendarToday, ChevronLeft, ChevronRight, Today } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { guestsService } from '../../services/guests';
+import { reservationsService } from '../../services/reservations';
+import { EditGuestDialog } from '../guest/EditGuestDialog';
 
 type Reservation = {
   id: number;
@@ -34,12 +43,25 @@ type Reservation = {
   end_time: string;
   status: 'booked'|'checked_in'|'in_service'|'completed'|'cancelled';
   employee: number | null;
+  employee_name?: string;
+  location?: number | null;
+  location_name?: string;
   is_first_for_guest?: boolean;
   reservation_services?: Array<{
     service: number;
-    service_details?: { name?: string; duration_minutes?: number };
+    service_details?: { name?: string; duration_minutes?: number; price?: string };
+    quantity?: number;
+    unit_price?: string;
     service_duration_minutes?: number;
   }>;
+  total_duration_minutes?: number;
+  total_price?: number;
+  checked_in_at?: string | null;
+  in_service_at?: string | null;
+  completed_at?: string | null;
+  checked_out_at?: string | null;
+  cancelled_at?: string | null;
+  no_show_recorded_at?: string | null;
 };
 
 type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
@@ -62,6 +84,7 @@ const statusColor = (status?: string) => {
 };
 
 export const StaffSchedulingCalendar: React.FC = () => {
+  const navigate = useNavigate();
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
@@ -74,6 +97,20 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [weeklySchedules, setWeeklySchedules] = React.useState<Record<number, any[]>>({});
   const [backgroundBlocks, setBackgroundBlocks] = React.useState<any[]>([]);
+  const [selectedGuest, setSelectedGuest] = React.useState<any | null>(null);
+  const [isEditGuestOpen, setIsEditGuestOpen] = React.useState(false);
+  const [editDialog, setEditDialog] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
+
+  const openEditReservation = async (reservationId: number) => {
+    try {
+      const full = await reservationsService.retrieve(reservationId as any);
+      setEditDialog({ open: true, reservation: full as any });
+    } catch (e) {
+      console.error('Failed to load reservation for edit', e);
+      // fallback to minimal data
+      if (drawer.reservation) setEditDialog({ open: true, reservation: drawer.reservation });
+    }
+  };
 
   // Use local state for date management
   const selectedDate = localDate;
@@ -660,7 +697,27 @@ export const StaffSchedulingCalendar: React.FC = () => {
     }
   };
 
-  const openDrawer = (r: Reservation) => setDrawer({ open: true, reservation: r });
+  const openDrawer = (r: Reservation) => {
+    setDrawer({ open: true, reservation: r });
+    // Load guest details each time a reservation is opened
+    if (r?.guest) {
+      setSelectedGuest(null);
+      (async () => {
+        try {
+          const g = await guestsService.retrieve(r.guest);
+          setSelectedGuest(g as any);
+        } catch (e) {
+          console.error('Failed to load guest', e);
+          setSelectedGuest({
+            first_name: r.guest_name?.split(' ')[0] ?? 'Guest',
+            last_name: r.guest_name?.split(' ').slice(1).join(' ') ?? '',
+            email: '',
+            phone: ''
+          } as any);
+        }
+      })();
+    }
+  };
   const closeDrawer = () => setDrawer({ open: false, reservation: null });
 
   const [isActing, setIsActing] = React.useState(false);
@@ -776,30 +833,159 @@ export const StaffSchedulingCalendar: React.FC = () => {
           {drawer.reservation ? (
             <>
               <Box>
-                <Typography variant="h6">{drawer.reservation.guest_name}</Typography>
-                <Stack direction="row" spacing={1} alignItems="center" mt={1}>
-                  <Typography variant="body2">Staff:</Typography>
-                  <Typography variant="body2">{getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}</Typography>
-                </Stack>
-                <Box mt={1}>
-                  <Chip label={(drawer.reservation.status || '').replace('_',' ')} color={
-                    drawer.reservation.status === 'booked' ? 'primary' :
-                    drawer.reservation.status === 'checked_in' ? 'warning' :
-                    drawer.reservation.status === 'in_service' ? 'warning' :
-                    drawer.reservation.status === 'completed' ? 'success' :
-                    drawer.reservation.status === 'cancelled' ? 'error' : 'default'
-                  } size="small" />
-                </Box>
-                <Box mt={1}>
-                  <Typography variant="body2">
-                    {dayjs(drawer.reservation.start_time).format('MMM D, YYYY h:mm A')} – {dayjs(drawer.reservation.end_time).format('h:mm A')}
+                <Typography
+                  variant="h6"
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/guests/profile?id=${drawer.reservation!.guest}`)}
+                  title="View full guest profile"
+                >
+                  {drawer.reservation.guest_name}
+                </Typography>
+                <Box mt={1} display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
+                  <Typography variant="body2"><strong>Guest:</strong> {drawer.reservation.guest_name}</Typography>
+                  <Typography variant="body2"><strong>Staff:</strong> {getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}</Typography>
+                  <Typography variant="body2"><strong>Location:</strong> {drawer.reservation.location_name ?? (drawer.reservation.location ? `Location #${drawer.reservation.location}` : '—')}</Typography>
+                  <Typography variant="body2" display="flex" alignItems="center" gap={1}>
+                    <strong>Status:</strong>
+                    <Chip label={(drawer.reservation.status || '').replace('_',' ')} color={
+                      drawer.reservation.status === 'booked' ? 'primary' :
+                      drawer.reservation.status === 'checked_in' ? 'warning' :
+                      drawer.reservation.status === 'in_service' ? 'warning' :
+                      drawer.reservation.status === 'completed' ? 'success' :
+                      drawer.reservation.status === 'cancelled' ? 'error' : 'default'
+                    } size="small" />
                   </Typography>
+                  <Typography variant="body2"><strong>Reservation #:</strong> {drawer.reservation.id}</Typography>
+                  {drawer.reservation.is_first_for_guest ? (
+                    <Chip label="First-time Guest" color="info" size="small" sx={{ width: 'fit-content', mt: 0.5 }} />
+                  ) : (
+                    (selectedGuest?.total_visits || selectedGuest?.total_visits === 0) && (
+                      <Chip label={`${selectedGuest.total_visits} visit${selectedGuest.total_visits === 1 ? '' : 's'}`} color="default" size="small" sx={{ width: 'fit-content', mt: 0.5 }} />
+                    )
+                  )}
+                  <Typography variant="body2"><strong>Time:</strong> {dayjs(drawer.reservation.start_time).format('MMM D, YYYY h:mm A')} – {dayjs(drawer.reservation.end_time).format('h:mm A')}</Typography>
                 </Box>
               </Box>
 
               <Divider />
 
+              {/* Services breakdown */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Services</Typography>
+                {Array.isArray(drawer.reservation.reservation_services) && drawer.reservation.reservation_services.length > 0 ? (
+                  <>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Name</TableCell>
+                          <TableCell align="right">Duration</TableCell>
+                          <TableCell align="right">Qty</TableCell>
+                          <TableCell align="right">Unit Price</TableCell>
+                          <TableCell align="right">Subtotal</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {drawer.reservation.reservation_services.map((rs, idx) => {
+                          const qty = rs.quantity ?? 1;
+                          const duration = rs.service_duration_minutes ?? rs.service_details?.duration_minutes ?? 0;
+                          const unit = rs.unit_price ?? (rs.service_details?.price ?? '0');
+                          const unitNum = Number(unit);
+                          const subtotal = (Number.isFinite(unitNum) ? unitNum : 0) * qty;
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{rs.service_details?.name ?? `Service #${rs.service}`}</TableCell>
+                              <TableCell align="right">{duration} min</TableCell>
+                              <TableCell align="right">{qty}</TableCell>
+                              <TableCell align="right">${unitNum.toFixed(2)}</TableCell>
+                              <TableCell align="right">${subtotal.toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <Box display="flex" justifyContent="space-between" mt={1}>
+                      <Typography variant="body2"><strong>Total Duration:</strong> {(drawer.reservation.total_duration_minutes ?? drawer.reservation.reservation_services.reduce((acc, rs) => acc + (rs.service_duration_minutes ?? rs.service_details?.duration_minutes ?? 0) * (rs.quantity ?? 1), 0))} min</Typography>
+                      <Typography variant="body2"><strong>Total Price:</strong> ${(
+                        typeof drawer.reservation.total_price === 'number'
+                          ? drawer.reservation.total_price
+                          : drawer.reservation.reservation_services.reduce((acc, rs) => {
+                              const qty = rs.quantity ?? 1;
+                              const unit = Number(rs.unit_price ?? (rs.service_details?.price ?? '0'));
+                              return acc + (Number.isFinite(unit) ? unit : 0) * qty;
+                            }, 0)
+                      ).toFixed(2)}</Typography>
+                    </Box>
+                  </>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No services</Typography>
+                )}
+              </Box>
+
+              <Divider />
+
+              {/* Status timeline */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Status Timeline</Typography>
+                <Box display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
+                  {drawer.reservation.checked_in_at && (
+                    <Typography variant="body2"><strong>Checked in:</strong> {dayjs(drawer.reservation.checked_in_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                  {drawer.reservation.in_service_at && (
+                    <Typography variant="body2"><strong>In service:</strong> {dayjs(drawer.reservation.in_service_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                  {drawer.reservation.completed_at && (
+                    <Typography variant="body2"><strong>Completed:</strong> {dayjs(drawer.reservation.completed_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                  {drawer.reservation.checked_out_at && (
+                    <Typography variant="body2"><strong>Checked out:</strong> {dayjs(drawer.reservation.checked_out_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                  {drawer.reservation.cancelled_at && (
+                    <Typography variant="body2"><strong>Cancelled:</strong> {dayjs(drawer.reservation.cancelled_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                  {drawer.reservation.no_show_recorded_at && (
+                    <Typography variant="body2"><strong>No-show:</strong> {dayjs(drawer.reservation.no_show_recorded_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                  )}
+                </Box>
+              </Box>
+
+              <Divider />
+
+              {/* Guest details */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Guest Details</Typography>
+                {selectedGuest ? (
+                  <Box display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
+                    <Typography variant="body2"><strong>Name:</strong> {selectedGuest.first_name} {selectedGuest.last_name}</Typography>
+                    <Typography variant="body2"><strong>Email:</strong> <a href={`mailto:${selectedGuest.email}`}>{selectedGuest.email}</a></Typography>
+                    <Typography variant="body2"><strong>Phone:</strong> <a href={`tel:${selectedGuest.phone}`}>{selectedGuest.phone}</a></Typography>
+                    {selectedGuest.membership_tier && (
+                      <Typography variant="body2"><strong>Membership:</strong> {typeof selectedGuest.membership_tier === 'string' ? selectedGuest.membership_tier : selectedGuest.membership_tier?.display_name}</Typography>
+                    )}
+                    {typeof selectedGuest.loyalty_points !== 'undefined' && (
+                      <Typography variant="body2"><strong>Loyalty Points:</strong> {selectedGuest.loyalty_points}</Typography>
+                    )}
+                    {typeof selectedGuest.total_visits !== 'undefined' && (
+                      <Typography variant="body2"><strong>Total Visits:</strong> {selectedGuest.total_visits}</Typography>
+                    )}
+                    {typeof selectedGuest.total_spent !== 'undefined' && (
+                      <Typography variant="body2"><strong>Total Spent:</strong> ${Number(selectedGuest.total_spent ?? 0).toFixed(2)}</Typography>
+                    )}
+                    {selectedGuest.last_visit && (
+                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs(selectedGuest.last_visit as any).format('MMM D, YYYY h:mm A')}</Typography>
+                    )}
+                    <Box mt={1}>
+                      <Button variant="outlined" size="small" onClick={() => setIsEditGuestOpen(true)}>Edit Guest</Button>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Loading guest details…</Typography>
+                )}
+              </Box>
+
               <Stack spacing={1}>
+                <Button variant="outlined" onClick={() => openEditReservation(drawer.reservation!.id)}>
+                  Edit Reservation
+                </Button>
                 {drawer.reservation.status === 'booked' && (
                   <Button variant="contained" onClick={() => act('check_in')} disabled={isActing}>Check-in</Button>
                 )}
@@ -810,7 +996,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   <Button variant="contained" color="success" onClick={() => act('complete')} disabled={isActing}>Complete</Button>
                 )}
                 {drawer.reservation.status !== 'completed' && (
-                  <Button variant="outlined" color="error" onClick={() => act('cancel')} disabled={isActing}>Cancel</Button>
+                  <Button variant="outlined" color="error" onClick={() => act('cancel')} disabled={isActing}>Cancel Reservation</Button>
                 )}
               </Stack>
             </>
@@ -819,6 +1005,39 @@ export const StaffSchedulingCalendar: React.FC = () => {
           )}
         </Box>
       </Drawer>
+
+      {/* Edit Guest Dialog */}
+      <EditGuestDialog
+        open={isEditGuestOpen}
+        guest={selectedGuest}
+        onClose={() => setIsEditGuestOpen(false)}
+        onUpdated={(g: any) => {
+          setSelectedGuest(g);
+          if (drawer.reservation) {
+            setDrawer({ open: true, reservation: { ...drawer.reservation, guest_name: `${g.first_name} ${g.last_name}` } as any });
+          }
+        }}
+      />
+
+      {/* Edit Reservation Dialog */}
+      <Dialog open={editDialog.open} onClose={() => setEditDialog({ open: false, reservation: null })} maxWidth="md" fullWidth>
+        <DialogTitle>Edit Reservation</DialogTitle>
+        <DialogContent>
+          <ReservationBookingForm
+            reservation={editDialog.reservation as any}
+            onSaved={async () => {
+              setEditDialog({ open: false, reservation: null });
+              await loadData();
+              // Refresh drawer data with latest reservation if still open
+              if (drawer.reservation && editDialog.reservation) {
+                const updated = (await api.get(`/reservations/${(editDialog.reservation as any).id}/`)).data;
+                setDrawer({ open: true, reservation: updated });
+              }
+            }}
+            onClose={() => setEditDialog({ open: false, reservation: null })}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createDialog.open} onClose={() => setCreateDialog({ open: false })} maxWidth="md" fullWidth>
         <DialogTitle>New Reservation</DialogTitle>

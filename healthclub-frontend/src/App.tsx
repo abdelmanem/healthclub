@@ -15,6 +15,7 @@ import { Home } from './pages/Home';
 import { Dashboard } from './pages/Dashboard';
 import { GuestManagement } from './pages/GuestManagement';
 import ServicesPage from './pages/ServicesPage';
+import AppointmentsFind from './pages/AppointmentsFind';
 import Housekeeping from './pages/Housekeeping';
 import { NewReservation } from './pages/NewReservation';
 import { EmployeeSchedules } from './pages/EmployeeSchedules';
@@ -94,6 +95,13 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="services">
                   <Layout>
                     <ServicesPage />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/appointments/find" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <AppointmentsFind />
                   </Layout>
                 </ProtectedRoute>
               } />
