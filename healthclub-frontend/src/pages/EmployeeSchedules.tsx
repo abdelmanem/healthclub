@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -27,39 +27,10 @@ import { api } from '../services/api';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 const WORK_TYPES = ['Workday', 'Day Off'] as const;
 
-// Predefined shift templates
-const SHIFT_TEMPLATES = {
-  morning: {
-    name: 'Morning Shift',
-    start: '07:00',
-    end: '15:00',
-    lunchStart: '11:00',
-    lunchEnd: '11:30'
-  },
-  afternoon: {
-    name: 'Afternoon Shift',
-    start: '15:00',
-    end: '23:00',
-    lunchStart: '18:00',
-    lunchEnd: '18:30'
-  },
-  night: {
-    name: 'Night Shift',
-    start: '23:00',
-    end: '07:00',
-    lunchStart: '02:00',
-    lunchEnd: '02:30'
-  },
-  custom: {
-    name: 'Custom',
-    start: '11:00',
-    end: '23:00',
-    lunchStart: '18:00',
-    lunchEnd: '18:30'
-  }
-} as const;
+// Shifts are fully driven from backend configurations. We keep a 'custom' entry for free editing.
 
-type ShiftType = keyof typeof SHIFT_TEMPLATES;
+// Allow dynamic shift keys (e.g., config_123) in addition to predefined ones
+type ShiftKey = string;
 
 // Generate time options with 30-minute intervals (00:00 to 23:30)
 const generateTimeOptions = (): string[] => {
@@ -82,7 +53,7 @@ type WorkType = typeof WORK_TYPES[number];
 type DaySchedule = {
   day: string;
   type: WorkType;
-  shift: ShiftType;
+  shift: ShiftKey;
   start: string;
   end: string;
   lunchStart: string;
@@ -99,6 +70,17 @@ type Employee = {
 type StatusMessage = {
   type: 'success' | 'error' | 'info';
   msg: string;
+};
+
+type ShiftConfiguration = {
+  id?: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  lunch_start_time: string;
+  lunch_end_time: string;
+  is_active: boolean;
+  is_default: boolean;
 };
 
 type ScheduleApiRow = {
@@ -164,30 +146,30 @@ const getEmployeeName = (emp: Employee): string => {
   );
 };
 
-const detectShiftType = (schedule: Omit<DaySchedule, 'day' | 'type' | 'shift'>): ShiftType => {
-  // Check if times match any predefined shift
-  for (const [key, template] of Object.entries(SHIFT_TEMPLATES)) {
-    if (
-      schedule.start === template.start &&
-      schedule.end === template.end &&
-      schedule.lunchStart === template.lunchStart &&
-      schedule.lunchEnd === template.lunchEnd
-    ) {
-      return key as ShiftType;
-    }
-  }
-  return 'custom';
+const isCurrentWeek = (weekStartDate: string): boolean => {
+  const today = new Date();
+  const currentWeekStart = getWeekStartLocal(today.toISOString().split('T')[0]);
+  return weekStartDate === currentWeekStart;
 };
 
-const createDefaultSchedule = (): DaySchedule[] => {
+const convertShiftConfigToTemplate = (config: ShiftConfiguration) => ({
+  name: config.name,
+  start: config.start_time,
+  end: config.end_time,
+  lunchStart: config.lunch_start_time,
+  lunchEnd: config.lunch_end_time
+});
+
+// Provide a very basic initial schedule; will be replaced after configs load
+const createInitialSchedule = (): DaySchedule[] => {
   return DAYS.map((dayName) => ({
     day: dayName,
     type: 'Workday' as WorkType,
-    shift: 'afternoon' as ShiftType,
-    start: '15:00',
-    end: '23:00',
-    lunchStart: '18:00',
-    lunchEnd: '18:30'
+    shift: 'custom' as ShiftKey,
+    start: '09:00',
+    end: '17:00',
+    lunchStart: '12:00',
+    lunchEnd: '12:30'
   }));
 };
 
@@ -199,17 +181,69 @@ export const EmployeeSchedules: React.FC = () => {
   // State
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | ''>('');
-  const [preservePto, setPreservePto] = useState(true);
-  const [ignoreConflicts, setIgnoreConflicts] = useState(false);
+  // Removed unused preservePto/ignoreConflicts; add back when backend supports these options
   const [alsoUpdateDefault, setAlsoUpdateDefault] = useState(false);
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const [weekRefDate, setWeekRefDate] = useState<string>(getTodayDateString);
-  const [schedule, setSchedule] = useState<DaySchedule[]>(createDefaultSchedule);
+  const [schedule, setSchedule] = useState<DaySchedule[]>(createInitialSchedule);
+  const [shiftConfigurations, setShiftConfigurations] = useState<ShiftConfiguration[]>([]);
+  // Shift configurations are managed centrally; this page consumes them read-only
 
   // ============================================================================
   // Callbacks
   // ============================================================================
+
+  // Build the current set of shift templates from backend (plus 'custom')
+  const currentShiftTemplates = useMemo(() => {
+    const templates: Record<string, { name: string; start: string; end: string; lunchStart: string; lunchEnd: string } > = {};
+
+    templates.custom = {
+      name: 'Custom',
+      start: '11:00',
+      end: '23:00',
+      lunchStart: '18:00',
+      lunchEnd: '18:30',
+    };
+
+    shiftConfigurations.forEach((config, index) => {
+      if (config.is_active) {
+        const key = `config_${config.id ?? index}`;
+        templates[key] = convertShiftConfigToTemplate(config);
+      }
+    });
+
+    return templates;
+  }, [shiftConfigurations]);
+
+  // Detect a shift key by matching its times to configured templates
+  const detectShiftKeyForTimes = useCallback((scheduleTimes: { start: string; end: string; lunchStart: string; lunchEnd: string }): ShiftKey => {
+    const templates = currentShiftTemplates;
+    for (const [key, template] of Object.entries(templates)) {
+      if (
+        scheduleTimes.start === template.start &&
+        scheduleTimes.end === template.end &&
+        scheduleTimes.lunchStart === template.lunchStart &&
+        scheduleTimes.lunchEnd === template.lunchEnd
+      ) {
+        return key;
+      }
+    }
+    return 'custom';
+  }, [currentShiftTemplates]);
+
+  // Compute the default day schedule based on configured default or fallback
+  const getDefaultDaySchedule = useCallback((dayName: string): DaySchedule => {
+    const defaultConfig = shiftConfigurations.find(sc => sc.is_default);
+    if (defaultConfig) {
+      const key = `config_${defaultConfig.id}`;
+      const t = currentShiftTemplates[key];
+      if (t) {
+        return { day: dayName, type: 'Workday', shift: key as ShiftKey, start: t.start, end: t.end, lunchStart: t.lunchStart, lunchEnd: t.lunchEnd };
+      }
+    }
+    return { day: dayName, type: 'Workday', shift: 'custom', start: '09:00', end: '17:00', lunchStart: '12:00', lunchEnd: '12:30' };
+  }, [shiftConfigurations, currentShiftTemplates]);
 
   const updateRow = useCallback((idx: number, key: keyof DaySchedule, value: string) => {
     setSchedule((prev) =>
@@ -217,14 +251,16 @@ export const EmployeeSchedules: React.FC = () => {
     );
   }, []);
 
-  const applyShiftToRow = useCallback((idx: number, shiftType: ShiftType) => {
-    const template = SHIFT_TEMPLATES[shiftType];
+  const applyShiftToRow = useCallback((idx: number, shiftKey: ShiftKey) => {
+    const templates = currentShiftTemplates;
+    const template = templates[shiftKey];
+    if (!template) return;
     setSchedule((prev) =>
       prev.map((row, i) =>
         i === idx
           ? {
               ...row,
-              shift: shiftType,
+              shift: shiftKey,
               start: template.start,
               end: template.end,
               lunchStart: template.lunchStart,
@@ -233,16 +269,18 @@ export const EmployeeSchedules: React.FC = () => {
           : row
       )
     );
-  }, []);
+  }, [currentShiftTemplates]);
 
-  const applyShiftToAll = useCallback((shiftType: ShiftType) => {
-    const template = SHIFT_TEMPLATES[shiftType];
+  const applyShiftToAll = useCallback((shiftKey: ShiftKey) => {
+    const templates = currentShiftTemplates;
+    const template = templates[shiftKey];
+    if (!template) return;
     setSchedule((prev) =>
       prev.map((row) =>
         row.type === 'Workday'
           ? {
               ...row,
-              shift: shiftType,
+              shift: shiftKey,
               start: template.start,
               end: template.end,
               lunchStart: template.lunchStart,
@@ -251,6 +289,16 @@ export const EmployeeSchedules: React.FC = () => {
           : row
       )
     );
+  }, [currentShiftTemplates]);
+
+  // Simple schedule validation
+  const validateSchedule = useCallback((sched: DaySchedule[]): string | null => {
+    for (const day of sched) {
+      if (day.type === 'Day Off') continue;
+      if (day.start >= day.end) return `${day.day}: End time must be after start time`;
+      if (day.lunchStart < day.start || day.lunchEnd > day.end) return `${day.day}: Lunch must be within work hours`;
+    }
+    return null;
   }, []);
 
   const copyPreviousDay = useCallback((idx: number) => {
@@ -267,14 +315,10 @@ export const EmployeeSchedules: React.FC = () => {
       return date.toISOString().split('T')[0];
     });
   }, []);
-  // const shiftWeek = useCallback((direction: -1 | 1) => {
-  //   setWeekRefDate((currentDate) => {
-  //     const weekStart = getWeekStartLocal(currentDate);
-  //     const date = new Date(weekStart + 'T00:00:00');
-  //     date.setDate(date.getDate() + 7 * direction);
-  //     return date.toISOString().split('T')[0];
-  //   });
-  // }, []);
+
+  
+
+  
 
   // ============================================================================
   // API Functions
@@ -321,6 +365,18 @@ export const EmployeeSchedules: React.FC = () => {
     }
   };
 
+  const fetchShiftConfigurations = async (): Promise<ShiftConfiguration[]> => {
+    try {
+      const res = await api.get('/shift-configurations/');
+      return res.data?.results ?? res.data ?? [];
+    } catch (error) {
+      console.error('Failed to fetch shift configurations:', error);
+      return [];
+    }
+  };
+
+  // No create/update/delete here; managed in Configuration Manager
+
   const createSchedulePayload = (
     row: DaySchedule,
     dayIndex: number,
@@ -353,6 +409,12 @@ export const EmployeeSchedules: React.FC = () => {
     const employeeId = Number(selectedEmployeeId);
 
     try {
+      const validationError = validateSchedule(schedule);
+      if (validationError) {
+        setStatus({ type: 'error', msg: validationError });
+        setLoading(false);
+        return;
+      }
       // Fetch existing schedules
       const [weeklySchedules, defaultSchedules] = await Promise.all([
         fetchSchedulesForWeek(employeeId, effectiveFrom),
@@ -404,25 +466,31 @@ export const EmployeeSchedules: React.FC = () => {
   // Effects
   // ============================================================================
 
-  // Load employees on mount
+  // Load employees and shift configurations on mount
   useEffect(() => {
-    const loadEmployees = async () => {
+    const loadInitialData = async () => {
       try {
-        const res = await api.get('/employees/');
-        setEmployees(res.data.results ?? res.data ?? []);
+        const [employeesRes, shiftConfigsRes] = await Promise.all([
+          api.get('/employees/'),
+          fetchShiftConfigurations()
+        ]);
+        setEmployees(employeesRes.data.results ?? employeesRes.data ?? []);
+        setShiftConfigurations(shiftConfigsRes);
       } catch (error) {
-        console.error('Failed to load employees:', error);
+        console.error('Failed to load initial data:', error);
         setEmployees([]);
+        setShiftConfigurations([]);
       }
     };
-    loadEmployees();
+    loadInitialData();
   }, []);
 
   // Load schedule when employee or week changes
   useEffect(() => {
     const loadSchedule = async () => {
       if (!selectedEmployeeId) {
-        setSchedule(createDefaultSchedule());
+        // build default schedule from current templates
+        setSchedule(DAYS.map((day) => getDefaultDaySchedule(day)));
         return;
       }
 
@@ -447,22 +515,14 @@ export const EmployeeSchedules: React.FC = () => {
           const row = scheduleByDay[idx];
 
           if (!row) {
-            return {
-              day: dayName,
-              type: 'Workday' as WorkType,
-              shift: 'afternoon' as ShiftType,
-              start: '15:00',
-              end: '23:00',
-              lunchStart: '18:00',
-              lunchEnd: '18:30'
-            };
+            return getDefaultDaySchedule(dayName);
           }
 
           if (row.is_day_off) {
             return {
               day: dayName,
               type: 'Day Off' as WorkType,
-              shift: 'custom' as ShiftType,
+              shift: 'custom' as ShiftKey,
               start: '11:00',
               end: '23:00',
               lunchStart: '18:00',
@@ -480,7 +540,7 @@ export const EmployeeSchedules: React.FC = () => {
           return {
             day: dayName,
             type: 'Workday' as WorkType,
-            shift: detectShiftType(times),
+            shift: detectShiftKeyForTimes(times),
             ...times
           };
         });
@@ -488,7 +548,7 @@ export const EmployeeSchedules: React.FC = () => {
         setSchedule(newSchedule);
       } catch (error) {
         console.error('Failed to load schedule:', error);
-        setSchedule(createDefaultSchedule());
+        setSchedule(createInitialSchedule());
       } finally {
         setLoading(false);
       }
@@ -504,6 +564,7 @@ export const EmployeeSchedules: React.FC = () => {
   const weekStart = getWeekStartLocal(weekRefDate);
   const weekEnd = getWeekEndLocal(weekStart);
   const weekDisplay = formatDateRange(weekStart, weekEnd);
+  const isCurrentWeekDisplayed = isCurrentWeek(weekStart);
 
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', p: 3 }}>
@@ -542,21 +603,20 @@ export const EmployeeSchedules: React.FC = () => {
 
         {/* Quick Apply Shifts */}
         <Box sx={{ mb: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-            Quick Apply Shift to All Workdays:
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Quick Apply Shift to All Workdays:
+            </Typography>
+          </Box>
           <ButtonGroup variant="outlined" size="small">
-            <Button onClick={() => applyShiftToAll('morning')}>
-              Morning (7:00-15:00)
-            </Button>
-            <Button onClick={() => applyShiftToAll('afternoon')}>
-              Afternoon (15:00-23:00)
-            </Button>
-            <Button onClick={() => applyShiftToAll('night')}>
-              Night (23:00-7:00)
-            </Button>
+              {Object.entries(currentShiftTemplates).map(([key, template]) => (
+              <Button key={key} onClick={() => applyShiftToAll(key as ShiftKey)}>
+                {template.name} ({template.start}-{template.end})
+              </Button>
+            ))}
           </ButtonGroup>
         </Box>
+
 
         {/* Loading Indicator */}
         {loading && (
@@ -615,12 +675,12 @@ export const EmployeeSchedules: React.FC = () => {
                         fullWidth
                         size="small"
                         value={row.shift}
-                        onChange={(e) => applyShiftToRow(idx, e.target.value as ShiftType)}
+                        onChange={(e) => applyShiftToRow(idx, e.target.value as ShiftKey)}
                         disabled={isDisabled || isDayOff}
                         sx={{ opacity: isDayOff ? 0.5 : 1 }}
                       >
-                        {Object.entries(SHIFT_TEMPLATES).map(([key, template]) => (
-                          <MenuItem key={key} value={key}>
+                        {Object.entries(currentShiftTemplates).map(([key, template]) => (
+                          <MenuItem key={key} value={key as string}>
                             {template.name}
                           </MenuItem>
                         ))}
@@ -756,13 +816,51 @@ export const EmployeeSchedules: React.FC = () => {
         <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Week Selector */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-            <TextField
-              size="small"
-              label="Week of"
-              value={weekDisplay}
-              InputProps={{ readOnly: true }}
-              sx={{ minWidth: 200 }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                size="small"
+                label="Week of"
+                value={weekDisplay}
+                InputProps={{ readOnly: true }}
+                sx={{ 
+                  minWidth: 200,
+                  ...(isCurrentWeekDisplayed && {
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'primary.light',
+                      color: 'primary.contrastText',
+                      '& fieldset': {
+                        borderColor: 'primary.main',
+                        borderWidth: 2,
+                      },
+                      '&:hover fieldset': {
+                        borderColor: 'primary.dark',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'primary.main',
+                      fontWeight: 600,
+                    },
+                  })
+                }}
+              />
+              {isCurrentWeekDisplayed && (
+                <Box
+                  sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'primary.contrastText',
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: 1,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Current Week
+                </Box>
+              )}
+            </Box>
             <Button
               variant="outlined"
               size="small"
@@ -779,20 +877,24 @@ export const EmployeeSchedules: React.FC = () => {
             >
               Next Week →
             </Button>
+            {!isCurrentWeekDisplayed && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const today = new Date();
+                  setWeekRefDate(today.toISOString().split('T')[0]);
+                }}
+                disabled={loading}
+                sx={{ ml: 1 }}
+              >
+                Go to Current Week
+              </Button>
+            )}
           </Box>
 
           {/* Options */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={preservePto}
-                  onChange={(e) => setPreservePto(e.target.checked)}
-                  disabled={loading}
-                />
-              }
-              label="Preserve vacation and personal days"
-            />
             <FormControlLabel
               control={
                 <Checkbox
@@ -802,16 +904,6 @@ export const EmployeeSchedules: React.FC = () => {
                 />
               }
               label="Also update default template"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={ignoreConflicts}
-                  onChange={(e) => setIgnoreConflicts(e.target.checked)}
-                  disabled={loading}
-                />
-              }
-              label="Ignore schedule conflicts"
             />
           </Box>
 

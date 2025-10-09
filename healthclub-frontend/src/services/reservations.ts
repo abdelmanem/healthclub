@@ -34,6 +34,16 @@ export interface Reservation {
   reservation_services?: ReservationService[];
   total_duration_minutes?: number;
   total_price?: number;
+  // timeline fields (optional, provided by backend)
+  checked_in_at?: string | null;
+  in_service_at?: string | null;
+  completed_at?: string | null;
+  checked_out_at?: string | null;
+  cancelled_at?: string | null;
+  no_show_recorded_at?: string | null;
+  // flags
+  location_is_out_of_service?: boolean;
+  is_first_for_guest?: boolean;
 }
 
 export interface CreateReservationInput {

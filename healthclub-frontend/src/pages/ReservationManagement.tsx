@@ -46,6 +46,7 @@ import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation } from '../services/reservations';
+import { guestsService, Guest } from '../services/guests';
 import { api } from '../services/api';
 import { PageWrapper } from '../components/common/PageWrapper';
 import { locationsApi, Location } from '../services/locations';
@@ -88,6 +89,7 @@ export const ReservationManagement: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [historicalReservations, setHistoricalReservations] = useState<Reservation[]>([]);
+  const [guestDetails, setGuestDetails] = useState<Guest | null>(null);
 
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
@@ -213,6 +215,26 @@ export const ReservationManagement: React.FC = () => {
       setHistoricalReservations([]);
     }
   };
+
+  // Load guest details when a reservation is selected
+  useEffect(() => {
+    const guestId = selectedReservation?.guest;
+    if (!guestId) {
+      setGuestDetails(null);
+      return;
+    }
+    let aborted = false;
+    (async () => {
+      try {
+        const details = await guestsService.retrieve(guestId);
+        if (!aborted) setGuestDetails(details);
+      } catch (e) {
+        console.error('Failed to load guest details', e);
+        if (!aborted) setGuestDetails(null);
+      }
+    })();
+    return () => { aborted = true; };
+  }, [selectedReservation?.guest]);
 
   useEffect(() => { loadReservations(); }, []);
 
@@ -638,19 +660,70 @@ export const ReservationManagement: React.FC = () => {
               {/* Details Card */}
               <Paper sx={{ p: 3, mb: 3, background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
                 <Typography variant="h6" sx={{ mb: 2, color: 'grey.900' }}>Reservation Details</Typography>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Services</Typography>
-                  <Typography variant="body2">
-                    {(selectedReservation.reservation_services || []).map((s:any)=> s.service_details?.name || `#${s.service}`).join(', ') || 'No services'}
-                  </Typography>
+
+                {/* Primary Info */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', rowGap: 1, mb: 2 }}>
+                  <Typography variant="body2"><strong>Guest:</strong> {selectedReservation.guest_name}</Typography>
+                  <Typography variant="body2"><strong>Employee:</strong> {selectedReservation.employee_name || 'Unassigned'}</Typography>
+                  <Typography variant="body2"><strong>Location:</strong> {selectedReservation.location_name || '—'}</Typography>
+                  <Typography variant="body2"><strong>Status:</strong> {(selectedReservation.status ?? 'pending').replace('_',' ')}</Typography>
+                  <Typography variant="body2"><strong>Reservation #:</strong> {selectedReservation.id}</Typography>
+                  {(selectedReservation as any).is_first_for_guest && (
+                    <Chip label="First-time Guest" color="info" size="small" sx={{ width: 'fit-content', mt: 0.5 }} />
+                  )}
                 </Box>
 
+                {/* Services Table */}
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Notes</Typography>
-                  <Typography variant="body2">{selectedReservation.notes || '—'}</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Services</Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 1 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Name</TableCell>
+                          <TableCell align="right">Duration</TableCell>
+                          <TableCell align="right">Qty</TableCell>
+                          <TableCell align="right">Unit Price</TableCell>
+                          <TableCell align="right">Subtotal</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(selectedReservation.reservation_services || []).length ? (
+                          (selectedReservation.reservation_services || []).map((s:any, i:number) => {
+                            const name = s.service_details?.name || `#${s.service}`;
+                            const dur = s.service_details?.duration_minutes || s.service_duration_minutes || 0;
+                            const qty = s.quantity || 1;
+                            const unit = Number(s.unit_price || s.service_details?.price || 0);
+                            const subtotal = unit * qty;
+                            return (
+                              <TableRow key={i}>
+                                <TableCell>{name}</TableCell>
+                                <TableCell align="right">{dur} min</TableCell>
+                                <TableCell align="right">{qty}</TableCell>
+                                <TableCell align="right">${unit.toFixed(2)}</TableCell>
+                                <TableCell align="right">${subtotal.toFixed(2)}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={5}>No services</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="body2" color="text.secondary">Total Duration</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{selectedReservation.total_duration_minutes || 0} min</Typography>
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Total Price</Typography>
+                    <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 700 }}>${Number(selectedReservation.total_price || 0).toFixed(2)}</Typography>
+                  </Stack>
                 </Box>
 
+                {/* Schedule */}
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Schedule</Typography>
                   <Typography variant="body2">
@@ -658,17 +731,68 @@ export const ReservationManagement: React.FC = () => {
                   </Typography>
                 </Box>
 
+                {/* Status Timeline */}
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Total Price</Typography>
-                  <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 600 }}>
-                    ${Number(selectedReservation.total_price || 0).toFixed(2)}
-                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Status Timeline</Typography>
+                  <List dense>
+                    {selectedReservation.checked_in_at && (
+                      <ListItem><ListItemText primary="Checked in" secondary={dayjs(selectedReservation.checked_in_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                    {selectedReservation.in_service_at && (
+                      <ListItem><ListItemText primary="In service" secondary={dayjs(selectedReservation.in_service_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                    {selectedReservation.completed_at && (
+                      <ListItem><ListItemText primary="Completed" secondary={dayjs(selectedReservation.completed_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                    {(selectedReservation as any).checked_out_at && (
+                      <ListItem><ListItemText primary="Checked out" secondary={dayjs((selectedReservation as any).checked_out_at).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                    {selectedReservation.cancelled_at && (
+                      <ListItem><ListItemText primary="Cancelled" secondary={dayjs(selectedReservation.cancelled_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                    {(selectedReservation as any).no_show_recorded_at && (
+                      <ListItem><ListItemText primary="No-show" secondary={dayjs((selectedReservation as any).no_show_recorded_at).format('MMM D, YYYY h:mm A')} /></ListItem>
+                    )}
+                  </List>
+                </Box>
+
+                {/* Notes / Flags */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Notes</Typography>
+                  <Typography variant="body2">{selectedReservation.notes || '—'}</Typography>
                 </Box>
 
                 {((selectedReservation as any).location_is_out_of_service) && (
                   <Chip label="Room Out of Service" color="error" size="small" />
                 )}
               </Paper>
+
+              {/* Guest Details */}
+              {guestDetails && (
+                <Paper sx={{ p: 3, mb: 3, background: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(8px)' }}>
+                  <Typography variant="h6" sx={{ mb: 2, color: 'grey.900' }}>Guest Details</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', rowGap: 0.75 }}>
+                    <Typography variant="body2"><strong>Name:</strong> {guestDetails.first_name} {guestDetails.last_name}</Typography>
+                    <Typography variant="body2"><strong>Email:</strong> <a href={`mailto:${guestDetails.email}`}>{guestDetails.email}</a></Typography>
+                    <Typography variant="body2"><strong>Phone:</strong> <a href={`tel:${guestDetails.phone}`}>{guestDetails.phone}</a></Typography>
+                    {guestDetails.membership_tier && (
+                      <Typography variant="body2"><strong>Membership:</strong> {typeof guestDetails.membership_tier === 'string' ? guestDetails.membership_tier : (guestDetails.membership_tier as any)?.display_name || (guestDetails.membership_tier as any)?.name}</Typography>
+                    )}
+                    {(guestDetails as any).loyalty_points !== undefined && (
+                      <Typography variant="body2"><strong>Loyalty Points:</strong> {(guestDetails as any).loyalty_points}</Typography>
+                    )}
+                    {(guestDetails as any).visit_count !== undefined && (
+                      <Typography variant="body2"><strong>Total Visits:</strong> {(guestDetails as any).visit_count}</Typography>
+                    )}
+                    {(guestDetails as any).total_spent !== undefined && (
+                      <Typography variant="body2"><strong>Total Spent:</strong> ${Number((guestDetails as any).total_spent || 0).toFixed(2)}</Typography>
+                    )}
+                    {(guestDetails as any).last_visit && (
+                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs((guestDetails as any).last_visit).format('MMM D, YYYY')}</Typography>
+                    )}
+                  </Box>
+                </Paper>
+              )}
 
               {/* Action Buttons */}
               <Paper sx={{ p: 2, mb: 3, background: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>

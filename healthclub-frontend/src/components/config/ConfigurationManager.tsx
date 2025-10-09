@@ -52,6 +52,9 @@ import {
   Warning,
   Info
 } from '@mui/icons-material';
+import { Schedule } from '@mui/icons-material';
+import { TextField, FormControlLabel, Checkbox } from '@mui/material';
+import { api } from '../../services/api';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
 import { PermissionGate } from '../common/PermissionGate';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -91,6 +94,8 @@ export const ConfigurationManager: React.FC = () => {
   const [isCancellationReasonFormOpen, setIsCancellationReasonFormOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [shiftConfigurations, setShiftConfigurations] = useState<any[]>([]);
+  const [editingShift, setEditingShift] = useState<any | null>(null);
   
   const { showSuccess, showError, showWarning, showInfo } = useToast();
   
@@ -118,11 +123,17 @@ export const ConfigurationManager: React.FC = () => {
     { label: 'Training Types', icon: <School />, color: 'primary' },
     { label: 'Product Types', icon: <Inventory />, color: 'secondary' },
     { label: 'Notification Templates', icon: <Notifications />, color: 'info' },
+    { label: 'Shift Configurations', icon: <Schedule />, color: 'primary' },
     { label: 'Cancellation Reasons', icon: <CancelIcon />, color: 'error' }
   ];
 
+  const SHIFT_TAB_INDEX = 8; // after adding, shift tab sits at index 8
+
   const handleEdit = (item: any, tabIndex?: number) => {
-    if (tabIndex === 8) {
+    if (tabIndex === SHIFT_TAB_INDEX) {
+      setEditingShift(item);
+      setIsDialogOpen(true);
+    } else if (tabIndex === 9) {
       // Handle cancellation reason edit
       setEditingCancellationReason(item as CancellationReason);
       setIsCancellationReasonFormOpen(true);
@@ -134,7 +145,18 @@ export const ConfigurationManager: React.FC = () => {
   };
 
   const handleAdd = (tabIndex?: number) => {
-    if (tabIndex === 8) {
+    if (tabIndex === SHIFT_TAB_INDEX) {
+      setEditingShift({
+        name: '',
+        start_time: '09:00',
+        end_time: '17:00',
+        lunch_start_time: '12:00',
+        lunch_end_time: '12:30',
+        is_active: true,
+        is_default: false
+      });
+      setIsDialogOpen(true);
+    } else if (tabIndex === 9) {
       // Handle cancellation reason add
       setEditingCancellationReason(null);
       setIsCancellationReasonFormOpen(true);
@@ -148,14 +170,27 @@ export const ConfigurationManager: React.FC = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // TODO: Implement actual save functionality
-    console.log('Save configuration:', editingItem);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
+      // Shift configurations save
+      if (tabValue === SHIFT_TAB_INDEX && editingShift) {
+        if (editingShift.id) {
+          await api.patch(`/shift-configurations/${editingShift.id}/`, editingShift);
+        } else {
+          await api.post('/shift-configurations/', editingShift);
+        }
+        showSuccess('Shift configuration saved successfully!');
+        setIsDialogOpen(false);
+        setEditingShift(null);
+        await loadShiftConfigurations();
+        return;
+      }
+
+      // Other types (placeholder)
+      console.log('Save configuration:', editingItem);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       showSuccess('Configuration saved successfully!');
-    setIsDialogOpen(false);
-    setEditingItem(null);
-    await refreshConfigurations();
+      setIsDialogOpen(false);
+      setEditingItem(null);
+      await refreshConfigurations();
     } catch (error) {
       showError('Failed to save configuration');
     } finally {
@@ -170,7 +205,15 @@ export const ConfigurationManager: React.FC = () => {
 
   const handleDelete = async (item: any) => {
     try {
-      // TODO: Implement actual delete functionality
+      if (tabValue === SHIFT_TAB_INDEX) {
+        if (item?.id) {
+          await api.delete(`/shift-configurations/${item.id}/`);
+          showSuccess('Shift configuration deleted successfully!');
+          await loadShiftConfigurations();
+        }
+        return;
+      }
+      // Other types (placeholder)
       console.log('Delete configuration:', item);
       showSuccess('Configuration deleted successfully!');
       await refreshConfigurations();
@@ -181,16 +224,27 @@ export const ConfigurationManager: React.FC = () => {
 
   const handleDuplicate = (item: any) => {
     const duplicatedItem = { ...item, id: undefined, name: `${item.name} (Copy)` };
-    setEditingItem(duplicatedItem);
-    setIsDialogOpen(true);
+    if (tabValue === SHIFT_TAB_INDEX) {
+      setEditingShift(duplicatedItem);
+      setIsDialogOpen(true);
+    } else {
+      setEditingItem(duplicatedItem);
+      setIsDialogOpen(true);
+    }
   };
 
   const handleBulkDelete = async (items: any[]) => {
     try {
-      // TODO: Implement bulk delete functionality
-      console.log('Bulk delete configurations:', items);
-      showSuccess(`${items.length} configurations deleted successfully!`);
-      await refreshConfigurations();
+      if (tabValue === SHIFT_TAB_INDEX) {
+        const ids = items.map(i => i.id).filter(Boolean);
+        await Promise.all(ids.map((id: number) => api.delete(`/shift-configurations/${id}/`)));
+        showSuccess(`${ids.length} shift configurations deleted successfully!`);
+        await loadShiftConfigurations();
+      } else {
+        console.log('Bulk delete configurations:', items);
+        showSuccess(`${items.length} configurations deleted successfully!`);
+        await refreshConfigurations();
+      }
     } catch (error) {
       showError('Failed to delete configurations');
     }
@@ -203,6 +257,19 @@ export const ConfigurationManager: React.FC = () => {
   const handleImport = () => {
     showInfo('Import functionality will be implemented soon');
   };
+
+  const loadShiftConfigurations = async () => {
+    try {
+      const res = await api.get('/shift-configurations/');
+      setShiftConfigurations(res.data?.results ?? res.data ?? []);
+    } catch (e) {
+      setShiftConfigurations([]);
+    }
+  };
+
+  useEffect(() => {
+    loadShiftConfigurations();
+  }, []);
 
   // Table column configurations
   const getColumnsForTab = (tabIndex: number): TableColumn[] => {
@@ -267,7 +334,17 @@ export const ConfigurationManager: React.FC = () => {
           { id: 'subject', label: 'Subject', minWidth: 200 },
           { id: 'is_active', label: 'Status', minWidth: 100, format: (value) => <Chip label={value ? 'Active' : 'Inactive'} size="small" color={value ? 'success' : 'default'} /> }
         ];
-      case 8: // Cancellation Reasons
+      case 8: // Shift Configurations
+        return [
+          { id: 'name', label: 'Name', minWidth: 150, sortable: true },
+          { id: 'start_time', label: 'Start', minWidth: 100 },
+          { id: 'end_time', label: 'End', minWidth: 100 },
+          { id: 'lunch_start_time', label: 'Lunch Start', minWidth: 110 },
+          { id: 'lunch_end_time', label: 'Lunch End', minWidth: 110 },
+          { id: 'is_default', label: 'Default', minWidth: 100, format: (v) => <Chip label={v ? 'Default' : '-'} size="small" color={v ? 'primary' : 'default'} /> },
+          { id: 'is_active', label: 'Status', minWidth: 100, format: (v) => <Chip label={v ? 'Active' : 'Inactive'} size="small" color={v ? 'success' : 'default'} /> }
+        ];
+      case 9: // Cancellation Reasons
         return [
           { id: 'code', label: 'Code', minWidth: 100, sortable: true },
           { id: 'name', label: 'Name', minWidth: 150, sortable: true },
@@ -290,7 +367,8 @@ export const ConfigurationManager: React.FC = () => {
       case 5: return trainingTypes;
       case 6: return productTypes;
       case 7: return notificationTemplates;
-      case 8: return cancellationReasons;
+      case 8: return shiftConfigurations;
+      case 9: return cancellationReasons;
       default: return [];
     }
   };
@@ -474,23 +552,81 @@ export const ConfigurationManager: React.FC = () => {
           open={isDialogOpen}
           onClose={handleCancel}
           onSave={handleSave}
-          title={editingItem ? 'Edit Configuration' : 'Add Configuration'}
+          title={tabValue === SHIFT_TAB_INDEX ? (editingShift?.id ? 'Edit Shift Configuration' : 'Add Shift Configuration') : (editingItem ? 'Edit Configuration' : 'Add Configuration')}
           subtitle={`${tabConfigs[tabValue].label} Management`}
           icon={tabConfigs[tabValue].icon}
           loading={loading}
           stickyHeader
           stickyFooter
         >
-          <ConfigurationForm
-            data={editingItem}
-            onChange={setEditingItem}
-            onSave={handleSave}
-            onCancel={handleCancel}
-            onDelete={editingItem?.id ? () => handleDelete(editingItem) : undefined}
-            onDuplicate={editingItem ? () => handleDuplicate(editingItem) : undefined}
-            loading={loading}
-            variant="dialog"
-          />
+          {tabValue === SHIFT_TAB_INDEX ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="Shift Name"
+                value={editingShift?.name || ''}
+                onChange={(e) => setEditingShift((prev: any) => ({ ...prev, name: e.target.value }))}
+                size="small"
+                fullWidth
+              />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Start Time"
+                  type="time"
+                  value={editingShift?.start_time || '09:00'}
+                  onChange={(e) => setEditingShift((prev: any) => ({ ...prev, start_time: e.target.value }))}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="End Time"
+                  type="time"
+                  value={editingShift?.end_time || '17:00'}
+                  onChange={(e) => setEditingShift((prev: any) => ({ ...prev, end_time: e.target.value }))}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Lunch Start"
+                  type="time"
+                  value={editingShift?.lunch_start_time || '12:00'}
+                  onChange={(e) => setEditingShift((prev: any) => ({ ...prev, lunch_start_time: e.target.value }))}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Lunch End"
+                  type="time"
+                  value={editingShift?.lunch_end_time || '12:30'}
+                  onChange={(e) => setEditingShift((prev: any) => ({ ...prev, lunch_end_time: e.target.value }))}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControlLabel
+                  control={<Checkbox checked={!!editingShift?.is_active} onChange={(e) => setEditingShift((prev: any) => ({ ...prev, is_active: e.target.checked }))} />}
+                  label="Active"
+                />
+                <FormControlLabel
+                  control={<Checkbox checked={!!editingShift?.is_default} onChange={(e) => setEditingShift((prev: any) => ({ ...prev, is_default: e.target.checked }))} />}
+                  label="Default"
+                />
+              </Box>
+            </Box>
+          ) : (
+            <ConfigurationForm
+              data={editingItem}
+              onChange={setEditingItem}
+              onSave={handleSave}
+              onCancel={handleCancel}
+              onDelete={editingItem?.id ? () => handleDelete(editingItem) : undefined}
+              onDuplicate={editingItem ? () => handleDuplicate(editingItem) : undefined}
+              loading={loading}
+              variant="dialog"
+            />
+          )}
         </EnhancedDialog>
         
         {/* Cancellation Reason Form Dialog */}
