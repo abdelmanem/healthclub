@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+  font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+.MuiDrawer-paper {
+  border-right: 1px solid #e0e0e0;
+}
+
+.MuiAppBar-root {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.MuiCard-root {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 8px;
+}
+
+.MuiButton-root {
+  border-radius: 6px;
+}
+
+.MuiTextField-root {
+  margin-bottom: 16px;
+}
