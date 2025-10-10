@@ -28,18 +28,16 @@ import {
   Button,
   ButtonGroup
 } from '@mui/material';
-import {
-  Search,
-  FilterList,
-  MoreVert,
-  Edit,
-  Delete,
-  ContentCopy,
-  History,
-  Refresh,
-  Download,
-  Upload
-} from '@mui/icons-material';
+import Search from '@mui/icons-material/Search';
+import FilterList from '@mui/icons-material/FilterList';
+import MoreVert from '@mui/icons-material/MoreVert';
+import Edit from '@mui/icons-material/Edit';
+import Delete from '@mui/icons-material/Delete';
+import ContentCopy from '@mui/icons-material/ContentCopy';
+import History from '@mui/icons-material/History';
+import Refresh from '@mui/icons-material/Refresh';
+import Download from '@mui/icons-material/Download';
+import Upload from '@mui/icons-material/Upload';
 
 export interface TableColumn {
   id: string;

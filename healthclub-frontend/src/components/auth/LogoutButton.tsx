@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, IconButton } from '@mui/material';
-import { Logout } from '@mui/icons-material';
+import Logout from '@mui/icons-material/Logout';
 import { authService } from '../../services/auth';
 import { useNavigate } from 'react-router-dom';
 

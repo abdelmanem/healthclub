@@ -16,15 +16,13 @@ import {
   Divider
 } from '@mui/material';
 import Grid from '@mui/material/Unstable_Grid2';
-import {
-  Save,
-  Cancel,
-  Edit,
-  Delete,
-  Add,
-  ContentCopy,
-  History
-} from '@mui/icons-material';
+import Save from '@mui/icons-material/Save';
+import Cancel from '@mui/icons-material/Cancel';
+import Edit from '@mui/icons-material/Edit';
+import Delete from '@mui/icons-material/Delete';
+import Add from '@mui/icons-material/Add';
+import ContentCopy from '@mui/icons-material/ContentCopy';
+import History from '@mui/icons-material/History';
 
 export interface ConfigurationFormProps {
   data: any;

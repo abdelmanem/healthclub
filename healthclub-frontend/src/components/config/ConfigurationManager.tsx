@@ -24,35 +24,33 @@ import {
   LinearProgress,
   CircularProgress
 } from '@mui/material';
-import {
-  Edit,
-  Add,
-  Save,
-  Cancel,
-  Delete,
-  ContentCopy,
-  History,
-  Refresh,
-  Download,
-  Upload,
-  FilterList,
-  Search,
-  MoreVert,
-  Settings,
-  People,
-  Category,
-  Business,
-  AttachMoney,
-  School,
-  Inventory,
-  Notifications,
-  Cancel as CancelIcon,
-  CheckCircle,
-  Error,
-  Warning,
-  Info
-} from '@mui/icons-material';
-import { Schedule } from '@mui/icons-material';
+import Edit from '@mui/icons-material/Edit';
+import Add from '@mui/icons-material/Add';
+import Save from '@mui/icons-material/Save';
+import Cancel from '@mui/icons-material/Cancel';
+import Delete from '@mui/icons-material/Delete';
+import ContentCopy from '@mui/icons-material/ContentCopy';
+import History from '@mui/icons-material/History';
+import Refresh from '@mui/icons-material/Refresh';
+import Download from '@mui/icons-material/Download';
+import Upload from '@mui/icons-material/Upload';
+import FilterList from '@mui/icons-material/FilterList';
+import Search from '@mui/icons-material/Search';
+import MoreVert from '@mui/icons-material/MoreVert';
+import Settings from '@mui/icons-material/Settings';
+import People from '@mui/icons-material/People';
+import Category from '@mui/icons-material/Category';
+import Business from '@mui/icons-material/Business';
+import AttachMoney from '@mui/icons-material/AttachMoney';
+import School from '@mui/icons-material/School';
+import Inventory from '@mui/icons-material/Inventory';
+import Notifications from '@mui/icons-material/Notifications';
+import CancelIcon from '@mui/icons-material/Cancel';
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import Error from '@mui/icons-material/Error';
+import Warning from '@mui/icons-material/Warning';
+import Info from '@mui/icons-material/Info';
+import Schedule from '@mui/icons-material/Schedule';
 import { TextField, FormControlLabel, Checkbox } from '@mui/material';
 import { api } from '../../services/api';
 import { useConfiguration } from '../../contexts/ConfigurationContext';

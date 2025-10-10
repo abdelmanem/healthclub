@@ -15,7 +15,11 @@ import {
   Divider,
   Badge
 } from '@mui/material';
-import { Settings, AccountCircle, ChevronRight, Search, Notifications } from '@mui/icons-material';
+import Settings from '@mui/icons-material/Settings';
+import AccountCircle from '@mui/icons-material/AccountCircle';
+import ChevronRight from '@mui/icons-material/ChevronRight';
+import Search from '@mui/icons-material/Search';
+import Notifications from '@mui/icons-material/Notifications';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { LogoutButton } from '../auth/LogoutButton';

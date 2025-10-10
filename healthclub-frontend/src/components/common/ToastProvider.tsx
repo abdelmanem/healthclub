@@ -9,7 +9,11 @@ import {
   IconButton,
   Typography
 } from '@mui/material';
-import { Close, CheckCircle, Error as ErrorIcon, Warning, Info } from '@mui/icons-material';
+import Close from '@mui/icons-material/Close';
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import Warning from '@mui/icons-material/Warning';
+import Info from '@mui/icons-material/Info';
 
 interface Toast {
   id: string;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography, Chip, Button } from '@mui/material';
 import { LoyaltyProgramManager } from './advanced/LoyaltyProgramManager';
-import { Person } from '@mui/icons-material';
+import Person from '@mui/icons-material/Person';
 import { Guest } from '../../services/guests';
 import { PermissionGate } from '../common/PermissionGate';
 

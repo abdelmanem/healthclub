@@ -13,7 +13,9 @@ import {
   Typography,
   Divider
 } from '@mui/material';
-import { Close, Save, Cancel } from '@mui/icons-material';
+import Close from '@mui/icons-material/Close';
+import Save from '@mui/icons-material/Save';
+import Cancel from '@mui/icons-material/Cancel';
 import { TransitionProps } from '@mui/material/transitions';
 
 const SlideTransition = React.forwardRef(function Transition(

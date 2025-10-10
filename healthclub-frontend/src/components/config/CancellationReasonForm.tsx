@@ -10,7 +10,8 @@ import {
   Switch,
   Box
 } from '@mui/material';
-import { Save, Cancel } from '@mui/icons-material';
+import Save from '@mui/icons-material/Save';
+import Cancel from '@mui/icons-material/Cancel';
 import { CancellationReason } from '../../types/config';
 import { configService } from '../../services/config';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
