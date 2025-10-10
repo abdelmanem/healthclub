@@ -26,7 +26,7 @@ from guests.views import GuestViewSet
 from services.views import ServiceViewSet, ServiceCategoryViewSet
 from reservations.views import LocationViewSet, ReservationViewSet, HousekeepingTaskViewSet
 # from reservations.spa_scheduling_views import SpaSchedulingViewSet
-from pos.views import InvoiceViewSet, PaymentViewSet
+from pos.views import InvoiceViewSet, PaymentViewSet, PaymentMethodViewSet
 from employees.views import (
     EmployeeViewSet,
     EmployeeShiftViewSet,
@@ -66,6 +66,7 @@ router.register(r'reservations', ReservationViewSet, basename='reservation')
 router.register(r'housekeeping-tasks', HousekeepingTaskViewSet, basename='housekeeping-task')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'payments', PaymentViewSet, basename='payment')
+router.register(r'payment-methods', PaymentMethodViewSet, basename='payment-method')
 router.register(r'employees', EmployeeViewSet, basename='employee')
 router.register(r'shifts', EmployeeShiftViewSet, basename='shift')
 router.register(r'employee-weekly-schedules', EmployeeWeeklyScheduleViewSet, basename='employee-weekly-schedule')

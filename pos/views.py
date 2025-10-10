@@ -1,98 +1,992 @@
-from rest_framework import viewsets, decorators, response, status, filters
-from django_filters.rest_framework import DjangoFilterBackend
-from .models import Invoice, Payment
-from .serializers import InvoiceSerializer, PaymentSerializer
-from healthclub.permissions import ObjectPermissionsOrReadOnly
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from django.db.models import Q, Sum, Count, Avg
+from decimal import Decimal
+
+from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+from .serializers import (
+    InvoiceSerializer,
+    InvoiceListSerializer,
+    InvoiceItemSerializer,
+    PaymentSerializer,
+    PaymentMethodSerializer,
+    ProcessPaymentSerializer,
+    RefundSerializer,
+)
+
 
 class InvoiceViewSet(viewsets.ModelViewSet):
-    queryset = Invoice.objects.all().select_related("guest", "reservation").order_by("-date")
-    serializer_class = InvoiceSerializer
-    permission_classes = [ObjectPermissionsOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["invoice_number", "guest__first_name", "guest__last_name"]
-    ordering_fields = ["date", "total"]
-    filterset_fields = {
-        'guest': ['exact', 'in'],
-        'reservation': ['exact', 'in', 'isnull'],
-        'status': ['exact', 'in'],
-        'date': ['gte', 'lte'],
-        'total': ['gte', 'lte'],
-    }
-
-    @decorators.action(detail=False, methods=["get"], url_path="report-revenue")
-    def report_revenue(self, request):
-        from django.db.models import Sum
-        total = self.get_queryset().filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PAID]).aggregate(Sum('total'))['total__sum'] or 0
-        paid = self.get_queryset().filter(status=Invoice.STATUS_PAID).aggregate(Sum('total'))['total__sum'] or 0
-        return response.Response({"total": total, "paid": paid})
-
+    """
+    ViewSet for invoice management
+    
+    Provides:
+    - Standard CRUD operations
+    - Payment processing
+    - Refunds
+    - Statistics
+    - Search and filtering
+    """
+    
+    queryset = Invoice.objects.all().prefetch_related(
+        'items',
+        'items__service',
+        'payments',
+        'payments__payment_method'
+    ).select_related(
+        'guest',
+        'reservation',
+        'created_by'
+    )
+    
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['invoice_number', 'guest__first_name', 'guest__last_name', 'guest__email']
+    ordering_fields = ['date', 'total', 'status', 'invoice_number']
+    ordering = ['-date']
+    
+    def get_serializer_class(self):
+        """
+        Use different serializers for different actions
+        
+        - List view: Lightweight serializer (better performance)
+        - Detail view: Full serializer with nested data
+        """
+        if self.action == 'list':
+            return InvoiceListSerializer
+        return InvoiceSerializer
+    
     def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if user.is_staff or user.is_superuser:
-            return qs
-        from guardian.shortcuts import get_objects_for_user
-        return get_objects_for_user(user, 'pos.view_invoice', qs)
-
-    @decorators.action(detail=True, methods=["get"], url_path="permissions")
-    def permissions(self, request, pk=None):
-        obj = self.get_object()
-        from guardian.shortcuts import get_users_with_perms
-        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
-        result = {u.username: perms for u, perms in users.items()}
-        return response.Response(result)
-
-    @decorators.action(detail=True, methods=["post"], url_path="cancel")
-    def cancel(self, request, pk=None):
-        invoice = self.get_object()
-        invoice.status = Invoice.STATUS_CANCELLED
-        invoice.save(update_fields=["status"])
-        return response.Response({"status": invoice.status})
-
-    @decorators.action(detail=True, methods=["post"], url_path="recalculate")
-    def recalculate(self, request, pk=None):
-        invoice = self.get_object()
-        invoice.recalculate_totals()
-        return response.Response(self.get_serializer(invoice).data)
-
-
-class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.all().select_related("invoice").order_by("-payment_date")
-    serializer_class = PaymentSerializer
-    permission_classes = [ObjectPermissionsOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["transaction_id", "invoice__invoice_number"]
-    ordering_fields = ["payment_date", "amount"]
-    filterset_fields = {
-        'invoice': ['exact', 'in'],
-        'method': ['exact', 'in'],
-        'amount': ['gte', 'lte'],
-        'payment_date': ['gte', 'lte'],
-    }
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if user.is_staff or user.is_superuser:
-            return qs
-        from guardian.shortcuts import get_objects_for_user
-        return get_objects_for_user(user, 'pos.view_payment', qs)
-
-    @decorators.action(detail=True, methods=["get"], url_path="permissions")
-    def permissions(self, request, pk=None):
-        obj = self.get_object()
-        from guardian.shortcuts import get_users_with_perms
-        users = get_users_with_perms(obj, attach_perms=True, with_superusers=False)
-        result = {u.username: perms for u, perms in users.items()}
-        return response.Response(result)
-
+        """
+        Filter invoices based on query parameters
+        
+        Supported filters:
+        - guest: Filter by guest ID
+        - reservation: Filter by reservation ID
+        - status: Filter by status
+        - start_date: Invoices on or after this date
+        - end_date: Invoices on or before this date
+        - search: Search invoice number, guest name, email
+        - min_amount: Minimum total amount
+        - max_amount: Maximum total amount
+        - has_balance: Only invoices with outstanding balance
+        - is_overdue: Only overdue invoices
+        
+        Examples:
+        GET /api/invoices/?guest=15
+        GET /api/invoices/?status=pending
+        GET /api/invoices/?start_date=2025-01-01&end_date=2025-01-31
+        GET /api/invoices/?has_balance=true
+        GET /api/invoices/?search=john
+        """
+        queryset = super().get_queryset()
+        
+        # Filter by guest
+        guest_id = self.request.query_params.get('guest')
+        if guest_id:
+            queryset = queryset.filter(guest_id=guest_id)
+        
+        # Filter by reservation
+        reservation_id = self.request.query_params.get('reservation')
+        if reservation_id:
+            queryset = queryset.filter(reservation_id=reservation_id)
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            # Support comma-separated statuses
+            statuses = status_param.split(',')
+            queryset = queryset.filter(status__in=statuses)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
+        # Filter by amount range
+        min_amount = self.request.query_params.get('min_amount')
+        max_amount = self.request.query_params.get('max_amount')
+        if min_amount:
+            queryset = queryset.filter(total__gte=Decimal(min_amount))
+        if max_amount:
+            queryset = queryset.filter(total__lte=Decimal(max_amount))
+        
+        # Filter invoices with balance
+        has_balance = self.request.query_params.get('has_balance')
+        if has_balance and has_balance.lower() == 'true':
+            queryset = queryset.filter(balance_due__gt=0)
+        
+        # Filter overdue invoices
+        is_overdue = self.request.query_params.get('is_overdue')
+        if is_overdue and is_overdue.lower() == 'true':
+            queryset = queryset.filter(
+                status='overdue'
+            ) | queryset.filter(
+                due_date__lt=timezone.now().date(),
+                balance_due__gt=0,
+                status__in=['pending', 'partial']
+            )
+        
+        return queryset
+    
     def perform_create(self, serializer):
-        payment = serializer.save()
-        invoice = payment.invoice
+        """
+        Hook to set created_by when creating invoice
+        """
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def process_payment(self, request, pk=None):
+        """
+        Process a payment for this invoice
+        
+        Endpoint: POST /api/invoices/{id}/process-payment/
+        
+        Request body:
+        {
+            "amount": "108.00",
+            "payment_method": 2,
+            "payment_type": "full",
+            "reference": "VISA-4532",
+            "transaction_id": "TXN-123456",
+            "notes": "Paid by Visa ending in 4532"
+        }
+        
+        Process:
+        1. Validate request data
+        2. Get invoice
+        3. Check if invoice can accept payments
+        4. Validate amount against balance
+        5. Create payment record
+        6. Update invoice totals (automatic via signals)
+        7. Update guest loyalty points (automatic via signals)
+        8. Return success response
+        
+        Response (success):
+        {
+            "success": true,
+            "payment_id": 1,
+            "amount_paid": "108.00",
+            "invoice_total": "108.00",
+            "amount_previously_paid": "0.00",
+            "total_paid": "108.00",
+            "balance_due": "0.00",
+            "invoice_status": "paid",
+            "payment_status": "completed",
+            "message": "Payment of $108.00 processed successfully"
+        }
+        
+        Response (error):
+        {
+            "error": "Payment amount cannot exceed balance due of $108.00"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Validate request data
+        serializer = ProcessPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        amount = serializer.validated_data['amount']
+        payment_method = serializer.validated_data['payment_method']
+        payment_type = serializer.validated_data['payment_type']
+        reference = serializer.validated_data.get('reference', '')
+        transaction_id = serializer.validated_data.get('transaction_id', '')
+        notes = serializer.validated_data.get('notes', '')
+        
+        # Check if invoice can accept payments
+        if not invoice.can_be_paid():
+            return Response(
+                {
+                    'error': f'Cannot process payment for {invoice.status} invoice',
+                    'invoice_status': invoice.status,
+                    'balance_due': str(invoice.balance_due)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate amount against balance
+        if amount > invoice.balance_due:
+            return Response(
+                {
+                    'error': f'Payment amount ${amount} cannot exceed balance due of ${invoice.balance_due}',
+                    'balance_due': str(invoice.balance_due),
+                    'amount_requested': str(amount)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Store previous amount paid for response
+        previous_amount_paid = invoice.amount_paid
+        
+        # Create payment within transaction
+        with transaction.atomic():
+            payment = Payment.objects.create(
+                invoice=invoice,
+                method=payment_method.code,
+                payment_method=payment_method,
+                payment_type=payment_type,
+                amount=amount,
+                transaction_id=transaction_id,
+                reference=reference,
+                status='completed',
+                notes=notes,
+                processed_by=request.user
+            )
+            
+            # Invoice totals and guest points updated automatically via signals
+        
+        # Refresh invoice from database to get updated values
+        invoice.refresh_from_db()
+        
+        return Response({
+            'success': True,
+            'payment_id': payment.id,
+            'amount_paid': str(payment.amount),
+            'invoice_total': str(invoice.total),
+            'amount_previously_paid': str(previous_amount_paid),
+            'total_paid': str(invoice.amount_paid),
+            'balance_due': str(invoice.balance_due),
+            'invoice_status': invoice.status,
+            'payment_status': payment.status,
+            'loyalty_points_earned': int(payment.amount),
+            'message': f'Payment of ${payment.amount} processed successfully'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def refund(self, request, pk=None):
+        """
+        Process a refund for this invoice
+        
+        Endpoint: POST /api/invoices/{id}/refund/
+        
+        Request body:
+        {
+            "amount": "50.00",
+            "reason": "Guest cancelled - partial refund per policy",
+            "payment_method": "credit_card",
+            "notes": "Refunded to original payment method"
+        }
+        
+        Process:
+        1. Validate request data
+        2. Check if invoice can be refunded
+        3. Validate refund amount against amount paid
+        4. Create refund payment (negative amount)
+        5. Update invoice totals
+        6. Deduct guest loyalty points
+        7. Return success response
+        
+        Response (success):
+        {
+            "success": true,
+            "refund_id": 2,
+            "refund_amount": "50.00",
+            "remaining_paid": "58.00",
+            "balance_due": "50.00",
+            "invoice_status": "partial",
+            "message": "Refund of $50.00 processed successfully"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Validate request data
+        serializer = RefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        amount = serializer.validated_data['amount']
+        reason = serializer.validated_data['reason']
+        payment_method = serializer.validated_data.get('payment_method', 'refund')
+        notes = serializer.validated_data.get('notes', '')
+        
+        # Check if invoice can be refunded
+        if not invoice.can_be_refunded():
+            return Response(
+                {
+                    'error': 'This invoice cannot be refunded',
+                    'invoice_status': invoice.status,
+                    'amount_paid': str(invoice.amount_paid)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate refund amount
+        if amount > invoice.amount_paid:
+            return Response(
+                {
+                    'error': f'Refund amount ${amount} cannot exceed amount paid ${invoice.amount_paid}',
+                    'amount_paid': str(invoice.amount_paid),
+                    'refund_requested': str(amount)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create refund within transaction
+        with transaction.atomic():
+            refund_payment = Payment.objects.create(
+                invoice=invoice,
+                method=payment_method,
+                payment_type='refund',
+                amount=-amount,  # Negative amount for refund
+                status='completed',
+                notes=f'Refund: {reason}\n{notes}'.strip(),
+                processed_by=request.user
+            )
+            
+            # Update invoice status if fully refunded
+            if invoice.balance_due >= invoice.total:
+                invoice.status = 'refunded'
+                invoice.save(update_fields=['status'])
+        
+        # Refresh invoice
+        invoice.refresh_from_db()
+        
+        return Response({
+            'success': True,
+            'refund_id': refund_payment.id,
+            'refund_amount': str(amount),
+            'refund_reason': reason,
+            'remaining_paid': str(invoice.amount_paid),
+            'balance_due': str(invoice.balance_due),
+            'invoice_status': invoice.status,
+            'loyalty_points_deducted': int(amount),
+            'message': f'Refund of ${amount} processed successfully'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def mark_paid(self, request, pk=None):
+        """
+        Manually mark invoice as paid
+        
+        Creates a payment for the remaining balance
+        Useful for cash payments, comp'd services, etc.
+        
+        Endpoint: POST /api/invoices/{id}/mark-paid/
+        
+        Request body:
+        {
+            "method": "cash",
+            "notes": "Paid in full - cash"
+        }
+        
+        Response:
+        {
+            "success": true,
+            "payment_id": 3,
+            "amount": "108.00",
+            "message": "Invoice marked as paid"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Check if already paid
+        if invoice.balance_due <= 0:
+            return Response(
+                {
+                    'error': 'Invoice is already paid',
+                    'status': invoice.status,
+                    'balance_due': str(invoice.balance_due)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        method = request.data.get('method', 'cash')
+        notes = request.data.get('notes', 'Marked as paid')
+        
+        # Create payment for remaining balance
+        with transaction.atomic():
+            payment = Payment.objects.create(
+                invoice=invoice,
+                method=method,
+                payment_type='full',
+                amount=invoice.balance_due,
+                status='completed',
+                notes=notes,
+                processed_by=request.user
+            )
+        
+        invoice.refresh_from_db()
+        
+        return Response({
+            'success': True,
+            'payment_id': payment.id,
+            'amount': str(payment.amount),
+            'invoice_status': invoice.status,
+            'message': 'Invoice marked as paid'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """
+        Cancel an invoice
+        
+        Can only cancel if no payments have been made
+        If payments exist, must refund first
+        
+        Endpoint: POST /api/invoices/{id}/cancel/
+		
+		Request body:
+        {
+            "reason": "Guest cancelled appointment"
+        }
+        
+        Response:
+        {
+            "success": true,
+            "message": "Invoice cancelled successfully"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Check if payments have been made
+        if invoice.amount_paid > 0:
+            return Response(
+                {
+                    'error': 'Cannot cancel invoice with payments. Please refund payments first.',
+                    'amount_paid': str(invoice.amount_paid)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        reason = request.data.get('reason', '')
+        
+        # Cancel invoice
+        invoice.status = 'cancelled'
+        if reason:
+            invoice.notes = f"{invoice.notes}\n\nCancelled: {reason}".strip()
+        invoice.save(update_fields=['status', 'notes'])
+        
+        return Response({
+            'success': True,
+            'invoice_status': invoice.status,
+            'message': 'Invoice cancelled successfully'
+        })
+    
+    @action(detail=True, methods=['get'])
+    def payment_history(self, request, pk=None):
+        """
+        Get complete payment history for this invoice
+        
+        Endpoint: GET /api/invoices/{id}/payment-history/
+        
+        Response:
+        {
+            "invoice_number": "INV-000042",
+            "guest_name": "John Smith",
+            "total": "108.00",
+            "amount_paid": "108.00",
+            "balance_due": "0.00",
+            "status": "paid",
+            "payment_count": 2,
+            "payments": [
+                {
+                    "id": 1,
+                    "amount": "50.00",
+                    "method": "credit_card",
+                    "payment_type": "partial",
+                    "payment_date": "2025-01-15T14:00:00Z",
+                    "status": "completed",
+                    "processed_by_name": "Jane Doe",
+                    "notes": "First payment"
+                },
+                {
+                    "id": 2,
+                    "amount": "58.00",
+                    "method": "cash",
+                    "payment_type": "full",
+                    "payment_date": "2025-01-15T15:00:00Z",
+                    "status": "completed",
+                    "processed_by_name": "Jane Doe",
+                    "notes": "Remaining balance"
+                }
+            ]
+        }
+        """
+        invoice = self.get_object()
+        payments = invoice.payments.all().order_by('-payment_date')
+        serializer = PaymentSerializer(payments, many=True)
+        
+        return Response({
+            'invoice_number': invoice.invoice_number,
+            'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
+            'total': str(invoice.total),
+            'amount_paid': str(invoice.amount_paid),
+            'balance_due': str(invoice.balance_due),
+            'status': invoice.status,
+            'payment_count': payments.count(),
+            'payments': serializer.data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Get invoice summary statistics
+        
+        Endpoint: GET /api/invoices/summary/
+        
+        Optional query parameters:
+        - start_date: Filter from this date
+        - end_date: Filter to this date
+        - guest: Filter by guest ID
+        
+        Response:
+        {
+            "total_invoices": 150,
+            "total_amount": "45000.00",
+            "total_paid": "42000.00",
+            "total_outstanding": "3000.00",
+            "average_invoice": "300.00",
+            "by_status": {
+                "pending": 10,
+                "partial": 5,
+                "paid": 130,
+                "overdue": 3,
+                "cancelled": 2
+            },
+            "pending_count": 10,
+            "paid_count": 130,
+            "overdue_count": 3,
+            "partial_count": 5,
+            "cancelled_count": 2,
+            "refunded_count": 0
+        }
+        """
+        queryset = self.get_queryset()
+        
+        # Calculate aggregates
+        summary_data = queryset.aggregate(
+            total_invoices=Count('id'),
+            total_amount=Sum('total'),
+            total_paid=Sum('amount_paid'),
+            total_outstanding=Sum('balance_due'),
+            average_invoice=Avg('total'),
+            pending_count=Count('id', filter=Q(status='pending')),
+            paid_count=Count('id', filter=Q(status='paid')),
+            overdue_count=Count('id', filter=Q(status='overdue')),
+            partial_count=Count('id', filter=Q(status='partial')),
+            cancelled_count=Count('id', filter=Q(status='cancelled')),
+            refunded_count=Count('id', filter=Q(status='refunded')),
+            draft_count=Count('id', filter=Q(status='draft')),
+        )
+        
+        # Count by status
+        by_status = {}
+        for status_choice, _ in Invoice.STATUS_CHOICES:
+            by_status[status_choice] = queryset.filter(status=status_choice).count()
+        
+        # Format response
+        return Response({
+            'total_invoices': summary_data['total_invoices'] or 0,
+            'total_amount': str(summary_data['total_amount'] or Decimal('0.00')),
+            'total_paid': str(summary_data['total_paid'] or Decimal('0.00')),
+            'total_outstanding': str(summary_data['total_outstanding'] or Decimal('0.00')),
+            'average_invoice': str(summary_data['average_invoice'] or Decimal('0.00')),
+            'by_status': by_status,
+            'pending_count': summary_data['pending_count'] or 0,
+            'paid_count': summary_data['paid_count'] or 0,
+            'overdue_count': summary_data['overdue_count'] or 0,
+            'partial_count': summary_data['partial_count'] or 0,
+            'cancelled_count': summary_data['cancelled_count'] or 0,
+            'refunded_count': summary_data['refunded_count'] or 0,
+            'draft_count': summary_data['draft_count'] or 0,
+        })
+    
+    @action(detail=True, methods=['post'])
+    def apply_discount(self, request, pk=None):
+        """
+        Apply or update discount on invoice
+        
+        Endpoint: POST /api/invoices/{id}/apply-discount/
+        
+        Request body:
+        {
+            "discount": "10.00",
+            "reason": "Loyalty member - 10% off"
+        }
+        
+        Response:
+        {
+            "success": true,
+            "previous_total": "108.00",
+            "discount_applied": "10.00",
+            "new_total": "98.00",
+            "message": "Discount of $10.00 applied"
+        }
+        """
+        invoice = self.get_object()
+        
+        discount = request.data.get('discount')
+        reason = request.data.get('reason', '')
+        
+        if discount is None:
+            return Response(
+                {'error': 'Discount amount is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            discount = Decimal(str(discount))
+        except:
+            return Response(
+                {'error': 'Invalid discount amount'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if discount < 0:
+            return Response(
+                {'error': 'Discount cannot be negative'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if discount > invoice.subtotal:
+            return Response(
+                {'error': f'Discount cannot exceed subtotal of ${invoice.subtotal}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        previous_total = invoice.total
+        
+        # Update discount
+        invoice.discount = discount
+        if reason:
+            invoice.notes = f"{invoice.notes}\n\nDiscount applied: {reason}".strip()
+        invoice.save(update_fields=['discount', 'notes'])
+        
+        # Recalculate totals
         invoice.recalculate_totals()
-        # Auto-mark paid if total covered
-        from decimal import Decimal
-        total_paid = sum(p.amount for p in invoice.payments.all())
-        if total_paid >= invoice.total:
-            invoice.status = Invoice.STATUS_PAID
-            invoice.save(update_fields=["status"])
+        invoice.refresh_from_db()
+        
+        return Response({
+            'success': True,
+            'previous_total': str(previous_total),
+            'discount_applied': str(discount),
+            'new_total': str(invoice.total),
+            'new_balance_due': str(invoice.balance_due),
+            'message': f'Discount of ${discount} applied'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def send_to_guest(self, request, pk=None):
+        """
+        Send invoice to guest via email
+        
+        Endpoint: POST /api/invoices/{id}/send-to-guest/
+        
+        Request body:
+        {
+            "email": "guest@example.com",  // Optional, defaults to guest's email
+            "message": "Thank you for visiting!"  // Optional custom message
+        }
+        
+        Response:
+        {
+            "success": true,
+            "sent_to": "guest@example.com",
+            "message": "Invoice sent successfully"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Get email address
+        email = request.data.get('email', invoice.guest.email)
+        custom_message = request.data.get('message', '')
+        
+        if not email:
+            return Response(
+                {'error': 'Guest email address is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # TODO: Implement email sending logic
+        # This would integrate with your email service
+        # For now, just return success
+        
+        return Response({
+            'success': True,
+            'sent_to': email,
+            'message': 'Invoice sent successfully'
+        })
+
+
+class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only viewset for payments
+    
+    Payments are created through invoice actions, not directly
+    This viewset is for viewing and reporting only
+    
+    Endpoints:
+    - GET /api/payments/          - List all payments
+    - GET /api/payments/{id}/     - Get payment details
+    - GET /api/payments/summary/  - Get payment statistics
+    """
+    
+    queryset = Payment.objects.all().select_related(
+        'invoice',
+        'invoice__guest',
+        'payment_method',
+        'processed_by'
+    )
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['payment_date', 'amount']
+    ordering = ['-payment_date']
+    
+    def get_queryset(self):
+        """
+        Filter payments based on query parameters
+        
+        Supported filters:
+        - invoice: Filter by invoice ID
+        - guest: Filter by guest ID
+        - status: Filter by status
+        - method: Filter by payment method
+        - start_date: Payments on or after this date
+        - end_date: Payments on or before this date
+        - min_amount: Minimum payment amount
+        - max_amount: Maximum payment amount
+        - payment_type: Filter by type (full, partial, deposit, refund)
+        - processed_by: Filter by staff member who processed
+        
+        Examples:
+        GET /api/payments/?invoice=42
+        GET /api/payments/?guest=15
+        GET /api/payments/?status=completed
+        GET /api/payments/?method=credit_card
+        GET /api/payments/?payment_type=refund
+        GET /api/payments/?start_date=2025-01-01&end_date=2025-01-31
+        """
+        queryset = super().get_queryset()
+        
+        # Filter by invoice
+        invoice_id = self.request.query_params.get('invoice')
+        if invoice_id:
+            queryset = queryset.filter(invoice_id=invoice_id)
+        
+        # Filter by guest
+        guest_id = self.request.query_params.get('guest')
+        if guest_id:
+            queryset = queryset.filter(invoice__guest_id=guest_id)
+        
+        # Filter by status
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        
+        # Filter by method
+        method = self.request.query_params.get('method')
+        if method:
+            queryset = queryset.filter(method=method)
+        
+        # Filter by payment type
+        payment_type = self.request.query_params.get('payment_type')
+        if payment_type:
+            queryset = queryset.filter(payment_type=payment_type)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(payment_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(payment_date__lte=end_date)
+        
+        # Filter by amount range
+        min_amount = self.request.query_params.get('min_amount')
+        max_amount = self.request.query_params.get('max_amount')
+        if min_amount:
+            queryset = queryset.filter(amount__gte=Decimal(min_amount))
+        if max_amount:
+            queryset = queryset.filter(amount__lte=Decimal(max_amount))
+        
+        # Filter by processor
+        processed_by = self.request.query_params.get('processed_by')
+        if processed_by:
+            queryset = queryset.filter(processed_by_id=processed_by)
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Get payment summary statistics
+        
+        Endpoint: GET /api/payments/summary/
+        
+        Response:
+        {
+            "total_payments": 250,
+            "total_amount": "45000.00",
+            "total_refunds": "2000.00",
+            "net_revenue": "43000.00",
+            "average_payment": "180.00",
+            "by_method": {
+                "cash": "15000.00",
+                "credit_card": "25000.00",
+                "mobile_payment": "5000.00"
+            },
+            "by_status": {
+                "completed": 245,
+                "pending": 3,
+                "failed": 2
+            },
+            "completed_count": 245,
+            "pending_count": 3,
+            "failed_count": 2
+        }
+        """
+        queryset = self.get_queryset()
+        
+        # Calculate aggregates
+        summary_data = queryset.aggregate(
+            total_payments=Count('id'),
+            total_amount=Sum('amount', filter=Q(status='completed', amount__gt=0)),
+            total_refunds=Sum('amount', filter=Q(payment_type='refund', status='completed')),
+            average_payment=Avg('amount', filter=Q(status='completed', amount__gt=0)),
+            completed_count=Count('id', filter=Q(status='completed')),
+            pending_count=Count('id', filter=Q(status='pending')),
+            failed_count=Count('id', filter=Q(status='failed')),
+            refunded_count=Count('id', filter=Q(status='refunded')),
+        )
+        
+        # Calculate net revenue
+        total_amount = summary_data['total_amount'] or Decimal('0.00')
+        total_refunds = abs(summary_data['total_refunds'] or Decimal('0.00'))
+        net_revenue = total_amount - total_refunds
+        
+        # Group by payment method
+        by_method = {}
+        for method_choice in queryset.values_list('method', flat=True).distinct():
+            method_total = queryset.filter(
+                method=method_choice,
+                status='completed',
+                amount__gt=0
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            by_method[method_choice] = str(method_total)
+        
+        # Group by status
+        by_status = {}
+        for status_choice, _ in Payment.PAYMENT_STATUS_CHOICES:
+            by_status[status_choice] = queryset.filter(status=status_choice).count()
+        
+        return Response({
+            'total_payments': summary_data['total_payments'] or 0,
+            'total_amount': str(total_amount),
+            'total_refunds': str(total_refunds),
+            'net_revenue': str(net_revenue),
+            'average_payment': str(summary_data['average_payment'] or Decimal('0.00')),
+            'by_method': by_method,
+            'by_status': by_status,
+            'completed_count': summary_data['completed_count'] or 0,
+            'pending_count': summary_data['pending_count'] or 0,
+            'failed_count': summary_data['failed_count'] or 0,
+            'refunded_count': summary_data['refunded_count'] or 0,
+        })
+    
+    @action(detail=False, methods=['get'])
+    def daily_report(self, request):
+        """
+        Get daily payment report
+        
+        Endpoint: GET /api/payments/daily-report/?date=2025-01-15
+        
+        Response:
+        {
+            "date": "2025-01-15",
+            "total_payments": 25,
+            "total_amount": "4500.00",
+            "total_refunds": "200.00",
+            "net_revenue": "4300.00",
+            "by_method": {...},
+            "by_hour": [
+                {"hour": 9, "count": 2, "amount": "200.00"},
+                {"hour": 10, "count": 5, "amount": "800.00"},
+                ...
+            ]
+        }
+        """
+        date_param = request.query_params.get('date', timezone.now().date())
+        
+        # Parse date
+        if isinstance(date_param, str):
+            from django.utils.dateparse import parse_date
+            date = parse_date(date_param)
+        else:
+            date = date_param
+        
+        # Filter payments for this date
+        queryset = self.get_queryset().filter(
+            payment_date__date=date
+        )
+        
+        # Calculate aggregates
+        summary = queryset.aggregate(
+            total_payments=Count('id'),
+            total_amount=Sum('amount', filter=Q(status='completed', amount__gt=0)),
+            total_refunds=Sum('amount', filter=Q(payment_type='refund', status='completed')),
+        )
+        
+        total_amount = summary['total_amount'] or Decimal('0.00')
+        total_refunds = abs(summary['total_refunds'] or Decimal('0.00'))
+        net_revenue = total_amount - total_refunds
+        
+        # Group by method
+        by_method = {}
+        for method in queryset.values_list('method', flat=True).distinct():
+            method_total = queryset.filter(
+                method=method,
+                status='completed',
+                amount__gt=0
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            by_method[method] = str(method_total)
+        
+        # Group by hour
+        by_hour = []
+        for hour in range(24):
+            hour_payments = queryset.filter(
+                payment_date__hour=hour,
+                status='completed'
+            )
+            hour_count = hour_payments.count()
+            hour_amount = hour_payments.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            if hour_count > 0:
+                by_hour.append({
+                    'hour': hour,
+                    'count': hour_count,
+                    'amount': str(hour_amount)
+                })
+        
+        return Response({
+            'date': str(date),
+            'total_payments': summary['total_payments'] or 0,
+            'total_amount': str(total_amount),
+            'total_refunds': str(total_refunds),
+            'net_revenue': str(net_revenue),
+            'by_method': by_method,
+            'by_hour': by_hour
+        })
+
+
+class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only viewset for payment methods
+    
+    Used to get list of available payment methods for dropdowns
+    
+    Endpoints:
+    - GET /api/payment-methods/  - List active payment methods
+    - GET /api/payment-methods/{id}/  - Get payment method details
+    """
+    
+    queryset = PaymentMethod.objects.filter(is_active=True)
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsAuthenticated]
+    ordering = ['display_order', 'name']

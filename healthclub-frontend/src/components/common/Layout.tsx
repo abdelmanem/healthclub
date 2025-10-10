@@ -39,6 +39,7 @@ const subNavConfigs: Record<string, SubNavConfig> = {
       { label: 'Calendar', path: '/reservations' },
       { label: 'Find Appointment', path: '/appointments/find' },
       { label: 'New Appointment', path: '/reservations/new' },
+      { label: 'Workflow Demo', path: '/workflow-demo' },
       { label: 'Manage Waitlist', path: '/reservations/waitlist' },
       { label: 'Class Schedule', path: '/reservations/classes' },
     ]
@@ -47,6 +48,13 @@ const subNavConfigs: Record<string, SubNavConfig> = {
     items: [
       { label: 'Customers List', path: '/guests' },
       { label: 'Guest Profile', path: '/guests/profile' },
+    ]
+  },
+  'Orders': {
+    items: [
+      { label: 'Invoices', path: '/invoices' },
+      { label: 'Payment History', path: '/payments' },
+      { label: 'POS Dashboard', path: '/pos-dashboard' },
     ]
   },
   'Products': {

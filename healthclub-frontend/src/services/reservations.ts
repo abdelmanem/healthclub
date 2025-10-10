@@ -158,8 +158,17 @@ export const reservationsService = {
     const response = await api.post(`/reservations/${id}/complete/`, {});
     return response.data;
   },
-  async checkOut(id: number): Promise<Reservation> {
-    const response = await api.post(`/reservations/${id}/check-out/`, {});
+  async checkOut(id: number, data?: { create_invoice?: boolean; notes?: string }): Promise<{
+    status: string;
+    checked_out_at: string;
+    invoice_created?: boolean;
+    invoice_id?: number;
+    invoice_number?: string;
+    invoice_total?: string;
+    housekeeping_task_created: boolean;
+    message: string;
+  }> {
+    const response = await api.post(`/reservations/${id}/check-out/`, data || {});
     return response.data;
   },
   async cancel(id: number, data?: { cancellation_reason?: number; notes?: string }): Promise<Reservation> {

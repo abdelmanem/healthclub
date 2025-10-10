@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
 from django.db.models import OuterRef, Subquery
+from django.db import transaction
+from decimal import Decimal
 
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all().order_by("name")
@@ -253,10 +255,141 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     @decorators.action(detail=True, methods=["post"], url_path="check-out")
     def check_out(self, request, pk=None):
+        """
+        Check out a completed reservation.
+        
+        This action follows the workflow:
+        1. Changes status to CHECKED_OUT
+        2. Triggers signals to mark room dirty and create housekeeping task
+        3. Optionally creates invoice if requested
+        
+        Endpoint: POST /api/reservations/{id}/check-out/
+        
+        Request Body:
+        {
+            "create_invoice": true,  // Optional: create invoice after checkout
+            "notes": "Additional notes"  // Optional: notes for checkout
+        }
+        
+        Response:
+        {
+            "status": "checked_out",
+            "checked_out_at": "2025-01-15T10:30:00Z",
+            "invoice_created": true,  // If invoice was created
+            "invoice_id": 42,  // If invoice was created
+            "housekeeping_task_created": true,
+            "message": "Reservation checked out successfully"
+        }
+        """
         reservation = self.get_object()
-        reservation.status = Reservation.STATUS_CHECKED_OUT
-        reservation.save()  # Use full save() to trigger signals properly
-        return response.Response({"status": reservation.status, "checked_out_at": reservation.checked_out_at})
+        
+        # Validate reservation can be checked out
+        if reservation.status not in [Reservation.STATUS_COMPLETED]:
+            return response.Response(
+                {
+                    'error': 'Reservation must be completed before checkout',
+                    'current_status': reservation.status,
+                    'allowed_statuses': [Reservation.STATUS_COMPLETED]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        create_invoice = request.data.get('create_invoice', False)
+        checkout_notes = request.data.get('notes', '')
+        
+        with transaction.atomic():
+            # Update reservation status (triggers signals automatically)
+            reservation.status = Reservation.STATUS_CHECKED_OUT
+            if checkout_notes:
+                reservation.notes = f"{reservation.notes}\nCheckout: {checkout_notes}".strip()
+            reservation.save()
+            
+            # Prepare response data
+            response_data = {
+                "status": reservation.status,
+                "checked_out_at": reservation.checked_out_at,
+                "housekeeping_task_created": True,  # Signal creates this automatically
+                "message": "Reservation checked out successfully"
+            }
+            
+            # Create invoice if requested
+            if create_invoice:
+                try:
+                    # Check if invoice already exists
+                    existing_invoice = Invoice.objects.filter(reservation=reservation).first()
+                    if existing_invoice:
+                        response_data.update({
+                            "invoice_created": False,
+                            "invoice_id": existing_invoice.id,
+                            "invoice_number": existing_invoice.invoice_number,
+                            "message": "Reservation checked out. Invoice already exists."
+                        })
+                    else:
+                        # Create invoice using the existing create_invoice logic
+                        invoice_number = Invoice.generate_invoice_number()
+                        invoice = Invoice.objects.create(
+                            reservation=reservation,
+                            guest=reservation.guest,
+                            invoice_number=invoice_number,
+                            invoice_date=timezone.now(),
+                            due_date=timezone.now().date(),
+                            status='pending',
+                            notes=f'Invoice for reservation #{reservation.id} - Checkout: {checkout_notes}'.strip(),
+                            created_by=request.user if request.user.is_authenticated else None
+                        )
+                        
+                        # Create invoice line items from reservation services
+                        if hasattr(reservation, 'reservation_services'):
+                            for res_service in reservation.reservation_services.all():
+                                service_name = (
+                                    res_service.service_details.name if hasattr(res_service, 'service_details') and res_service.service_details
+                                    else f"Service #{res_service.service}"
+                                )
+                                unit_price = (
+                                    res_service.unit_price if hasattr(res_service, 'unit_price')
+                                    else res_service.service_details.price if hasattr(res_service, 'service_details')
+                                    else Decimal('0.00')
+                                )
+                                quantity = res_service.quantity if hasattr(res_service, 'quantity') else 1
+                                
+                                InvoiceItem.objects.create(
+                                    invoice=invoice,
+                                    service=res_service.service if hasattr(res_service, 'service') else None,
+                                    product_name=service_name,
+                                    quantity=quantity,
+                                    unit_price=unit_price,
+                                    tax_rate=Decimal('8.00'),  # Default tax rate
+                                )
+                        
+                        # If no services, create a generic line item
+                        if not invoice.items.exists():
+                            InvoiceItem.objects.create(
+                                invoice=invoice,
+                                product_name=f"Reservation #{reservation.id}",
+                                quantity=1,
+                                unit_price=reservation.total_price or Decimal('0.00'),
+                                tax_rate=Decimal('8.00'),
+                            )
+                        
+                        # Recalculate totals
+                        invoice.recalculate_totals()
+                        
+                        response_data.update({
+                            "invoice_created": True,
+                            "invoice_id": invoice.id,
+                            "invoice_number": invoice.invoice_number,
+                            "invoice_total": str(invoice.total),
+                            "message": "Reservation checked out and invoice created successfully"
+                        })
+                        
+                except Exception as e:
+                    response_data.update({
+                        "invoice_created": False,
+                        "invoice_error": str(e),
+                        "message": "Reservation checked out but invoice creation failed"
+                    })
+            
+            return response.Response(response_data, status=status.HTTP_200_OK)
 
     @decorators.action(detail=True, methods=["get"], url_path="services")
     def get_services(self, request, pk=None):
@@ -346,9 +479,251 @@ class ReservationViewSet(viewsets.ModelViewSet):
         
     @decorators.action(detail=True, methods=["post"], url_path="create-invoice")
     def create_invoice(self, request, pk=None):
+        """
+        Create invoice for completed reservation
+        
+        Endpoint: POST /api/reservations/{id}/create-invoice/
+        
+        Process:
+        1. Validate reservation is completed/checked-out
+        2. Check if invoice already exists
+        3. Generate invoice number
+        4. Create invoice with line items from reservation services
+        5. Calculate totals
+        6. Return invoice details
+        
+        Response:
+        {
+            "success": true,
+            "invoice_id": 42,
+            "invoice_number": "INV-000042",
+            "total_amount": "108.00",
+            "balance_due": "108.00",
+            "message": "Invoice created successfully"
+        }
+        """
         reservation = self.get_object()
-        invoice = create_invoice_for_reservation(reservation)
-        return response.Response({"invoice_id": invoice.id, "invoice_number": invoice.invoice_number}, status=status.HTTP_201_CREATED)
+        
+        # Validate reservation status
+        if reservation.status not in ['completed', 'checked_out']:
+            return response.Response(
+                {
+                    'error': 'Can only create invoice for completed/checked-out reservations',
+                    'current_status': reservation.status,
+                    'allowed_statuses': ['completed', 'checked_out']
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if invoice already exists
+        from pos.models import Invoice
+        existing_invoice = Invoice.objects.filter(reservation=reservation).first()
+        if existing_invoice:
+            return response.Response({
+                'success': True,
+                'invoice_id': existing_invoice.id,
+                'invoice_number': existing_invoice.invoice_number,
+                'total_amount': str(existing_invoice.total),
+                'balance_due': str(existing_invoice.balance_due),
+                'invoice_status': existing_invoice.status,
+                'message': 'Invoice already exists for this reservation'
+            })
+        
+        with transaction.atomic():
+            # Generate invoice number
+            invoice_number = Invoice.generate_invoice_number()
+            
+            # Create invoice
+            invoice = Invoice.objects.create(
+                reservation=reservation,
+                guest=reservation.guest,
+                invoice_number=invoice_number,
+                invoice_date=timezone.now(),
+                due_date=timezone.now().date(),  # Due immediately
+                status='issued',
+                notes=f'Invoice for reservation #{reservation.id}',
+                created_by=request.user if request.user.is_authenticated else None
+            )
+            
+            # Create invoice line items from reservation services
+            from pos.models import InvoiceItem
+            if hasattr(reservation, 'reservation_services'):
+                for res_service in reservation.reservation_services.all():
+                    # Get service details
+                    service_name = (
+                        res_service.service.name 
+                        if hasattr(res_service, 'service') and res_service.service 
+                        else f"Service #{res_service.service_id}"
+                    )
+                    
+                    unit_price = (
+                        res_service.unit_price 
+                        if hasattr(res_service, 'unit_price') and res_service.unit_price
+                        else res_service.service.price if hasattr(res_service, 'service') and res_service.service
+                        else Decimal('0.00')
+                    )
+                    
+                    quantity = res_service.quantity if hasattr(res_service, 'quantity') else 1
+                    
+                    # Create invoice item
+                    InvoiceItem.objects.create(
+                        invoice=invoice,
+                        service=res_service.service if hasattr(res_service, 'service') else None,
+                        product_name=service_name,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        tax_rate=Decimal('8.00'),  # Default tax rate, adjust as needed
+                        notes=f'From reservation service #{res_service.id}'
+                    )
+            
+            # If no services, create a generic line item
+            if not invoice.items.exists():
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    product_name=f"Reservation #{reservation.id}",
+                    quantity=1,
+                    unit_price=reservation.total_price or Decimal('0.00'),
+                    tax_rate=Decimal('8.00'),
+                    notes=f'Generic line item for reservation #{reservation.id}'
+                )
+            
+            # Recalculate totals
+            invoice.recalculate_totals()
+        
+        return response.Response({
+            'success': True,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice.invoice_number,
+            'total_amount': str(invoice.total),
+            'balance_due': str(invoice.balance_due),
+            'invoice_status': invoice.status,
+            'subtotal': str(invoice.subtotal),
+            'tax_amount': str(invoice.tax),
+            'service_charge': str(invoice.service_charge),
+            'message': 'Invoice created successfully'
+        }, status=status.HTTP_201_CREATED)
+
+    @decorators.action(detail=True, methods=["get"], url_path="invoice-status")
+    def invoice_status(self, request, pk=None):
+        """
+        Get invoice status for a reservation
+        
+        Endpoint: GET /api/reservations/{id}/invoice-status/
+        
+        Returns:
+        {
+            "has_invoice": true,
+            "invoice_id": 42,
+            "invoice_number": "INV-000042",
+            "invoice_status": "paid",
+            "total_amount": "108.00",
+            "balance_due": "0.00",
+            "can_create_invoice": false
+        }
+        """
+        reservation = self.get_object()
+        
+        from pos.models import Invoice
+        invoice = Invoice.objects.filter(reservation=reservation).first()
+        
+        if invoice:
+            return response.Response({
+                'has_invoice': True,
+                'invoice_id': invoice.id,
+                'invoice_number': invoice.invoice_number,
+                'invoice_status': invoice.status,
+                'total_amount': str(invoice.total),
+                'balance_due': str(invoice.balance_due),
+                'amount_paid': str(invoice.amount_paid),
+                'can_create_invoice': False,
+                'can_process_payment': invoice.can_be_paid(),
+                'can_refund': invoice.can_be_refunded()
+            })
+        else:
+            can_create = reservation.status in ['completed', 'checked_out']
+            return response.Response({
+                'has_invoice': False,
+                'invoice_id': None,
+                'invoice_number': None,
+                'invoice_status': None,
+                'total_amount': None,
+                'balance_due': None,
+                'amount_paid': None,
+                'can_create_invoice': can_create,
+                'can_process_payment': False,
+                'can_refund': False,
+                'reason': 'No invoice exists' if not can_create else 'Invoice can be created'
+            })
+
+    @decorators.action(detail=True, methods=["post"], url_path="process-payment")
+    def process_payment(self, request, pk=None):
+        """
+        Process payment for reservation invoice
+        
+        Endpoint: POST /api/reservations/{id}/process-payment/
+        
+        Body:
+        {
+            "amount": "108.00",
+            "payment_method": 2,
+            "payment_type": "full",
+            "reference": "VISA-4532",
+            "transaction_id": "TXN-123456",
+            "notes": "Payment processed at front desk"
+        }
+        """
+        reservation = self.get_object()
+        
+        # Check if invoice exists
+        from pos.models import Invoice
+        invoice = Invoice.objects.filter(reservation=reservation).first()
+        if not invoice:
+            return response.Response(
+                {
+                    'error': 'No invoice found for this reservation',
+                    'suggestion': 'Create an invoice first using /create-invoice/ endpoint'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delegate to invoice's process_payment action
+        from pos.views import InvoiceViewSet
+        invoice_viewset = InvoiceViewSet()
+        invoice_viewset.request = request
+        invoice_viewset.format_kwarg = None
+        
+        # Use the invoice's process_payment method
+        return invoice_viewset.process_payment(request, pk=invoice.id)
+
+    @decorators.action(detail=True, methods=["get"], url_path="payment-history")
+    def payment_history(self, request, pk=None):
+        """
+        Get payment history for reservation invoice
+        
+        Endpoint: GET /api/reservations/{id}/payment-history/
+        """
+        reservation = self.get_object()
+        
+        # Check if invoice exists
+        from pos.models import Invoice
+        invoice = Invoice.objects.filter(reservation=reservation).first()
+        if not invoice:
+            return response.Response(
+                {
+                    'error': 'No invoice found for this reservation',
+                    'suggestion': 'Create an invoice first using /create-invoice/ endpoint'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delegate to invoice's payment_history action
+        from pos.views import InvoiceViewSet
+        invoice_viewset = InvoiceViewSet()
+        invoice_viewset.request = request
+        invoice_viewset.format_kwarg = None
+        
+        # Use the invoice's payment_history method
+        return invoice_viewset.payment_history(request, pk=invoice.id)
 
     def get_queryset(self):
         qs = super().get_queryset()

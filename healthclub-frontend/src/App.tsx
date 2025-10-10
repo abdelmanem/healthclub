@@ -21,6 +21,8 @@ import { NewReservation } from './pages/NewReservation';
 import { EmployeeSchedules } from './pages/EmployeeSchedules';
 import { theme } from './theme';
 import GuestProfilePage from './pages/GuestProfilePage';
+import { InvoicesPage } from './pages/InvoicesPage';
+import { ReservationWorkflowDemo } from './pages/ReservationWorkflowDemo';
 
 // Lazy load ConfigurationPage to avoid circular dependency
 const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
@@ -125,6 +127,38 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="employees">
                   <Layout>
                     <EmployeeSchedules />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/invoices" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="invoices">
+                  <Layout>
+                    <InvoicesPage />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/payments" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="payments">
+                  <Layout>
+                    <div>Payment History - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/pos-dashboard" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="pos">
+                  <Layout>
+                    <div>POS Dashboard - Coming Soon</div>
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/workflow-demo" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="reservations">
+                  <Layout>
+                    <ReservationWorkflowDemo />
                   </Layout>
                 </ProtectedRoute>
               } />
