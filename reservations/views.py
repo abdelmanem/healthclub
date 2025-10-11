@@ -221,20 +221,46 @@ class ReservationViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True, methods=["post"], url_path="check-in")
     def check_in(self, request, pk=None):
         reservation = self.get_object()
-        # Enforce room not out-of-service or occupied before check-in
+        
+        # Validate reservation can be checked in
+        if reservation.status != Reservation.STATUS_BOOKED:
+            return response.Response(
+                {
+                    'error': 'Reservation must be booked before check-in',
+                    'current_status': reservation.status,
+                    'allowed_statuses': [Reservation.STATUS_BOOKED]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check room availability if location is assigned
         if getattr(reservation, 'location_id', None):
             loc = reservation.location
             if getattr(loc, 'is_out_of_service', False):
-                return response.Response({"error": "Room is out of service"}, status=status.HTTP_400_BAD_REQUEST)
-            if getattr(loc, 'is_occupied', False):
+                return response.Response(
+                    {"error": "Room is out of service"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check capacity-based availability instead of just occupied status
+            current_active_reservations = Reservation.objects.filter(
+                location=loc,
+                status__in=[Reservation.STATUS_CHECKED_IN, Reservation.STATUS_IN_SERVICE]
+            ).exclude(pk=reservation.pk)  # Exclude current reservation
+            
+            room_capacity = getattr(loc, 'capacity', 1) or 1
+            if current_active_reservations.count() >= room_capacity:
                 return response.Response(
                     {
-                        "error": "Room is occupied",
-                        "reason_code": "room_occupied",
-                        "message": "Selected room is currently occupied. Choose another room.",
+                        "error": "Room is at capacity",
+                        "reason_code": "room_at_capacity",
+                        "message": f"Room capacity is {room_capacity} and currently has {current_active_reservations.count()} active reservations.",
+                        "current_capacity": current_active_reservations.count(),
+                        "max_capacity": room_capacity
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+        
         reservation.status = Reservation.STATUS_CHECKED_IN
         reservation.save()  # Use full save() to trigger signals properly
         return response.Response({"status": reservation.status, "checked_in_at": reservation.checked_in_at})
