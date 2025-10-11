@@ -37,6 +37,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit, Cancel } from '@mui/icons-material';
+import { InvoiceDetails } from '../components/pos/InvoiceDetails';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -90,6 +91,8 @@ export const ReservationManagement: React.FC = () => {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [historicalReservations, setHistoricalReservations] = useState<Reservation[]>([]);
   const [guestDetails, setGuestDetails] = useState<Guest | null>(null);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [createdInvoiceId, setCreatedInvoiceId] = useState<number | null>(null);
 
   // pending drag move
   const [pendingMove, setPendingMove] = useState<any | null>(null);
@@ -496,14 +499,34 @@ export const ReservationManagement: React.FC = () => {
       if (action === 'in_service') await reservationsService.inService(targetReservation.id);
       if (action === 'complete') await reservationsService.complete(targetReservation.id);
       if (action === 'check_out') {
-        await reservationsService.checkOut(targetReservation.id);
-        // Auto-create invoice on checkout (non-blocking UI)
-        try { await reservationsService.createInvoice(targetReservation.id); } catch (e) { console.warn('Invoice creation failed:', e); }
-        // Notify user about room status change and HK task creation
-        setSnackbar({ open: true, message: 'Checked out. Room marked dirty and housekeeping task created.', severity: 'success' });
+        // Check out with automatic invoice creation
+        const checkoutResult = await reservationsService.checkOut(targetReservation.id, {
+          create_invoice: true,
+          notes: 'Automatic invoice creation on checkout'
+        });
+        
+        // If invoice was created, show it
+        if (checkoutResult.invoice_created && checkoutResult.invoice_id) {
+          setCreatedInvoiceId(checkoutResult.invoice_id);
+          setInvoiceDialogOpen(true);
+          
+          setSnackbar({
+            open: true,
+            message: `Checked out. Invoice ${checkoutResult.invoice_number} created ($${checkoutResult.invoice_total}).`,
+            severity: 'success',
+          });
+        } else {
+          setSnackbar({
+            open: true,
+            message: 'Checked out. Room marked dirty and housekeeping task created.',
+            severity: 'success',
+          });
+        }
+        
+        // Close the reservation drawer
+        if (!reservation) setDrawerOpen(false);
       }
       await loadReservations();
-      if (!reservation) setDrawerOpen(false);
     } catch (e:any) {
       console.error('Action failed', e);
       setSnackbar({ open: true, message: e?.response?.data?.detail || 'Action failed', severity: 'error' });
@@ -1066,6 +1089,50 @@ export const ReservationManagement: React.FC = () => {
           setDrawerOpen(false);
         }}
       />
+
+      {/* Invoice Dialog */}
+      <Dialog
+        open={invoiceDialogOpen}
+        onClose={() => {
+          setInvoiceDialogOpen(false);
+          setCreatedInvoiceId(null);
+        }}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            height: '90vh',
+            maxHeight: '90vh',
+          }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Invoice & Payment</Typography>
+          <IconButton
+            onClick={() => {
+              setInvoiceDialogOpen(false);
+              setCreatedInvoiceId(null);
+            }}
+            size="small"
+          >
+            <Cancel />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, overflow: 'auto' }}>
+          {createdInvoiceId && (
+            <InvoiceDetails
+              invoiceId={createdInvoiceId}
+              onClose={() => {
+                setInvoiceDialogOpen(false);
+                setCreatedInvoiceId(null);
+              }}
+              onPaymentProcessed={() => {
+                loadReservations();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 };
