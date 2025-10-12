@@ -30,11 +30,12 @@ import {
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { CancellationDialog } from './CancellationDialog';
 import { api } from '../../services/api';
-import { CalendarToday, ChevronLeft, ChevronRight, Today } from '@mui/icons-material';
+import { CalendarToday, ChevronLeft, ChevronRight, Today, Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { guestsService } from '../../services/guests';
 import { reservationsService } from '../../services/reservations';
 import { EditGuestDialog } from '../guest/EditGuestDialog';
+import { InvoiceDetails } from '../pos/InvoiceDetails';
 
 type Reservation = {
   id: number;
@@ -121,6 +122,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [menuAnchor, setMenuAnchor] = React.useState<{ element: HTMLElement; reservation: Reservation } | null>(null);
   const [isCancellationDialogOpen, setIsCancellationDialogOpen] = React.useState<boolean>(false);
   const [reservationToCancel, setReservationToCancel] = React.useState<number | null>(null);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = React.useState(false);
+  const [createdInvoiceId, setCreatedInvoiceId] = React.useState<number | null>(null);
 
   // Mini calendar helper functions
   const handleCalendarClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -723,7 +726,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   const [isActing, setIsActing] = React.useState(false);
 
-  const act = async (action: 'check_in'|'in_service'|'complete'|'cancel') => {
+  const act = async (action: 'check_in'|'in_service'|'complete'|'check_out'|'cancel') => {
     if (isActing) return;
     const r = menuAnchor?.reservation || drawer.reservation;
     if (!r) return;
@@ -736,14 +739,69 @@ export const StaffSchedulingCalendar: React.FC = () => {
     }
     setIsActing(true);
     try {
-      const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
-      await api.post(`/reservations/${r.id}/${endpoint}/`, {});
+      if (action === 'check_out') {
+        // Use proper checkout service that creates invoice
+        const checkoutResult = await reservationsService.checkOut(r.id, {
+          create_invoice: true,
+          notes: 'Checkout from calendar'
+        });
+        
+        // Debug: Log the checkout result
+        console.log('Checkout result:', checkoutResult);
+        
+        // If invoice was created, show it
+        if (checkoutResult.invoice_created && checkoutResult.invoice_id) {
+          setCreatedInvoiceId(checkoutResult.invoice_id);
+          setInvoiceDialogOpen(true);
+          
+          alert(
+            `Check-out successful!\n\n` +
+            `Invoice created: ${checkoutResult.invoice_number}\n` +
+            `Total: $${checkoutResult.invoice_total}\n` +
+            `Housekeeping task created automatically.`
+          );
+        } else {
+          console.log('Invoice not created or missing fields:', {
+            invoice_created: checkoutResult.invoice_created,
+            invoice_id: checkoutResult.invoice_id,
+            fullResult: checkoutResult
+          });
+          
+          // Try to create invoice manually if checkout didn't create one
+          try {
+            const invoiceResult = await reservationsService.createInvoice(r.id);
+            console.log('Manual invoice creation result:', invoiceResult);
+            
+            if (invoiceResult.invoice_id) {
+              setCreatedInvoiceId(invoiceResult.invoice_id);
+              setInvoiceDialogOpen(true);
+              
+              alert(
+                `Check-out successful!\n\n` +
+                `Invoice created: ${invoiceResult.invoice_number}\n` +
+                `Housekeeping task created automatically.`
+              );
+            } else {
+              alert('Check-out successful! Housekeeping task created automatically.');
+            }
+          } catch (invoiceError) {
+            console.error('Failed to create invoice manually:', invoiceError);
+            alert('Check-out successful! Housekeeping task created automatically.');
+          }
+        }
+      } else {
+        // Handle other actions normally
+        const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
+        await api.post(`/reservations/${r.id}/${endpoint}/`, {});
+      }
+      
       await loadData();
       closeDrawer();
       setMenuAnchor(null);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(`Failed to ${action.replace('_', ' ')} reservation. Please try again.`);
+      const errorMessage = e?.response?.data?.error || e?.response?.data?.message || `Failed to ${action.replace('_', ' ')} reservation. Please try again.`;
+      alert(errorMessage);
     } finally {
       setIsActing(false);
     }
@@ -830,7 +888,14 @@ export const StaffSchedulingCalendar: React.FC = () => {
         />
       </Paper>
 
-      <Drawer anchor="right" open={drawer.open} onClose={closeDrawer} sx={{ '& .MuiDrawer-paper': { width: 360 } }}>
+      <Drawer 
+        anchor="right" 
+        open={drawer.open} 
+        onClose={closeDrawer} 
+        sx={{ '& .MuiDrawer-paper': { width: 360 } }}
+        disableEnforceFocus
+        disableRestoreFocus
+      >
         <Box p={2} display="flex" flexDirection="column" gap={2}>
           {drawer.reservation ? (
             <>
@@ -847,7 +912,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   <Typography variant="body2"><strong>Guest:</strong> {drawer.reservation.guest_name}</Typography>
                   <Typography variant="body2"><strong>Staff:</strong> {getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}</Typography>
                   <Typography variant="body2"><strong>Location:</strong> {drawer.reservation.location_name ?? (drawer.reservation.location ? `Location #${drawer.reservation.location}` : '—')}</Typography>
-                  <Typography variant="body2" display="flex" alignItems="center" gap={1}>
+                  <Typography variant="body2" component="div" display="flex" alignItems="center" gap={1}>
                     <strong>Status:</strong>
                     <Chip label={(drawer.reservation.status || '').replace('_',' ')} color={
                       drawer.reservation.status === 'booked' ? 'primary' :
@@ -1084,9 +1149,23 @@ export const StaffSchedulingCalendar: React.FC = () => {
         aria-label="Reservation actions"
         anchorEl={menuAnchor?.element || null}
         open={Boolean(menuAnchor)}
-        onClose={() => setMenuAnchor(null)}
+        onClose={() => {
+          setMenuAnchor(null);
+          // Return focus to the calendar after menu closes
+          setTimeout(() => {
+            // Find the calendar element in the DOM
+            const calendarElement = document.querySelector('.fc') as HTMLElement;
+            if (calendarElement) {
+              calendarElement.focus();
+            }
+          }, 100);
+        }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        disableAutoFocusItem
+        autoFocus={false}
+        disableEnforceFocus
+        disableRestoreFocus
       >
         <MenuItem onClick={() => {
           const r = menuAnchor?.reservation;
@@ -1099,6 +1178,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           if (status === 'booked') return (<MenuItem onClick={() => act('check_in')} disabled={isActing}>Check-in Guest</MenuItem>);
           if (status === 'checked_in') return (<MenuItem onClick={() => act('in_service')} disabled={isActing}>Start Service</MenuItem>);
           if (status === 'in_service') return (<MenuItem onClick={() => act('complete')} disabled={isActing}>Mark Complete</MenuItem>);
+          if (status === 'completed') return (<MenuItem onClick={() => act('check_out')} disabled={isActing}>Check Out Guest</MenuItem>);
           return null;
         })()}
         {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && [
@@ -1119,6 +1199,50 @@ export const StaffSchedulingCalendar: React.FC = () => {
           closeDrawer();
         }}
       />
+
+      {/* Invoice Dialog */}
+      <Dialog
+        open={invoiceDialogOpen}
+        onClose={() => {
+          setInvoiceDialogOpen(false);
+          setCreatedInvoiceId(null);
+        }}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            height: '90vh',
+            maxHeight: '90vh',
+          }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Invoice & Payment</Typography>
+          <IconButton
+            onClick={() => {
+              setInvoiceDialogOpen(false);
+              setCreatedInvoiceId(null);
+            }}
+            size="small"
+          >
+            <Cancel />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, overflow: 'auto' }}>
+          {createdInvoiceId && (
+            <InvoiceDetails
+              invoiceId={createdInvoiceId}
+              onClose={() => {
+                setInvoiceDialogOpen(false);
+                setCreatedInvoiceId(null);
+              }}
+              onPaymentProcessed={() => {
+                loadData();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

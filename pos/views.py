@@ -85,45 +85,45 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         
         # Filter by guest
-        guest_id = self.request.query_params.get('guest')
+        guest_id = getattr(self.request, 'query_params', {}).get('guest')
         if guest_id:
             queryset = queryset.filter(guest_id=guest_id)
         
         # Filter by reservation
-        reservation_id = self.request.query_params.get('reservation')
+        reservation_id = getattr(self.request, 'query_params', {}).get('reservation')
         if reservation_id:
             queryset = queryset.filter(reservation_id=reservation_id)
         
         # Filter by status
-        status_param = self.request.query_params.get('status')
+        status_param = getattr(self.request, 'query_params', {}).get('status')
         if status_param:
             # Support comma-separated statuses
             statuses = status_param.split(',')
             queryset = queryset.filter(status__in=statuses)
         
         # Filter by date range
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
+        start_date = getattr(self.request, 'query_params', {}).get('start_date')
+        end_date = getattr(self.request, 'query_params', {}).get('end_date')
         if start_date:
             queryset = queryset.filter(date__gte=start_date)
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
         # Filter by amount range
-        min_amount = self.request.query_params.get('min_amount')
-        max_amount = self.request.query_params.get('max_amount')
+        min_amount = getattr(self.request, 'query_params', {}).get('min_amount')
+        max_amount = getattr(self.request, 'query_params', {}).get('max_amount')
         if min_amount:
             queryset = queryset.filter(total__gte=Decimal(min_amount))
         if max_amount:
             queryset = queryset.filter(total__lte=Decimal(max_amount))
         
         # Filter invoices with balance
-        has_balance = self.request.query_params.get('has_balance')
+        has_balance = getattr(self.request, 'query_params', {}).get('has_balance')
         if has_balance and has_balance.lower() == 'true':
             queryset = queryset.filter(balance_due__gt=0)
         
         # Filter overdue invoices
-        is_overdue = self.request.query_params.get('is_overdue')
+        is_overdue = getattr(self.request, 'query_params', {}).get('is_overdue')
         if is_overdue and is_overdue.lower() == 'true':
             queryset = queryset.filter(
                 status='overdue'
@@ -766,48 +766,48 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = super().get_queryset()
         
         # Filter by invoice
-        invoice_id = self.request.query_params.get('invoice')
+        invoice_id = getattr(self.request, 'query_params', {}).get('invoice')
         if invoice_id:
             queryset = queryset.filter(invoice_id=invoice_id)
         
         # Filter by guest
-        guest_id = self.request.query_params.get('guest')
+        guest_id = getattr(self.request, 'query_params', {}).get('guest')
         if guest_id:
             queryset = queryset.filter(invoice__guest_id=guest_id)
         
         # Filter by status
-        status_param = self.request.query_params.get('status')
+        status_param = getattr(self.request, 'query_params', {}).get('status')
         if status_param:
             queryset = queryset.filter(status=status_param)
         
         # Filter by method
-        method = self.request.query_params.get('method')
+        method = getattr(self.request, 'query_params', {}).get('method')
         if method:
             queryset = queryset.filter(method=method)
         
         # Filter by payment type
-        payment_type = self.request.query_params.get('payment_type')
+        payment_type = getattr(self.request, 'query_params', {}).get('payment_type')
         if payment_type:
             queryset = queryset.filter(payment_type=payment_type)
         
         # Filter by date range
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
+        start_date = getattr(self.request, 'query_params', {}).get('start_date')
+        end_date = getattr(self.request, 'query_params', {}).get('end_date')
         if start_date:
             queryset = queryset.filter(payment_date__gte=start_date)
         if end_date:
             queryset = queryset.filter(payment_date__lte=end_date)
         
         # Filter by amount range
-        min_amount = self.request.query_params.get('min_amount')
-        max_amount = self.request.query_params.get('max_amount')
+        min_amount = getattr(self.request, 'query_params', {}).get('min_amount')
+        max_amount = getattr(self.request, 'query_params', {}).get('max_amount')
         if min_amount:
             queryset = queryset.filter(amount__gte=Decimal(min_amount))
         if max_amount:
             queryset = queryset.filter(amount__lte=Decimal(max_amount))
         
         # Filter by processor
-        processed_by = self.request.query_params.get('processed_by')
+        processed_by = getattr(self.request, 'query_params', {}).get('processed_by')
         if processed_by:
             queryset = queryset.filter(processed_by_id=processed_by)
         

@@ -329,3 +329,19 @@ class CancellationReasonViewSet(viewsets.ModelViewSet):
             return qs
         from guardian.shortcuts import get_objects_for_user
         return get_objects_for_user(user, 'config.view_notificationtemplate', qs)
+
+
+class NotificationViewSet(viewsets.ViewSet):
+    """
+    Simple notifications endpoint for frontend
+    """
+    permission_classes = [ObjectPermissionsOrReadOnly]
+    
+    def list(self, request):
+        """Return empty notifications list for now"""
+        return Response([])
+    
+    @action(detail=False, methods=['post'], url_path='mark-all-read')
+    def mark_all_read(self, request):
+        """Mark all notifications as read (placeholder)"""
+        return Response({'message': 'All notifications marked as read'})

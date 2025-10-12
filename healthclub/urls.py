@@ -52,7 +52,8 @@ from analytics.views import (
 from config.views import (
     SystemConfigurationViewSet, MembershipTierViewSet, GenderOptionViewSet,
     CommissionTypeViewSet, TrainingTypeViewSet, ProductTypeViewSet,
-    BusinessRuleViewSet, NotificationTemplateViewSet, CancellationReasonViewSet
+    BusinessRuleViewSet, NotificationTemplateViewSet, CancellationReasonViewSet,
+    NotificationViewSet
 )
 from accounts.views import get_current_user
 
@@ -103,6 +104,7 @@ router.register(r'config/product-types', ProductTypeViewSet, basename='product-t
 router.register(r'config/business-rules', BusinessRuleViewSet, basename='business-rule')
 router.register(r'config/notification-templates', NotificationTemplateViewSet, basename='notification-template')
 router.register(r'config/cancellation-reasons', CancellationReasonViewSet, basename='cancellation-reason')
+router.register(r'notifications', NotificationViewSet, basename='notification')
 
 
 

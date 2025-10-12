@@ -186,8 +186,8 @@ class Reservation(models.Model):
         return f"Reservation #{self.pk or 'new'} for {self.guest} at {self.start_time}"
 
     def clean(self) -> None:
-                # 1. Prevent past reservations
-        if self.start_time < timezone.now():
+        # 1. Prevent past reservations - but allow status updates for existing reservations
+        if not self.pk and self.start_time < timezone.now():
             raise ValidationError("Cannot create a reservation in the past.")
 
         # Skip validation until both times are provided
