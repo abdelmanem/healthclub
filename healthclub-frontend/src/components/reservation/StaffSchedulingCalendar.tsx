@@ -88,7 +88,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
-  const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '10:00:00', end: '23:30:00' });
+  const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '00:00:00', end: '23:59:59' });
   const [calendarAnchor, setCalendarAnchor] = React.useState<null | HTMLElement>(null);
   const [monthlyReservations, setMonthlyReservations] = React.useState<Record<string, number>>({});
   const [localDate, setLocalDate] = React.useState(new Date());
@@ -773,8 +773,9 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const hh = String(d.getHours()).padStart(2, '0');
             return `${hh}:00`;
           }}
-          slotMinTime={workingHours.start}
-          slotMaxTime={workingHours.end}
+          slotMinTime="00:00:00"
+          slotMaxTime="23:59:59"
+          scrollTime="06:00:00"
           headerToolbar={{ 
             left: 'prev,next calendarIcon today', 
             center: 'title', 
