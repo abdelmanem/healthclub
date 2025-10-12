@@ -1,6 +1,7 @@
 import React from 'react';
 import FullCalendar from '@fullcalendar/react';
-import timeGridPlugin from '@fullcalendar/timegrid';
+// @ts-ignore
+import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import dayjs from 'dayjs';
 import {
@@ -753,14 +754,16 @@ export const StaffSchedulingCalendar: React.FC = () => {
       <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <FullCalendar
           ref={calendarRef}
-          plugins={[timeGridPlugin as any, interactionPlugin]}
-          initialView="timeGridDay"
+          plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
+          initialView="resourceTimeGridDay"
           initialDate={selectedDate}
+          resources={resources}
           events={allEvents}
           nowIndicator
           selectable
           selectMirror
           editable
+          eventResourceEditable
           snapDuration="00:01:00"
           slotDuration="00:30:00"
           slotLabelInterval="00:30"
@@ -777,7 +780,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           headerToolbar={{ 
             left: 'prev,next calendarIcon today', 
             center: 'title', 
-            right: 'timeGridDay,timeGridWeek' 
+            right: 'resourceTimeGridDay,resourceTimeGridWeek' 
           }}
           customButtons={{
             calendarIcon: {
