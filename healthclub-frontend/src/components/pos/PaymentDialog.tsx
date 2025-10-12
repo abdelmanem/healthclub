@@ -59,16 +59,26 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   // Load payment methods
   useEffect(() => {
-    const loadPaymentMethods = async () => {
+    const loadPaymentMethods = async (retryCount = 0) => {
       try {
         const methods = await paymentMethodsService.list();
         setPaymentMethods(methods);
         if (methods.length > 0) {
           setSelectedMethod(methods[0]);
         }
-      } catch (error) {
+        setError(''); // Clear any previous errors
+      } catch (error: any) {
         console.error('Failed to load payment methods:', error);
-        setError('Failed to load payment methods');
+        
+        // If it's a 401 error and we haven't retried yet, wait a bit and retry
+        if (error?.response?.status === 401 && retryCount < 2) {
+          console.log('Payment methods loading failed due to auth, retrying...');
+          setTimeout(() => {
+            loadPaymentMethods(retryCount + 1);
+          }, 1000); // Wait 1 second for token refresh
+        } else {
+          setError('Failed to load payment methods');
+        }
       }
     };
     if (open) {

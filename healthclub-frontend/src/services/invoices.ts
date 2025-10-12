@@ -470,7 +470,7 @@ export const invoicesService = {
     new_balance_due: string;
     message: string;
   }> {
-    const response = await api.post(`/invoices/${invoiceId}/apply-discount/`, data);
+    const response = await api.post(`/invoices/${invoiceId}/apply_discount/`, data);
     return response.data;
   },
 
