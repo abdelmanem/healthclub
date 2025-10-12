@@ -333,7 +333,7 @@ export const invoicesService = {
     invoiceId: number,
     data: ProcessPaymentRequest
   ): Promise<ProcessPaymentResponse> {
-    const response = await api.post(`/invoices/${invoiceId}/process-payment/`, data);
+    const response = await api.post(`/invoices/${invoiceId}/process_payment/`, data);
     return response.data;
   },
 
@@ -705,7 +705,7 @@ export const reservationInvoiceService = {
     reservationId: number,
     data: ProcessPaymentRequest
   ): Promise<ProcessPaymentResponse> {
-    const response = await api.post(`/reservations/${reservationId}/process-payment/`, data);
+    const response = await api.post(`/reservations/${reservationId}/process_payment/`, data);
     return response.data;
   },
 

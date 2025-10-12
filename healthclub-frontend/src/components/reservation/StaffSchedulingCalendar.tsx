@@ -1209,6 +1209,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
         }}
         maxWidth="lg"
         fullWidth
+        disableEnforceFocus
+        disableRestoreFocus
         PaperProps={{
           sx: {
             height: '90vh',

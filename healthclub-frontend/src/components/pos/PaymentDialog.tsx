@@ -172,12 +172,12 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Stack direction="row" spacing={2} alignItems="center">
-          <Typography variant="h6">Process Payment</Typography>
+          <Typography component="span" variant="h6">Process Payment</Typography>
           <Chip 
             label={invoice.invoice_number} 
             size="small" 
             color="primary" 
-            variant="outlined" 
+            variant="outlined"
           />
         </Stack>
       </DialogTitle>
