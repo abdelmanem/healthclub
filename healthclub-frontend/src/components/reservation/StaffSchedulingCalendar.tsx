@@ -1217,7 +1217,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
         }}
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Invoice & Payment</Typography>
+          <Typography component="span" variant="h6">Invoice & Payment</Typography>
           <IconButton
             onClick={() => {
               setInvoiceDialogOpen(false);

@@ -357,9 +357,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
                             reservation=reservation,
                             guest=reservation.guest,
                             invoice_number=invoice_number,
-                            invoice_date=timezone.now(),
                             due_date=timezone.now().date(),
-                            status='pending',
+                            status='issued',
                             notes=f'Invoice for reservation #{reservation.id} - Checkout: {checkout_notes}'.strip(),
                             created_by=request.user if request.user.is_authenticated else None
                         )
@@ -389,11 +388,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
                         
                         # If no services, create a generic line item
                         if not invoice.items.exists():
+                            # Calculate total from reservation services
+                            total_from_services = Decimal('0.00')
+                            if hasattr(reservation, 'reservation_services'):
+                                for res_service in reservation.reservation_services.all():
+                                    if hasattr(res_service, 'total_price'):
+                                        total_from_services += res_service.total_price
+                                    elif hasattr(res_service, 'unit_price') and hasattr(res_service, 'quantity'):
+                                        total_from_services += (res_service.unit_price or Decimal('0.00')) * (res_service.quantity or 1)
+                            
                             InvoiceItem.objects.create(
                                 invoice=invoice,
                                 product_name=f"Reservation #{reservation.id}",
                                 quantity=1,
-                                unit_price=reservation.total_price or Decimal('0.00'),
+                                unit_price=total_from_services,
                                 tax_rate=Decimal('8.00'),
                             )
                         
@@ -564,7 +572,6 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 reservation=reservation,
                 guest=reservation.guest,
                 invoice_number=invoice_number,
-                invoice_date=timezone.now(),
                 due_date=timezone.now().date(),  # Due immediately
                 status='issued',
                 notes=f'Invoice for reservation #{reservation.id}',
@@ -604,11 +611,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
             
             # If no services, create a generic line item
             if not invoice.items.exists():
+                # Calculate total from reservation services
+                total_from_services = Decimal('0.00')
+                if hasattr(reservation, 'reservation_services'):
+                    for res_service in reservation.reservation_services.all():
+                        if hasattr(res_service, 'total_price'):
+                            total_from_services += res_service.total_price
+                        elif hasattr(res_service, 'unit_price') and hasattr(res_service, 'quantity'):
+                            total_from_services += (res_service.unit_price or Decimal('0.00')) * (res_service.quantity or 1)
+                
                 InvoiceItem.objects.create(
                     invoice=invoice,
                     product_name=f"Reservation #{reservation.id}",
                     quantity=1,
-                    unit_price=reservation.total_price or Decimal('0.00'),
+                    unit_price=total_from_services,
                     tax_rate=Decimal('8.00'),
                     notes=f'Generic line item for reservation #{reservation.id}'
                 )
