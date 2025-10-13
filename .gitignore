@@ -12,3 +12,5 @@ media/
 node_modules
 *.pyc
 *.pyc
+*.pyc
+*.pyc
