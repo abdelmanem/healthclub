@@ -239,6 +239,12 @@ class Invoice(models.Model):
         default=Decimal('0.00'),
         help_text="Remaining balance: (total - amount_paid)"
     )
+
+    # Version for optimistic locking (Phase 1)
+    version = models.IntegerField(
+        default=0,
+        help_text='Version number for optimistic locking'
+    )
     
     # Status
     status = models.CharField(
@@ -376,10 +382,11 @@ class Invoice(models.Model):
                 else:
                     self.status = self.STATUS_ISSUED
         
-        # Save updated fields
+        # Save updated fields and bump version
+        self.version = (self.version or 0) + 1
         self.save(update_fields=[
             'subtotal', 'tax', 'service_charge', 'total', 
-            'amount_paid', 'balance_due', 'status', 'paid_date'
+            'amount_paid', 'balance_due', 'status', 'paid_date', 'version'
         ])
     
     def save(self, *args, **kwargs):
@@ -657,6 +664,16 @@ class Payment(models.Model):
         blank=True,
         help_text="Payment notes"
     )
+
+    # Phase 1: Idempotency key to prevent duplicate processing
+    idempotency_key = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Unique key to prevent duplicate payment processing'
+    )
     
     # Refund tracking
     is_refunded = models.BooleanField(
@@ -705,6 +722,7 @@ class Payment(models.Model):
             models.Index(fields=['invoice', '-payment_date']),
             models.Index(fields=['status']),
             models.Index(fields=['method']),
+            models.Index(fields=['idempotency_key']),
         ]
     
     def __str__(self) -> str:
@@ -726,19 +744,24 @@ class Payment(models.Model):
                 )
     
     def save(self, *args, **kwargs):
-        """Save payment and update related records"""
+        """Save payment with basic idempotency check and update related records"""
         # Validate before saving
         self.clean()
-        
+
+        # Basic idempotency guard (non-transactional; full handling in view)
+        if self.idempotency_key and not self.pk:
+            if Payment.objects.filter(idempotency_key=self.idempotency_key).exists():
+                raise ValidationError(f'Payment with idempotency key {self.idempotency_key} already exists')
+
         super().save(*args, **kwargs)
-        
+
         # Recalculate invoice totals
         self.invoice.recalculate_totals()
-        
+
         # Update guest loyalty points for completed payments
         if self.status == 'completed':
             guest = self.invoice.guest
-            
+
             if hasattr(guest, 'loyalty_points') and hasattr(guest, 'total_spent'):
                 if self.payment_type == 'refund':
                     points_change = -int(abs(self.amount))
@@ -746,7 +769,7 @@ class Payment(models.Model):
                 else:
                     points_change = int(self.amount)
                     spending_change = self.amount
-                
+
                 guest.loyalty_points = max(0, (guest.loyalty_points or 0) + points_change)
                 guest.total_spent = max(
                     Decimal('0.00'),
@@ -755,15 +778,30 @@ class Payment(models.Model):
                 guest.save(update_fields=['loyalty_points', 'total_spent'])
     
     def process_refund(self, amount, reason=""):
-        """Process a refund for this payment"""
-        if amount > self.amount - self.refund_amount:
-            raise ValueError("Refund amount cannot exceed remaining payment amount")
-        
-        self.refund_amount += amount
-        self.is_refunded = self.refund_amount >= self.amount
-        self.refund_reason = reason
-        self.refund_date = timezone.now()
-        self.save()
+        """Process a refund for this payment with locking and validation"""
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+
+        if amount <= 0:
+            raise ValidationError("Refund amount must be positive")
+
+        with transaction.atomic():
+            # Lock this payment row to prevent concurrent refunds
+            payment = Payment.objects.select_for_update().get(pk=self.pk)
+
+            available_amount = payment.amount - payment.refund_amount
+            if amount > available_amount:
+                raise ValidationError(
+                    f"Refund amount ${amount} cannot exceed remaining payment amount ${available_amount}"
+                )
+
+            payment.refund_amount += amount
+            payment.is_refunded = payment.refund_amount >= payment.amount
+            payment.refund_reason = reason
+            payment.refund_date = timezone.now()
+            payment.save(update_fields=[
+                'refund_amount', 'is_refunded', 'refund_reason', 'refund_date'
+            ])
     
     def can_be_refunded(self):
         """Check if this payment can be refunded"""

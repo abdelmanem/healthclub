@@ -643,6 +643,14 @@ class ProcessPaymentSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Additional notes about this payment"
     )
+
+    # Phase 1: Idempotency key to prevent duplicate submissions
+    idempotency_key = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        help_text="Unique key to prevent duplicate submissions"
+    )
     
     def validate_payment_method(self, value):
         """Ensure payment method exists and is active"""
@@ -705,4 +713,24 @@ class RefundSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Additional notes"
     )
+
+    # Phase 1: Optional link to a specific payment to refund against
+    payment_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID of specific payment to refund (optional)"
+    )
+
+    def validate_payment_id(self, value):
+        """Validate payment exists if provided"""
+        if value:
+            try:
+                payment = Payment.objects.get(id=value)
+                # Ensure payment can be refunded (positive, completed, not already fully refunded)
+                if not payment.can_be_refunded():
+                    raise serializers.ValidationError("This payment cannot be refunded")
+                return payment
+            except Payment.DoesNotExist:
+                raise serializers.ValidationError("Payment not found")
+        return None
 

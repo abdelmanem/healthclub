@@ -188,18 +188,38 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         }
         """
         invoice = self.get_object()
-        
+
         # Validate request data
         serializer = ProcessPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         amount = serializer.validated_data['amount']
         payment_method = serializer.validated_data['payment_method']
         payment_type = serializer.validated_data['payment_type']
         reference = serializer.validated_data.get('reference', '')
         transaction_id = serializer.validated_data.get('transaction_id', '')
         notes = serializer.validated_data.get('notes', '')
-        
+        idempotency_key = serializer.validated_data.get('idempotency_key', '')
+
+        # Idempotency short-circuit
+        if idempotency_key:
+            existing = Payment.objects.filter(idempotency_key=idempotency_key).first()
+            if existing:
+                invoice.refresh_from_db()
+                return Response({
+                    'success': True,
+                    'duplicate': True,
+                    'payment_id': existing.id,
+                    'amount_paid': str(existing.amount),
+                    'invoice_total': str(invoice.total),
+                    'amount_previously_paid': str(invoice.amount_paid - existing.amount),
+                    'total_paid': str(invoice.amount_paid),
+                    'balance_due': str(invoice.balance_due),
+                    'invoice_status': invoice.status,
+                    'payment_status': existing.status,
+                    'message': 'Payment already processed (idempotency key matched)'
+                })
+
         # Check if invoice can accept payments
         if not invoice.can_be_paid():
             return Response(
@@ -210,7 +230,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Validate amount against balance
         if amount > invoice.balance_due:
             return Response(
@@ -221,14 +241,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Store previous amount paid for response
+
         previous_amount_paid = invoice.amount_paid
-        
+
         # Create payment within transaction
         with transaction.atomic():
+            # Lock invoice row for concurrent safety
+            invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+
             payment = Payment.objects.create(
-                invoice=invoice,
+                invoice=invoice_locked,
                 method=payment_method.code,
                 payment_method=payment_method,
                 payment_type=payment_type,
@@ -237,14 +259,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 reference=reference,
                 status='completed',
                 notes=notes,
-                processed_by=request.user
+                processed_by=request.user,
+                idempotency_key=idempotency_key or None
             )
-            
-            # Invoice totals and guest points updated automatically via signals
-        
-        # Refresh invoice from database to get updated values
+
+            # Refresh locked invoice
+            invoice_locked.refresh_from_db()
+
+        # Refresh main invoice instance
         invoice.refresh_from_db()
-        
+
         return Response({
             'success': True,
             'payment_id': payment.id,
@@ -304,6 +328,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         reason = serializer.validated_data['reason']
         payment_method = serializer.validated_data.get('payment_method', 'refund')
         notes = serializer.validated_data.get('notes', '')
+        payment_to_refund = serializer.validated_data.get('payment_id')
         
         # Check if invoice can be refunded
         if not invoice.can_be_refunded():
@@ -329,8 +354,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         # Create refund within transaction
         with transaction.atomic():
+            invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+
             refund_payment = Payment.objects.create(
-                invoice=invoice,
+                invoice=invoice_locked,
                 method=payment_method,
                 payment_type='refund',
                 amount=-amount,  # Negative amount for refund
@@ -338,11 +365,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 notes=f'Refund: {reason}\n{notes}'.strip(),
                 processed_by=request.user
             )
-            
+
+            # If specific payment, update its refund tracking
+            if payment_to_refund:
+                payment_to_refund.process_refund(amount, reason)
+
             # Update invoice status if fully refunded
-            if invoice.balance_due >= invoice.total:
-                invoice.status = 'refunded'
-                invoice.save(update_fields=['status'])
+            invoice_locked.refresh_from_db()
+            if invoice_locked.amount_paid <= 0:
+                invoice_locked.status = 'refunded'
+                invoice_locked.save(update_fields=['status'])
         
         # Refresh invoice
         invoice.refresh_from_db()
