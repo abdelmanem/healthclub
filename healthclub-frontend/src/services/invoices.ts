@@ -115,6 +115,7 @@ export interface ProcessPaymentRequest {
   reference?: string;
   transaction_id?: string;
   notes?: string;
+  idempotency_key?: string;
 }
 
 export interface ProcessPaymentResponse {

@@ -356,17 +356,31 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
 
+            # Create Refund record (track business refund)
+            from .models import Refund
+            refund = Refund.objects.create(
+                invoice=invoice_locked,
+                payment=payment_to_refund if payment_to_refund else None,
+                amount=amount,
+                reason=reason,
+                status='processed',
+                requested_by=request.user,
+                approved_by=request.user,
+                processed_at=timezone.now(),
+            )
+
+            # Create accounting negative payment entry
             refund_payment = Payment.objects.create(
                 invoice=invoice_locked,
                 method=payment_method,
                 payment_type='refund',
                 amount=-amount,  # Negative amount for refund
                 status='completed',
-                notes=f'Refund: {reason}\n{notes}'.strip(),
+                notes=f'Refund ID: {refund.id}\nReason: {reason}\n{notes}'.strip(),
                 processed_by=request.user
             )
 
-            # If specific payment, update its refund tracking
+            # If specific payment, update its refund tracking helper
             if payment_to_refund:
                 payment_to_refund.process_refund(amount, reason)
 
@@ -381,7 +395,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         return Response({
             'success': True,
-            'refund_id': refund_payment.id,
+            'refund_id': refund.id,
+            'refund_payment_id': refund_payment.id,
             'refund_amount': str(amount),
             'refund_reason': reason,
             'remaining_paid': str(invoice.amount_paid),
@@ -743,6 +758,37 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'success': True,
             'sent_to': email,
             'message': 'Invoice sent successfully'
+        })
+
+    @action(detail=True, methods=['get'])
+    def refund_history(self, request, pk=None):
+        """
+        Get complete refund history for this invoice
+        Endpoint: GET /api/invoices/{id}/refund-history/
+        """
+        invoice = self.get_object()
+        refunds = invoice.refunds.all().order_by('-created_at')
+        data = [
+            {
+                'id': r.id,
+                'amount': str(r.amount),
+                'reason': r.reason,
+                'status': r.status,
+                'payment_id': r.payment_id,
+                'created_at': r.created_at,
+                'processed_at': r.processed_at,
+            }
+            for r in refunds
+        ]
+        total_refunded = invoice.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        return Response({
+            'invoice_number': invoice.invoice_number,
+            'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
+            'total': str(invoice.total),
+            'amount_paid': str(invoice.amount_paid),
+            'total_refunded': str(total_refunded),
+            'refund_count': refunds.count(),
+            'refunds': data,
         })
 
 
