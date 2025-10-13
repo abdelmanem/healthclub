@@ -404,14 +404,29 @@ class Invoice(models.Model):
         """Get payment breakdown for display"""
         completed_payments = self.payments.filter(status='completed')
         
+        # Calculate refund amount from both refunds table and negative refund payments
+        refund_amount = Decimal('0.00')
+        
+        # Add refunds from refunds table
+        refunds_sum = self.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum']
+        if refunds_sum:
+            refund_amount += refunds_sum
+        
+        # Add negative payments with payment_type='refund'
+        refund_payments_sum = self.payments.filter(
+            status='completed',
+            payment_type='refund',
+            amount__lt=0
+        ).aggregate(Sum('amount'))['amount__sum']
+        if refund_payments_sum:
+            refund_amount += abs(refund_payments_sum)  # Convert negative to positive for display
+        
         return {
             'total_payments': completed_payments.count(),
             'payment_methods': list(
                 completed_payments.values_list('method', flat=True).distinct()
             ),
-            'refund_amount': self.refunds.filter(
-                status='processed'
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00'),
+            'refund_amount': refund_amount,
         }
 
 
