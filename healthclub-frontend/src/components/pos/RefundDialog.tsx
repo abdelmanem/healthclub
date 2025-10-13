@@ -43,6 +43,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
+  const [targetPaymentId, setTargetPaymentId] = useState<number | ''>('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
 
@@ -52,6 +53,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
       setAmount(invoice.amount_paid);
       setReason('');
       setNotes('');
+      setTargetPaymentId('');
       setError('');
     }
   }, [open, invoice]);
@@ -84,6 +86,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
         amount: amount,
         reason: reason,
         notes: notes || undefined,
+        payment_id: typeof targetPaymentId === 'number' ? targetPaymentId : undefined,
       });
 
       // Show success message
@@ -186,6 +189,28 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
             }}
             helperText={`Maximum: ${formatCurrency(invoice.amount_paid)}`}
           />
+
+          {/* Target Payment (optional) */}
+          {invoice.payments && invoice.payments.length > 0 && (
+            <TextField
+              select
+              label="Refund Against Payment (optional)"
+              value={targetPaymentId}
+              onChange={(e) => setTargetPaymentId(e.target.value ? Number(e.target.value) : '')}
+              fullWidth
+              helperText="Choose a specific payment to refund back to its method"
+              SelectProps={{ native: true }}
+            >
+              <option value="">Auto-select (any method)</option>
+              {invoice.payments
+                .filter((p) => !p.is_refund && Number(p.amount) > 0)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    #{p.id} • {p.payment_method_name || p.method} • ${Math.abs(Number(p.amount)).toFixed(2)}
+                  </option>
+                ))}
+            </TextField>
+          )}
 
           {/* Reason */}
           <TextField
