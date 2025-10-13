@@ -16,6 +16,7 @@ from .serializers import (
     PaymentMethodSerializer,
     ProcessPaymentSerializer,
     RefundSerializer,
+    RefundModelSerializer,
 )
 
 
@@ -768,18 +769,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         """
         invoice = self.get_object()
         refunds = invoice.refunds.all().order_by('-created_at')
-        data = [
-            {
-                'id': r.id,
-                'amount': str(r.amount),
-                'reason': r.reason,
-                'status': r.status,
-                'payment_id': r.payment_id,
-                'created_at': r.created_at,
-                'processed_at': r.processed_at,
-            }
-            for r in refunds
-        ]
+        data = RefundModelSerializer(refunds, many=True).data
         total_refunded = invoice.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
         return Response({
             'invoice_number': invoice.invoice_number,
