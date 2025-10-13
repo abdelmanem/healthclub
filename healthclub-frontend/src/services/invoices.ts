@@ -115,6 +115,7 @@ export interface ProcessPaymentRequest {
   reference?: string;
   transaction_id?: string;
   notes?: string;
+  idempotency_key?: string;
 }
 
 export interface ProcessPaymentResponse {
@@ -136,6 +137,7 @@ export interface RefundRequest {
   reason: string;
   payment_method?: string;
   notes?: string;
+  payment_id?: number;
 }
 
 export interface RefundResponse {

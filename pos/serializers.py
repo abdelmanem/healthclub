@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund
 
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
@@ -164,6 +164,14 @@ class PaymentSerializer(serializers.ModelSerializer):
         help_text="True if this is a refund"
     )
     
+    # Enrichments: refund info and linked refunds
+    refund_info = serializers.SerializerMethodField(
+        help_text="Details about refunds on this payment"
+    )
+    refunds = serializers.SerializerMethodField(
+        help_text="List of Refund records linked to this payment"
+    )
+
     class Meta:
         model = Payment
         fields = [
@@ -185,6 +193,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             'processed_by',
             'processed_by_name',
             'is_refund',
+            'is_refunded',
+            'refund_amount',
+            'refund_date',
+            'refund_reason',
+            'refund_info',
+            'refunds',
             'created_at',
             'updated_at',
         ]
@@ -199,6 +213,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             'processed_by_name',
             'display_amount',
             'is_refund',
+            'is_refunded',
+            'refund_amount',
+            'refund_date',
+            'refund_reason',
+            'refund_info',
+            'refunds',
         ]
     
     def get_guest_name(self, obj):
@@ -221,6 +241,34 @@ class PaymentSerializer(serializers.ModelSerializer):
     def get_is_refund(self, obj):
         """Check if this is a refund"""
         return obj.is_refund()
+
+    def get_refund_info(self, obj):
+        """Return aggregate refund info if any refunds applied to this payment"""
+        if not obj.is_refunded and obj.refund_amount == 0:
+            return None
+        return {
+            'is_refunded': obj.is_refunded,
+            'refund_amount': str(obj.refund_amount),
+            'remaining_amount': str(obj.amount - obj.refund_amount),
+            'refund_date': obj.refund_date,
+            'refund_reason': obj.refund_reason,
+            'can_be_refunded': obj.can_be_refunded(),
+        }
+
+    def get_refunds(self, obj):
+        """Return linked Refund records (minimal fields)"""
+        qs = obj.refunds.all().order_by('-created_at')
+        return [
+            {
+                'id': r.id,
+                'amount': str(r.amount),
+                'reason': r.reason,
+                'status': r.status,
+                'created_at': r.created_at,
+                'processed_at': r.processed_at,
+            }
+            for r in qs
+        ]
     
     def validate_amount(self, value):
         """Validate payment amount"""
@@ -643,6 +691,14 @@ class ProcessPaymentSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Additional notes about this payment"
     )
+
+    # Phase 1: Idempotency key to prevent duplicate submissions
+    idempotency_key = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        help_text="Unique key to prevent duplicate submissions"
+    )
     
     def validate_payment_method(self, value):
         """Ensure payment method exists and is active"""
@@ -705,4 +761,24 @@ class RefundSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Additional notes"
     )
+
+    # Phase 1: Optional link to a specific payment to refund against
+    payment_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID of specific payment to refund (optional)"
+    )
+
+    def validate_payment_id(self, value):
+        """Validate payment exists if provided"""
+        if value:
+            try:
+                payment = Payment.objects.get(id=value)
+                # Ensure payment can be refunded (positive, completed, not already fully refunded)
+                if not payment.can_be_refunded():
+                    raise serializers.ValidationError("This payment cannot be refunded")
+                return payment
+            except Payment.DoesNotExist:
+                raise serializers.ValidationError("Payment not found")
+        return None
 

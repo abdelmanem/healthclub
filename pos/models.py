@@ -239,6 +239,12 @@ class Invoice(models.Model):
         default=Decimal('0.00'),
         help_text="Remaining balance: (total - amount_paid)"
     )
+
+    # Version for optimistic locking (Phase 1)
+    version = models.IntegerField(
+        default=0,
+        help_text='Version number for optimistic locking'
+    )
     
     # Status
     status = models.CharField(
@@ -285,6 +291,7 @@ class Invoice(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['invoice_number']),
             models.Index(fields=['reservation']),
+            models.Index(fields=['status', 'balance_due'], name='invoice_status_balance_idx'),
         ]
     
     def __str__(self) -> str:
@@ -316,71 +323,71 @@ class Invoice(models.Model):
         8. Update status based on balance
         """
         
-        # Calculate subtotal from items
-        subtotal = Decimal("0.00")
-        for item in self.items.all():
-            line_subtotal = item.unit_price * item.quantity
-            subtotal += line_subtotal
-        
-        self.subtotal = subtotal
-        
-        # Get POS configuration
-        cfg = PosConfig.objects.first()
-        
-        # Service charge (percentage of subtotal)
-        service_charge = Decimal("0.00")
-        if cfg and cfg.service_charge_rate:
-            service_charge = (subtotal * (cfg.service_charge_rate / Decimal("100")))
-        self.service_charge = service_charge
-        
-        # Calculate tax: item-level tax + VAT on (subtotal + service charge)
-        item_tax = Decimal("0.00")
-        for item in self.items.all():
-            if item.tax_rate:
-                item_tax += (item.unit_price * item.quantity) * (item.tax_rate / Decimal("100"))
-        
-        vat_total = Decimal("0.00")
-        if cfg and cfg.vat_rate:
-            vat_total = (subtotal + service_charge) * (cfg.vat_rate / Decimal("100"))
-        
-        self.tax = item_tax + vat_total
-        
-        # Calculate total
-        self.total = subtotal + service_charge + self.tax - (self.discount or Decimal('0.00'))
-        
-        # Calculate amount paid from completed payments only
-        payments_data = self.payments.filter(
-            status='completed'
-        ).aggregate(Sum('amount'))
-        
-        self.amount_paid = payments_data['amount__sum'] or Decimal('0.00')
-        
-        # Calculate balance due
-        self.balance_due = self.total - self.amount_paid
-        
-        # Update status based on payment
-        if self.balance_due <= Decimal('0.00') and self.total > Decimal('0.00'):
-            # Fully paid
-            self.status = self.STATUS_PAID
-            if not self.paid_date:
-                self.paid_date = timezone.now()
-        elif self.amount_paid > Decimal('0.00') and self.balance_due > Decimal('0.00'):
-            # Partially paid
-            self.status = self.STATUS_PARTIAL
-        elif self.amount_paid == Decimal('0.00'):
-            # Not paid yet
-            if self.status not in [self.STATUS_DRAFT, self.STATUS_CANCELLED, self.STATUS_REFUNDED]:
-                # Check if overdue
-                if self.due_date and timezone.now().date() > self.due_date:
-                    self.status = self.STATUS_OVERDUE
-                else:
-                    self.status = self.STATUS_ISSUED
-        
-        # Save updated fields
-        self.save(update_fields=[
-            'subtotal', 'tax', 'service_charge', 'total', 
-            'amount_paid', 'balance_due', 'status', 'paid_date'
-        ])
+        from django.db import transaction
+        # Perform calculations inside a transaction and lock this invoice row
+        with transaction.atomic():
+            locked = Invoice.objects.select_for_update().get(pk=self.pk)
+
+            # Calculate subtotal from items
+            subtotal = Decimal("0.00")
+            for item in locked.items.all():
+                line_subtotal = item.unit_price * item.quantity
+                subtotal += line_subtotal
+            locked.subtotal = subtotal
+
+            # Get POS configuration
+            cfg = PosConfig.objects.first()
+
+            # Service charge (percentage of subtotal)
+            service_charge = Decimal("0.00")
+            if cfg and cfg.service_charge_rate:
+                service_charge = (subtotal * (cfg.service_charge_rate / Decimal("100")))
+            locked.service_charge = service_charge
+
+            # Calculate tax: item-level tax + VAT on (subtotal + service charge)
+            item_tax = Decimal("0.00")
+            for item in locked.items.all():
+                if item.tax_rate:
+                    item_tax += (item.unit_price * item.quantity) * (item.tax_rate / Decimal("100"))
+            vat_total = Decimal("0.00")
+            if cfg and cfg.vat_rate:
+                vat_total = (subtotal + service_charge) * (cfg.vat_rate / Decimal("100"))
+            locked.tax = item_tax + vat_total
+
+            # Calculate total
+            locked.total = subtotal + service_charge + locked.tax - (locked.discount or Decimal('0.00'))
+
+            # Amount paid from completed payments only
+            payments_data = locked.payments.filter(status='completed').aggregate(Sum('amount'))
+            locked.amount_paid = payments_data['amount__sum'] or Decimal('0.00')
+
+            # Balance
+            locked.balance_due = locked.total - locked.amount_paid
+
+            # Status update
+            if locked.balance_due <= Decimal('0.00') and locked.total > Decimal('0.00'):
+                locked.status = self.STATUS_PAID
+                if not locked.paid_date:
+                    locked.paid_date = timezone.now()
+            elif locked.amount_paid > Decimal('0.00') and locked.balance_due > Decimal('0.00'):
+                locked.status = self.STATUS_PARTIAL
+            elif locked.amount_paid == Decimal('0.00'):
+                if locked.status not in [self.STATUS_DRAFT, self.STATUS_CANCELLED, self.STATUS_REFUNDED]:
+                    if locked.due_date and timezone.now().date() > locked.due_date:
+                        locked.status = self.STATUS_OVERDUE
+                    else:
+                        locked.status = self.STATUS_ISSUED
+
+            # Save updated fields and bump version
+            locked.version = (locked.version or 0) + 1
+            locked.save(update_fields=[
+                'subtotal', 'tax', 'service_charge', 'total',
+                'amount_paid', 'balance_due', 'status', 'paid_date', 'version'
+            ])
+
+            # Sync current instance fields to reflect latest values
+            for f in ['subtotal','tax','service_charge','total','amount_paid','balance_due','status','paid_date','version']:
+                setattr(self, f, getattr(locked, f))
     
     def save(self, *args, **kwargs):
         """Override save to handle auto-generation"""
@@ -404,14 +411,29 @@ class Invoice(models.Model):
         """Get payment breakdown for display"""
         completed_payments = self.payments.filter(status='completed')
         
+        # Calculate refund amount from both refunds table and negative refund payments
+        refund_amount = Decimal('0.00')
+        
+        # Add refunds from refunds table
+        refunds_sum = self.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum']
+        if refunds_sum:
+            refund_amount += refunds_sum
+        
+        # Add negative payments with payment_type='refund'
+        refund_payments_sum = self.payments.filter(
+            status='completed',
+            payment_type='refund',
+            amount__lt=0
+        ).aggregate(Sum('amount'))['amount__sum']
+        if refund_payments_sum:
+            refund_amount += abs(refund_payments_sum)  # Convert negative to positive for display
+        
         return {
             'total_payments': completed_payments.count(),
             'payment_methods': list(
                 completed_payments.values_list('method', flat=True).distinct()
             ),
-            'refund_amount': self.refunds.filter(
-                status='processed'
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00'),
+            'refund_amount': refund_amount,
         }
 
 
@@ -642,6 +664,16 @@ class Payment(models.Model):
         blank=True,
         help_text="Payment notes"
     )
+
+    # Phase 1: Idempotency key to prevent duplicate processing
+    idempotency_key = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Unique key to prevent duplicate payment processing'
+    )
     
     # Refund tracking
     is_refunded = models.BooleanField(
@@ -690,6 +722,7 @@ class Payment(models.Model):
             models.Index(fields=['invoice', '-payment_date']),
             models.Index(fields=['status']),
             models.Index(fields=['method']),
+            models.Index(fields=['idempotency_key']),
         ]
     
     def __str__(self) -> str:
@@ -711,44 +744,74 @@ class Payment(models.Model):
                 )
     
     def save(self, *args, **kwargs):
-        """Save payment and update related records"""
+        """Save payment with idempotency and row-level locking on invoice/guest"""
+        from django.db import transaction
         # Validate before saving
         self.clean()
-        
-        super().save(*args, **kwargs)
-        
-        # Recalculate invoice totals
-        self.invoice.recalculate_totals()
-        
-        # Update guest loyalty points for completed payments
-        if self.status == 'completed':
-            guest = self.invoice.guest
-            
-            if hasattr(guest, 'loyalty_points') and hasattr(guest, 'total_spent'):
-                if self.payment_type == 'refund':
-                    points_change = -int(abs(self.amount))
-                    spending_change = -abs(self.amount)
-                else:
-                    points_change = int(self.amount)
-                    spending_change = self.amount
-                
-                guest.loyalty_points = max(0, (guest.loyalty_points or 0) + points_change)
-                guest.total_spent = max(
-                    Decimal('0.00'),
-                    (guest.total_spent or Decimal('0.00')) + spending_change
-                )
-                guest.save(update_fields=['loyalty_points', 'total_spent'])
+
+        if self.idempotency_key and not self.pk:
+            if Payment.objects.filter(idempotency_key=self.idempotency_key).exists():
+                raise ValidationError(f'Payment with idempotency key {self.idempotency_key} already exists')
+
+        with transaction.atomic():
+            # Lock invoice row
+            invoice_locked = Invoice.objects.select_for_update().get(pk=self.invoice_id)
+
+            super().save(*args, **kwargs)
+
+            # Recalculate totals under the same lock
+            invoice_locked.recalculate_totals()
+
+            # Update guest loyalty points for completed payments
+            if self.status == 'completed':
+                guest = invoice_locked.guest
+                # Lock guest (if applicable)
+                try:
+                    from guests.models import Guest
+                    guest_locked = Guest.objects.select_for_update().get(pk=guest.pk)
+                except Exception:
+                    guest_locked = guest
+
+                if hasattr(guest_locked, 'loyalty_points') and hasattr(guest_locked, 'total_spent'):
+                    if self.payment_type == 'refund':
+                        points_change = -int(abs(self.amount))
+                        spending_change = -abs(self.amount)
+                    else:
+                        points_change = int(self.amount)
+                        spending_change = self.amount
+
+                    guest_locked.loyalty_points = max(0, (guest_locked.loyalty_points or 0) + points_change)
+                    guest_locked.total_spent = max(
+                        Decimal('0.00'),
+                        (guest_locked.total_spent or Decimal('0.00')) + spending_change
+                    )
+                    guest_locked.save(update_fields=['loyalty_points', 'total_spent'])
     
     def process_refund(self, amount, reason=""):
-        """Process a refund for this payment"""
-        if amount > self.amount - self.refund_amount:
-            raise ValueError("Refund amount cannot exceed remaining payment amount")
-        
-        self.refund_amount += amount
-        self.is_refunded = self.refund_amount >= self.amount
-        self.refund_reason = reason
-        self.refund_date = timezone.now()
-        self.save()
+        """Process a refund for this payment with locking and validation"""
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+
+        if amount <= 0:
+            raise ValidationError("Refund amount must be positive")
+
+        with transaction.atomic():
+            # Lock this payment row to prevent concurrent refunds
+            payment = Payment.objects.select_for_update().get(pk=self.pk)
+
+            available_amount = payment.amount - payment.refund_amount
+            if amount > available_amount:
+                raise ValidationError(
+                    f"Refund amount ${amount} cannot exceed remaining payment amount ${available_amount}"
+                )
+
+            payment.refund_amount += amount
+            payment.is_refunded = payment.refund_amount >= payment.amount
+            payment.refund_reason = reason
+            payment.refund_date = timezone.now()
+            payment.save(update_fields=[
+                'refund_amount', 'is_refunded', 'refund_reason', 'refund_date'
+            ])
     
     def can_be_refunded(self):
         """Check if this payment can be refunded"""
