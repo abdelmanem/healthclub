@@ -782,3 +782,62 @@ class RefundSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Payment not found")
         return None
 
+
+class RefundModelSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Refund model with helpful computed fields
+    """
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    guest_name = serializers.SerializerMethodField()
+    original_payment_amount = serializers.SerializerMethodField()
+    requested_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Refund
+        fields = [
+            'id',
+            'invoice',
+            'invoice_number',
+            'guest_name',
+            'payment',
+            'original_payment_amount',
+            'amount',
+            'reason',
+            'status',
+            'status_display',
+            'requested_by',
+            'requested_by_name',
+            'approved_by',
+            'approved_by_name',
+            'created_at',
+            'processed_at',
+        ]
+        read_only_fields = [
+            'id', 'invoice_number', 'guest_name', 'original_payment_amount',
+            'requested_by_name', 'approved_by_name', 'status_display',
+            'created_at', 'processed_at'
+        ]
+
+    def get_guest_name(self, obj):
+        if obj.invoice and obj.invoice.guest:
+            g = obj.invoice.guest
+            return f"{g.first_name} {g.last_name}".strip()
+        return None
+
+    def get_original_payment_amount(self, obj):
+        if obj.payment and obj.payment.amount > 0:
+            return str(obj.payment.amount)
+        return None
+
+    def get_requested_by_name(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.get_full_name() or obj.requested_by.username
+        return None
+
+    def get_approved_by_name(self, obj):
+        if obj.approved_by:
+            return obj.approved_by.get_full_name() or obj.approved_by.username
+        return None
+
