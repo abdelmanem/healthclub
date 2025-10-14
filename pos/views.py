@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Q, Sum, Count, Avg
 from decimal import Decimal
 
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund
 from .serializers import (
     InvoiceSerializer,
     InvoiceListSerializer,
@@ -447,8 +447,20 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         method = request.data.get('method', 'cash')
         notes = request.data.get('notes', 'Marked as paid')
         
-        # Create payment for remaining balance
+        # Create payment for remaining balance with row lock
         with transaction.atomic():
+            invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+
+            if invoice.balance_due <= 0:
+                return Response(
+                    {
+                        'error': 'Invoice is already paid',
+                        'status': invoice.status,
+                        'balance_due': str(invoice.balance_due)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             payment = Payment.objects.create(
                 invoice=invoice,
                 method=method,
