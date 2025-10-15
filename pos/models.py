@@ -1097,14 +1097,16 @@ def recalculate_invoice_on_item_delete(sender, instance, **kwargs):
             pass
 
 
-@receiver(post_save, sender=Payment)
-def update_invoice_on_payment_save(sender, instance, created, **kwargs):
-    """Update invoice totals when payment is saved"""
-    if instance.invoice_id:
-        # Prevent recursive calls by checking if we're already in recalculation
-        if not hasattr(instance, '_recalculating'):
-            instance._recalculating = True
-            try:
-                instance.invoice.recalculate_totals()
-            finally:
-                delattr(instance, '_recalculating')
+# NOTE: Recalculation is now handled within Payment.save() with proper locking.
+# The signal below is intentionally disabled to avoid double recalculation.
+# @receiver(post_save, sender=Payment)
+# def update_invoice_on_payment_save(sender, instance, created, **kwargs):
+#     """Update invoice totals when payment is saved"""
+#     if instance.invoice_id:
+#         # Prevent recursive calls by checking if we're already in recalculation
+#         if not hasattr(instance, '_recalculating'):
+#             instance._recalculating = True
+#             try:
+#                 instance.invoice.recalculate_totals()
+#             finally:
+#                 delattr(instance, '_recalculating')
