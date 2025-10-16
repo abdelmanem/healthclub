@@ -121,10 +121,10 @@ export const LoginForm: React.FC = () => {
 
           <Box textAlign="center" mt={2}>
             <Typography variant="body2" color="text.secondary">
-              Demo Mode: Use any username and password
+             
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              (Backend not available - using mock authentication)
+              
             </Typography>
           </Box>
         </CardContent>
