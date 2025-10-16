@@ -24,6 +24,14 @@ interface CreateGuestDialogProps {
 
 export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onClose, onCreated }) => {
   const { membershipTiers } = useConfiguration();
+
+  // Basic country list; can be replaced with a full ISO list later
+  const countries = [
+    'United States', 'Canada', 'United Kingdom', 'Egypt', 'Saudi Arabia', 'United Arab Emirates',
+    'Germany', 'France', 'Spain', 'Italy', 'India', 'Pakistan', 'Bangladesh', 'Nigeria', 'South Africa',
+    'Australia', 'New Zealand', 'Brazil', 'Mexico', 'China', 'Japan', 'South Korea'
+  ];
+
   const [form, setForm] = useState<CreateGuestInput>({
     first_name: '',
     last_name: '',
@@ -32,7 +40,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
     email: '',
     phone: '',
     membership_tier: '',
-    country: '',
+    country: 'United States',
     medical_notes: '',
     email_notifications: true,
     sms_notifications: true,
@@ -79,7 +87,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
       onClose();
       setForm({
         first_name: '', last_name: '', gender: undefined, date_of_birth: undefined, email: '', phone: '', membership_tier: '',
-        country: '', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
+        country: 'United States', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
         addresses: [{ id: 0 as any, address_type: 'home', street_address: '', city: '', state: '', postal_code: '', country: 'United States', is_primary: true } as unknown as GuestAddress],
         emergency_contacts: [{ id: 0 as any, name: '', relationship: '', phone: '', email: '', is_primary: true } as unknown as EmergencyContact],
       });
@@ -183,14 +191,30 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
               </Select>
             </FormControl>
           </Grid>
+
+          {/* Unified Country (dropdown) */}
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Country"
-              margin="none"
-              value={form.country || ''}
-              onChange={handleChange('country' as any)}
-            />
+            <FormControl fullWidth margin="none">
+              <InputLabel id="country-label">Country</InputLabel>
+              <Select
+                labelId="country-label"
+                id="country"
+                value={form.country || ''}
+                label="Country"
+                onChange={(e) => {
+                  const value = e.target.value as string;
+                  setForm(prev => ({
+                    ...prev,
+                    country: value,
+                    addresses: [{ ...prev.addresses![0], country: value } as GuestAddress],
+                  }));
+                }}
+              >
+                {countries.map((c) => (
+                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           <Grid item xs={12}>
@@ -275,74 +299,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
               }))}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Country"
-              margin="none"
-              value={form.addresses?.[0]?.country || ''}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                addresses: [{ ...prev.addresses![0], country: e.target.value } as GuestAddress]
-              }))}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Divider sx={{ my: 1 }} />
-          </Grid>
-
-          <Grid item xs={12}>
-            <strong>Primary Emergency Contact</strong>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Name"
-              margin="none"
-              value={form.emergency_contacts?.[0]?.name || ''}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                emergency_contacts: [{ ...prev.emergency_contacts![0], name: e.target.value } as EmergencyContact]
-              }))}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Relationship"
-              margin="none"
-              value={form.emergency_contacts?.[0]?.relationship || ''}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                emergency_contacts: [{ ...prev.emergency_contacts![0], relationship: e.target.value } as EmergencyContact]
-              }))}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Phone"
-              margin="none"
-              value={form.emergency_contacts?.[0]?.phone || ''}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                emergency_contacts: [{ ...prev.emergency_contacts![0], phone: e.target.value } as EmergencyContact]
-              }))}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Email"
-              margin="none"
-              value={form.emergency_contacts?.[0]?.email || ''}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                emergency_contacts: [{ ...prev.emergency_contacts![0], email: e.target.value } as EmergencyContact]
-              }))}
-            />
-          </Grid>
+          {/* Removed duplicate address-level country input; unified with top-level country */}
         </Grid>
       </DialogContent>
       <DialogActions>
