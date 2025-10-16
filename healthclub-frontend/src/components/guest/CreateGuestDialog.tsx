@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -42,12 +42,6 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
     }
   }, []);
 
-  const defaultCountryName = useMemo(() => {
-    // Prefer 'US' if available, otherwise first option
-    const us = countryOptions.find(c => c.code === 'US');
-    return us?.name || countryOptions[0]?.name || '';
-  }, [countryOptions]);
-
   const [form, setForm] = useState<CreateGuestInput>({
     first_name: '',
     last_name: '',
@@ -56,7 +50,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
     email: '',
     phone: '',
     membership_tier: '',
-    country: defaultCountryName || 'United States',
+    country: '',
     medical_notes: '',
     email_notifications: true,
     sms_notifications: true,
@@ -69,7 +63,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
         city: '',
         state: '',
         postal_code: '',
-        country: defaultCountryName || 'United States',
+        country: '',
         is_primary: true,
       } as unknown as GuestAddress,
     ],
@@ -87,6 +81,20 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showSnackbar, SnackbarComponent } = useSnackbar();
 
+  // Set default country after options load (prefer US)
+  useEffect(() => {
+    if (!form.country && countryOptions.length > 0) {
+      const us = countryOptions.find(c => c.code === 'US');
+      const first = countryOptions[0];
+      const chosen = (us?.name || first?.name || '') as string;
+      setForm(prev => ({
+        ...prev,
+        country: chosen,
+        addresses: [{ ...prev.addresses![0], country: chosen } as GuestAddress],
+      }));
+    }
+  }, [countryOptions]);
+
   const handleChange = (field: keyof CreateGuestInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
   };
@@ -103,8 +111,8 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
       onClose();
       setForm({
         first_name: '', last_name: '', gender: undefined, date_of_birth: undefined, email: '', phone: '', membership_tier: '',
-        country: defaultCountryName || 'United States', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
-        addresses: [{ id: 0 as any, address_type: 'home', street_address: '', city: '', state: '', postal_code: '', country: defaultCountryName || 'United States', is_primary: true } as unknown as GuestAddress],
+        country: '', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
+        addresses: [{ id: 0 as any, address_type: 'home', street_address: '', city: '', state: '', postal_code: '', country: '', is_primary: true } as unknown as GuestAddress],
         emergency_contacts: [{ id: 0 as any, name: '', relationship: '', phone: '', email: '', is_primary: true } as unknown as EmergencyContact],
       });
       showSnackbar('Guest created successfully', 'success');
@@ -215,7 +223,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
               <Select
                 labelId="country-label"
                 id="country"
-                value={form.country || ''}
+                value={countryOptions.find(c => c.name === form.country) ? form.country : ''}
                 label="Country"
                 onChange={(e) => {
                   const value = e.target.value as string;
