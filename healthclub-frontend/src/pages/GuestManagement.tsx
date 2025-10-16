@@ -53,6 +53,8 @@ export const GuestManagement: React.FC = () => {
   const [isQuickResOpen, setIsQuickResOpen] = useState(false);
   const [guestReservations, setGuestReservations] = useState<any[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [guestsLoading, setGuestsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleGuestSelect = (guest: Guest) => {
@@ -86,6 +88,24 @@ export const GuestManagement: React.FC = () => {
     })();
     return () => { aborted = true; };
   }, [selectedGuest]);
+
+  // Load initial guests list (keeps search as-is, shows full list below)
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        setGuestsLoading(true);
+        const list = await guestsService.list();
+        if (!aborted) setGuests(list as any);
+      } catch (e) {
+        console.error(e);
+        if (!aborted) setGuests([]);
+      } finally {
+        if (!aborted) setGuestsLoading(false);
+      }
+    })();
+    return () => { aborted = true; };
+  }, []);
 
   const updateSelectedGuest = (updater: (prev: any) => any) => {
     setSelectedGuest((prev) => (prev ? updater(prev) : prev));
@@ -190,6 +210,43 @@ export const GuestManagement: React.FC = () => {
               <GuestSearch onGuestSelect={handleGuestSelect} />
             </CardContent>
           </Card>
+
+          {/* Loaded Guests List (below search) */}
+          <Box mt={2}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  All Guests
+                </Typography>
+                {guestsLoading && (
+                  <Typography variant="body2" color="text.secondary">Loading…</Typography>
+                )}
+                {!guestsLoading && guests.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">No guests found.</Typography>
+                )}
+                {!guestsLoading && guests.length > 0 && (
+                  <List dense>
+                    {guests.map((g: any, idx: number) => (
+                      <React.Fragment key={g.id ?? idx}>
+                        <ListItem
+                          disableGutters
+                          button
+                          selected={selectedGuest?.id === g.id}
+                          onClick={() => handleGuestSelect(g)}
+                        >
+                          <ListItemText
+                            primary={`${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() || 'Guest'}
+                            secondary={g.email || g.phone || undefined}
+                          />
+                        </ListItem>
+                        {idx < guests.length - 1 && <Divider component="li" />}
+                      </React.Fragment>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
         </Box>
         <Box>
           <Card>

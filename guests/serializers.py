@@ -87,6 +87,9 @@ class GuestSerializer(serializers.ModelSerializer):
             "communications",
             "membership_benefits",
         ]
+        read_only_fields = [
+            "membership_id",
+        ]
 
     # Represent membership_tier by its unique "name" slug from config.MembershipTier
     # If the related row is missing or inactive, treat it as null on read

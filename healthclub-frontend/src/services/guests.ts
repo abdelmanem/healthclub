@@ -123,7 +123,26 @@ export const guestsService = {
   },
 
   async create(payload: CreateGuestInput): Promise<Guest> {
-    const response = await api.post('/guests/', payload);
+    const body: any = { ...payload };
+    // Normalize membership_tier: empty string -> null; omit if null
+    if (body.membership_tier === '') body.membership_tier = null;
+    if (body.membership_tier == null) {
+      delete body.membership_tier;
+    }
+    // Strip client-side ids from nested arrays
+    if (Array.isArray(body.addresses)) {
+      body.addresses = body.addresses.map((a: any) => {
+        const { id, ...rest } = a || {};
+        return rest;
+      });
+    }
+    if (Array.isArray(body.emergency_contacts)) {
+      body.emergency_contacts = body.emergency_contacts.map((c: any) => {
+        const { id, ...rest } = c || {};
+        return rest;
+      });
+    }
+    const response = await api.post('/guests/', body);
     return response.data;
   },
 
