@@ -1,2627 +1,2224 @@
-# Complete Invoice & Payment System Integration Guide
+# Invoice System - Comprehensive Code Review & Recommendations
 
-## Table of Contents
-1. [Overview](#overview)
-2. [Backend Implementation](#backend-implementation)
-3. [Frontend Implementation](#frontend-implementation)
-4. [Integration Steps](#integration-steps)
-5. [Workflow Documentation](#workflow-documentation)
-6. [Testing Checklist](#testing-checklist)
-7. [Troubleshooting](#troubleshooting)
+## 📋 Table of Contents
 
----
-
-## Overview
-
-This guide provides complete implementation details for integrating an invoice and payment system with your spa reservation management system.
-
-### Key Features
-- ✅ Automatic invoice creation on checkout
-- ✅ Multi-payment processing (Cash, Card, Mobile, etc.)
-- ✅ Refund handling with loyalty point adjustments
-- ✅ Real-time payment validation
-- ✅ Guest loyalty point integration
-- ✅ Complete audit trail
-- ✅ Room status management (dirty/clean)
-- ✅ Housekeeping task creation
-
-### Technology Stack
-- **Backend:** Django REST Framework, PostgreSQL
-- **Frontend:** React, TypeScript, Material-UI
-- **State Management:** React Hooks
-- **Date Handling:** Day.js
+1. [Executive Summary](#executive-summary)
+2. [Critical Issues](#critical-issues)
+3. [High Priority Issues](#high-priority-issues)
+4. [Medium Priority Issues](#medium-priority-issues)
+5. [Best Practices & Enhancements](#best-practices--enhancements)
+6. [Security Recommendations](#security-recommendations)
+7. [Performance Optimizations](#performance-optimizations)
+8. [Testing Strategy](#testing-strategy)
+9. [Complete Refactored Examples](#complete-refactored-examples)
 
 ---
 
-## Backend Implementation
+## 📊 Executive Summary
 
-### 1. Models (invoices/models.py)
+### Overall Assessment
+Your codebase is **well-structured** with good separation of concerns. The backend has strong concurrency controls, but the frontend doesn't leverage these protections effectively.
 
-```python
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from decimal import Decimal
-from django.utils import timezone
-from django.db.models import Sum, Q
+### Key Strengths ✅
+- Good use of `select_for_update()` for row-level locking
+- Optimistic locking with `version` field
+- Comprehensive serializers with validation
+- Well-documented API endpoints
+- Idempotency keys for payment processing
+- Good use of TypeScript for type safety
 
-class PaymentMethod(models.Model):
-    """Available payment methods"""
-    name = models.CharField(max_length=50)
-    code = models.CharField(max_length=20, unique=True)
-    is_active = models.BooleanField(default=True)
-    requires_reference = models.BooleanField(default=False)
-    icon = models.CharField(max_length=50, blank=True)
-    display_order = models.IntegerField(default=0)
-    
-    class Meta:
-        ordering = ['display_order', 'name']
-    
-    def __str__(self):
-        return self.name
+### Critical Gaps ❌
+- Frontend doesn't use optimistic locking
+- Using `prompt()`/`alert()` instead of proper dialogs
+- No error boundaries
+- Memory leaks in useEffect hooks
+- Missing loading states for some actions
+- No retry logic for failed requests
 
+---
 
-class Invoice(models.Model):
-    """Main invoice model"""
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('pending', 'Pending Payment'),
-        ('partial', 'Partially Paid'),
-        ('paid', 'Paid'),
-        ('overdue', 'Overdue'),
-        ('cancelled', 'Cancelled'),
-        ('refunded', 'Refunded'),
-    ]
-    
-    invoice_number = models.CharField(max_length=50, unique=True, blank=True)
-    guest = models.ForeignKey('guests.Guest', on_delete=models.CASCADE, related_name='invoices')
-    reservation = models.ForeignKey('reservations.Reservation', on_delete=models.CASCADE, 
-                                   related_name='invoices', null=True, blank=True)
-    
-    date = models.DateTimeField(auto_now_add=True)
-    due_date = models.DateField(null=True, blank=True)
-    
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    tax = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    balance_due = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    paid_date = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, 
-                                  null=True, blank=True, related_name='created_invoices')
-    
-    class Meta:
-        ordering = ['-date']
-    
-    def __str__(self):
-        return f"{self.invoice_number} - {self.guest}"
-    
-    @staticmethod
-    def generate_invoice_number():
-        from django.db.models import Max
-        last_invoice = Invoice.objects.aggregate(Max('id'))['id__max']
-        next_id = (last_invoice or 0) + 1
-        return f"INV-{next_id:06d}"
-    
-    def recalculate_totals(self):
-        """Recalculate all invoice totals"""
-        items_data = self.items.aggregate(
-            subtotal=Sum('line_total'),
-            tax_total=Sum(models.F('unit_price') * models.F('quantity') * models.F('tax_rate') / 100)
-        )
-        
-        self.subtotal = items_data['subtotal'] or Decimal('0.00')
-        self.tax = items_data['tax_total'] or Decimal('0.00')
-        self.total = self.subtotal + self.tax - (self.discount or Decimal('0.00'))
-        
-        payments_data = self.payments.filter(status='completed').aggregate(Sum('amount'))
-        self.amount_paid = payments_data['amount__sum'] or Decimal('0.00')
-        self.balance_due = self.total - self.amount_paid
-        
-        # Update status
-        if self.balance_due <= Decimal('0.00') and self.total > Decimal('0.00'):
-            self.status = 'paid'
-            if not self.paid_date:
-                self.paid_date = timezone.now()
-        elif self.amount_paid > Decimal('0.00') and self.balance_due > Decimal('0.00'):
-            self.status = 'partial'
-        elif self.amount_paid == Decimal('0.00'):
-            if self.status not in ['draft', 'cancelled', 'refunded']:
-                if self.due_date and timezone.now().date() > self.due_date:
-                    self.status = 'overdue'
-                else:
-                    self.status = 'pending'
-        
-        self.save(update_fields=['subtotal', 'tax', 'total', 'amount_paid', 
-                                'balance_due', 'status', 'paid_date'])
-    
-    def save(self, *args, **kwargs):
-        if not self.invoice_number:
-            self.invoice_number = self.generate_invoice_number()
-        if not self.due_date:
-            self.due_date = timezone.now().date()
-        super().save(*args, **kwargs)
-    
-    def can_be_paid(self):
-        return self.status not in ['cancelled', 'refunded'] and self.balance_due > 0
-    
-    def can_be_refunded(self):
-        return self.amount_paid > 0 and self.status != 'cancelled'
+## 🔴 Critical Issues (Fix Immediately)
 
+### 1. Optimistic Locking Not Implemented in Frontend
 
-class InvoiceItem(models.Model):
-    """Invoice line items"""
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='items')
-    service = models.ForeignKey('services.Service', on_delete=models.SET_NULL, null=True, blank=True)
-    product_name = models.CharField(max_length=255)
-    quantity = models.PositiveIntegerField(default=1)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
-    line_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    notes = models.TextField(blank=True)
-    
-    def __str__(self):
-        return f"{self.product_name} x {self.quantity}"
-    
-    def save(self, *args, **kwargs):
-        self.line_total = self.unit_price * self.quantity
-        super().save(*args, **kwargs)
-        if self.invoice_id:
-            self.invoice.recalculate_totals()
+**Impact:** Data loss when two users modify the same invoice simultaneously
 
-
-class Payment(models.Model):
-    """Payment records"""
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('refunded', 'Refunded'),
-        ('cancelled', 'Cancelled'),
-    ]
-    
-    PAYMENT_TYPE_CHOICES = [
-        ('full', 'Full Payment'),
-        ('partial', 'Partial Payment'),
-        ('deposit', 'Deposit'),
-        ('refund', 'Refund'),
-    ]
-    
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
-    method = models.CharField(max_length=50)
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, null=True, blank=True)
-    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='full')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    transaction_id = models.CharField(max_length=255, blank=True)
-    reference_number = models.CharField(max_length=100, blank=True)
-    payment_date = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
-    notes = models.TextField(blank=True)
-    processed_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-payment_date']
-    
-    def __str__(self):
-        return f"Payment #{self.id} - ${self.amount} ({self.method})"
-    
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        self.invoice.recalculate_totals()
-        
-        # Update guest loyalty points
-        if self.status == 'completed':
-            guest = self.invoice.guest
-            if hasattr(guest, 'loyalty_points'):
-                if self.payment_type == 'refund':
-                    points_change = -int(abs(self.amount))
-                    spending_change = self.amount
-                else:
-                    points_change = int(self.amount)
-                    spending_change = self.amount
-                
-                guest.loyalty_points = max(0, (guest.loyalty_points or 0) + points_change)
-                guest.total_spent = max(Decimal('0.00'), 
-                                       (guest.total_spent or Decimal('0.00')) + spending_change)
-                guest.save(update_fields=['loyalty_points', 'total_spent'])
+**Current Code:**
+```typescript
+// ❌ InvoiceDetails.tsx - No version checking
+const handleCancel = async () => {
+  await invoicesService.cancel(invoice.id, { reason });
+};
 ```
 
-### 2. Serializers (invoices/serializers.py)
+**Solution:**
 
-```python
-from rest_framework import serializers
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod
+#### Step 1: Update TypeScript Types
 
-class InvoiceItemSerializer(serializers.ModelSerializer):
-    service_name = serializers.CharField(source='service.name', read_only=True)
-    tax_amount = serializers.SerializerMethodField()
-    total_with_tax = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = InvoiceItem
-        fields = ['id', 'service', 'service_name', 'product_name', 'quantity', 
-                 'unit_price', 'tax_rate', 'line_total', 'tax_amount', 
-                 'total_with_tax', 'notes']
-        read_only_fields = ['id', 'line_total', 'service_name']
-    
-    def get_tax_amount(self, obj):
-        return str((obj.unit_price * obj.quantity * obj.tax_rate / 100).quantize(Decimal('0.01')))
-    
-    def get_total_with_tax(self, obj):
-        tax = obj.unit_price * obj.quantity * obj.tax_rate / 100
-        return str((obj.line_total + tax).quantize(Decimal('0.01')))
+```typescript
+// services/invoices.ts
 
+export interface Invoice {
+  // ... existing fields ...
+  version: number; // ✅ Add version field
+}
 
-class PaymentSerializer(serializers.ModelSerializer):
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
-    guest_name = serializers.SerializerMethodField()
-    payment_method_name = serializers.CharField(source='payment_method.name', read_only=True)
-    processed_by_name = serializers.SerializerMethodField()
-    display_amount = serializers.SerializerMethodField()
-    is_refund = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Payment
-        fields = ['id', 'invoice', 'invoice_number', 'guest_name', 'method', 
-                 'payment_method', 'payment_method_name', 'payment_type', 'amount',
-                 'display_amount', 'transaction_id', 'reference_number', 'payment_date',
-                 'status', 'notes', 'processed_by', 'processed_by_name', 'is_refund',
-                 'created_at', 'updated_at']
-        read_only_fields = ['payment_date', 'created_at', 'updated_at']
-    
-    def get_guest_name(self, obj):
-        if obj.invoice and obj.invoice.guest:
-            return f"{obj.invoice.guest.first_name} {obj.invoice.guest.last_name}"
-        return None
-    
-    def get_processed_by_name(self, obj):
-        if obj.processed_by:
-            return obj.processed_by.get_full_name() or obj.processed_by.username
-        return None
-    
-    def get_display_amount(self, obj):
-        return f"${abs(obj.amount):.2f}"
-    
-    def get_is_refund(self, obj):
-        return obj.payment_type == 'refund' or obj.amount < 0
+export interface CancelInvoiceRequest {
+  reason: string;
+  version: number; // ✅ Required for optimistic locking
+}
 
-
-class InvoiceSerializer(serializers.ModelSerializer):
-    items = InvoiceItemSerializer(many=True, required=False)
-    payments = PaymentSerializer(many=True, read_only=True)
-    guest_name = serializers.SerializerMethodField()
-    guest_email = serializers.CharField(source='guest.email', read_only=True)
-    reservation_id = serializers.IntegerField(source='reservation.id', read_only=True)
-    payment_summary = serializers.SerializerMethodField()
-    can_be_paid = serializers.SerializerMethodField()
-    can_be_refunded = serializers.SerializerMethodField()
-    created_by_name = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Invoice
-        fields = ['id', 'invoice_number', 'guest', 'guest_name', 'guest_email',
-                 'reservation', 'reservation_id', 'date', 'due_date', 'subtotal',
-                 'tax', 'discount', 'total', 'amount_paid', 'balance_due', 'status',
-                 'paid_date', 'notes', 'items', 'payments', 'payment_summary',
-                 'can_be_paid', 'can_be_refunded', 'created_by', 'created_by_name',
-                 'created_at', 'updated_at']
-        read_only_fields = ['id', 'date', 'invoice_number', 'subtotal', 'tax',
-                          'total', 'amount_paid', 'balance_due', 'paid_date',
-                          'created_at', 'updated_at']
-    
-    def get_guest_name(self, obj):
-        if obj.guest:
-            return f"{obj.guest.first_name} {obj.guest.last_name}"
-        return None
-    
-    def get_payment_summary(self, obj):
-        completed_payments = obj.payments.filter(status='completed')
-        return {
-            'total_payments': completed_payments.count(),
-            'payment_methods': list(completed_payments.values_list('method', flat=True).distinct()),
-            'refund_amount': str(completed_payments.filter(
-                payment_type='refund'
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')),
-        }
-    
-    def get_can_be_paid(self, obj):
-        return obj.can_be_paid()
-    
-    def get_can_be_refunded(self, obj):
-        return obj.can_be_refunded()
-    
-    def get_created_by_name(self, obj):
-        if obj.created_by:
-            return obj.created_by.get_full_name() or obj.created_by.username
-        return None
-    
-    def create(self, validated_data):
-        items_data = validated_data.pop('items', [])
-        
-        if not validated_data.get('invoice_number'):
-            validated_data['invoice_number'] = Invoice.generate_invoice_number()
-        
-        request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.is_authenticated:
-            validated_data['created_by'] = request.user
-        
-        invoice = Invoice.objects.create(**validated_data)
-        
-        for item_data in items_data:
-            InvoiceItem.objects.create(invoice=invoice, **item_data)
-        
-        invoice.recalculate_totals()
-        return invoice
-    
-    def update(self, instance, validated_data):
-        items_data = validated_data.pop('items', None)
-        
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        if items_data is not None:
-            instance.items.all().delete()
-            for item_data in items_data:
-                InvoiceItem.objects.create(invoice=instance, **item_data)
-        
-        instance.recalculate_totals()
-        return instance
-
-
-class PaymentMethodSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PaymentMethod
-        fields = ['id', 'name', 'code', 'requires_reference', 'icon', 'display_order']
+export interface ApplyDiscountRequest {
+  discount: string;
+  reason?: string;
+  version: number; // ✅ Add to all write operations
+}
 ```
 
-### 3. Views (invoices/views.py)
+#### Step 2: Update Backend Views
 
 ```python
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.db import transaction
-from django.utils import timezone
-from decimal import Decimal
+# views.py
 
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod
-from .serializers import InvoiceSerializer, PaymentSerializer, PaymentMethodSerializer
-
-class InvoiceViewSet(viewsets.ModelViewSet):
-    queryset = Invoice.objects.all().prefetch_related('items', 'payments')
-    serializer_class = InvoiceSerializer
-    permission_classes = [IsAuthenticated]
-    
-    @action(detail=True, methods=['post'])
-    def process_payment(self, request, pk=None):
-        """Process a payment for this invoice"""
-        invoice = self.get_object()
-        
-        amount = Decimal(str(request.data.get('amount')))
-        payment_method_id = request.data.get('payment_method')
-        payment_type = request.data.get('payment_type', 'full')
-        reference_number = request.data.get('reference_number', '')
-        transaction_id = request.data.get('transaction_id', '')
-        notes = request.data.get('notes', '')
-        
-        # Validation
-        if not invoice.can_be_paid():
-            return Response(
-                {'error': f'Cannot process payment for {invoice.status} invoice'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if amount > invoice.balance_due:
-            return Response(
-                {'error': f'Payment amount cannot exceed balance due of ${invoice.balance_due}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            payment_method = PaymentMethod.objects.get(id=payment_method_id, is_active=True)
-        except PaymentMethod.DoesNotExist:
-            return Response(
-                {'error': 'Invalid payment method'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        with transaction.atomic():
-            payment = Payment.objects.create(
-                invoice=invoice,
-                method=payment_method.code,
-                payment_method=payment_method,
-                payment_type=payment_type,
-                amount=amount,
-                transaction_id=transaction_id,
-                reference_number=reference_number,
-                status='completed',
-                notes=notes,
-                processed_by=request.user
-            )
-        
-        invoice.refresh_from_db()
-        
-        return Response({
-            'success': True,
-            'payment_id': payment.id,
-            'amount_paid': str(payment.amount),
-            'invoice_total': str(invoice.total),
-            'total_paid': str(invoice.amount_paid),
-            'balance_due': str(invoice.balance_due),
-            'invoice_status': invoice.status,
-            'payment_status': payment.status,
-            'loyalty_points_earned': int(payment.amount),
-            'message': f'Payment of ${payment.amount} processed successfully'
-        })
-    
-    @action(detail=True, methods=['post'])
-    def refund(self, request, pk=None):
-        """Process a refund for this invoice"""
-        invoice = self.get_object()
-        
-        amount = Decimal(str(request.data.get('amount')))
-        reason = request.data.get('reason', '')
-        
-        if not invoice.can_be_refunded():
-            return Response(
-                {'error': 'This invoice cannot be refunded'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if amount > invoice.amount_paid:
-            return Response(
-                {'error': f'Refund amount cannot exceed amount paid of ${invoice.amount_paid}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        with transaction.atomic():
-            refund_payment = Payment.objects.create(
-                invoice=invoice,
-                method='refund',
-                payment_type='refund',
-                amount=-amount,
-                status='completed',
-                notes=f'Refund: {reason}',
-                processed_by=request.user
-            )
-            
-            if invoice.balance_due >= invoice.total:
-                invoice.status = 'refunded'
-                invoice.save(update_fields=['status'])
-        
-        invoice.refresh_from_db()
-        
-        return Response({
-            'success': True,
-            'refund_id': refund_payment.id,
-            'refund_amount': str(amount),
-            'balance_due': str(invoice.balance_due),
-            'invoice_status': invoice.status,
-            'message': f'Refund of ${amount} processed successfully'
-        })
-
-
-class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Payment.objects.all()
-    serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = PaymentMethod.objects.filter(is_active=True)
-    serializer_class = PaymentMethodSerializer
-    permission_classes = [IsAuthenticated]
-```
-
-### 4. Update Reservation ViewSet (reservations/views.py)
-
-Add this to your existing ReservationViewSet:
-
-```python
 @action(detail=True, methods=['post'])
-def check_out(self, request, pk=None):
-    """Check out guest and optionally create invoice"""
-    reservation = self.get_object()
+def cancel(self, request, pk=None):
+    """Cancel invoice with optimistic locking"""
     
-    if reservation.status != 'completed':
-        return Response(
-            {'error': 'Reservation must be completed before check-out'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    create_invoice = request.data.get('create_invoice', False)
-    notes = request.data.get('notes', '')
+    version = request.data.get('version')
     
     with transaction.atomic():
-        # Update reservation
-        reservation.status = 'checked_out'
-        reservation.checked_out_at = timezone.now()
-        if notes:
-            reservation.notes = f"{reservation.notes}\n\n{notes}".strip()
-        reservation.save()
+        invoice = Invoice.objects.select_for_update().get(pk=pk)
         
-        # Mark location as dirty
-        if reservation.location:
-            reservation.location.is_clean = False
-            reservation.location.is_occupied = False
-            reservation.location.save()
-            
-            # Create housekeeping task
-            from housekeeping.models import HousekeepingTask
-            HousekeepingTask.objects.create(
-                location=reservation.location,
-                task_type='cleaning',
-                priority='normal',
-                status='pending',
-                notes=f'Clean after reservation #{reservation.id}'
+        # ✅ Version conflict check
+        if version is not None and invoice.version != version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'current_version': invoice.version,
+                    'requested_version': version,
+                    'conflict': True
+                },
+                status=status.HTTP_409_CONFLICT
             )
         
-        # Create invoice if requested
-        invoice_data = {}
-        if create_invoice:
-            try:
-                from invoices.models import Invoice, InvoiceItem
-                
-                existing_invoice = Invoice.objects.filter(reservation=reservation).first()
-                
-                if existing_invoice:
-                    invoice_data = {
-                        'invoice_created': True,
-                        'invoice_id': existing_invoice.id,
-                        'invoice_number': existing_invoice.invoice_number,
-                        'invoice_total': str(existing_invoice.total),
-                    }
-                else:
-                    invoice = Invoice.objects.create(
-                        reservation=reservation,
-                        guest=reservation.guest,
-                        invoice_number=Invoice.generate_invoice_number(),
-                        status='pending',
-                        notes=f'Invoice for reservation #{reservation.id}',
-                        created_by=request.user
-                    )
-                    
-                    # Create items from services
-                    for res_service in reservation.reservation_services.all():
-                        InvoiceItem.objects.create(
-                            invoice=invoice,
-                            service=res_service.service,
-                            product_name=res_service.service_details.name,
-                            quantity=res_service.quantity,
-                            unit_price=res_service.unit_price,
-                            tax_rate=Decimal('8.00'),
-                        )
-                    
-                    invoice.recalculate_totals()
-                    
-                    invoice_data = {
-                        'invoice_created': True,
-                        'invoice_id': invoice.id,
-                        'invoice_number': invoice.invoice_number,
-                        'invoice_total': str(invoice.total),
-                    }
-            except Exception as e:
-                invoice_data = {'invoice_created': False, 'error': str(e)}
+        # Validation
+        if invoice.amount_paid > 0:
+            return Response(
+                {'error': 'Cannot cancel invoice with payments.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update
+        invoice.status = 'cancelled'
+        reason = request.data.get('reason', '')
+        if reason:
+            invoice.notes = f"{invoice.notes}\n\nCancelled: {reason}".strip()
+        
+        # ✅ Increment version
+        invoice.version += 1
+        invoice.save(update_fields=['status', 'notes', 'version'])
     
     return Response({
-        'status': reservation.status,
-        'checked_out_at': reservation.checked_out_at.isoformat(),
-        'housekeeping_task_created': True,
-        'message': 'Guest checked out successfully',
-        **invoice_data
+        'success': True,
+        'invoice_status': invoice.status,
+        'version': invoice.version,  # ✅ Return new version
+        'message': 'Invoice cancelled successfully'
     })
 ```
 
-### 5. URLs (invoices/urls.py)
+**Apply version checking to ALL write endpoints:**
+- `apply_discount`
+- `process_payment`
+- `refund`
+- `mark_paid`
+- `update` (PATCH)
 
-```python
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import InvoiceViewSet, PaymentViewSet, PaymentMethodViewSet
-
-router = DefaultRouter()
-router.register(r'invoices', InvoiceViewSet, basename='invoice')
-router.register(r'payments', PaymentViewSet, basename='payment')
-router.register(r'payment-methods', PaymentMethodViewSet, basename='paymentmethod')
-
-urlpatterns = [
-    path('', include(router.urls)),
-]
-```
-
-### 6. Management Command (invoices/management/commands/create_payment_methods.py)
-
-```python
-from django.core.management.base import BaseCommand
-from invoices.models import PaymentMethod
-
-class Command(BaseCommand):
-    help = 'Create default payment methods'
-    
-    def handle(self, *args, **options):
-        payment_methods = [
-            {'name': 'Cash', 'code': 'cash', 'icon': '💵', 'display_order': 1},
-            {'name': 'Credit Card', 'code': 'credit_card', 'icon': '💳', 
-             'requires_reference': True, 'display_order': 2},
-            {'name': 'Debit Card', 'code': 'debit_card', 'icon': '💳', 
-             'requires_reference': True, 'display_order': 3},
-            {'name': 'Mobile Payment', 'code': 'mobile_payment', 'icon': '📱', 
-             'requires_reference': True, 'display_order': 4},
-            {'name': 'Bank Transfer', 'code': 'bank_transfer', 'icon': '🏦', 
-             'requires_reference': True, 'display_order': 5},
-        ]
-        
-        for method_data in payment_methods:
-            PaymentMethod.objects.get_or_create(
-                code=method_data['code'],
-                defaults=method_data
-            )
-            self.stdout.write(self.style.SUCCESS(f'✓ {method_data["name"]}'))
-```
-
----
-
-## Frontend Implementation
-
-### 1. Services API (services/invoices.ts)
+#### Step 3: Update Frontend Services
 
 ```typescript
-import { api } from './api';
+// services/invoices.ts
 
-export interface PaymentMethod {
-  id: number;
-  name: string;
-  code: string;
-  requires_reference: boolean;
-  icon?: string;
-}
-
-export interface InvoiceItem {
-  id: number;
-  service?: number;
-  service_name?: string;
-  product_name: string;
-  quantity: number;
-  unit_price: string;
-  tax_rate: string;
-  line_total: string;
-  tax_amount: string;
-  total_with_tax: string;
-}
-
-export interface Payment {
-  id: number;
-  invoice: number;
-  invoice_number: string;
-  method: string;
-  payment_method_name?: string;
-  payment_type: 'full' | 'partial' | 'deposit' | 'refund';
-  amount: string;
-  display_amount: string;
-  payment_date: string;
-  status: string;
-  notes: string;
-  is_refund: boolean;
-}
-
-export interface Invoice {
-  id: number;
-  invoice_number: string;
-  guest: number;
-  guest_name: string;
-  guest_email?: string;
-  reservation?: number;
-  date: string;
-  due_date: string;
-  subtotal: string;
-  tax: string;
-  discount: string;
-  total: string;
-  amount_paid: string;
-  balance_due: string;
-  status: 'draft' | 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
-  items: InvoiceItem[];
-  payments: Payment[];
-  can_be_paid: boolean;
-  can_be_refunded: boolean;
-}
-
-export const invoicesService = {
-  async list(params?: any): Promise<Invoice[]> {
-    const response = await api.get('/invoices/', { params });
-    return response.data.results ?? response.data;
-  },
-  
-  async retrieve(id: number): Promise<Invoice> {
-    const response = await api.get(`/invoices/${id}/`);
-    return response.data;
-  },
-  
-  async processPayment(invoiceId: number, data: {
-    amount: string;
-    payment_method: number;
-    payment_type?: string;
-    reference_number?: string;
-    transaction_id?: string;
-    notes?: string;
-  }): Promise<any> {
-    const response = await api.post(`/invoices/${invoiceId}/process-payment/`, data);
-    return response.data;
-  },
-  
-  async refund(invoiceId: number, data: {
-    amount: string;
-    reason: string;
-    notes?: string;
-  }): Promise<any> {
-    const response = await api.post(`/invoices/${invoiceId}/refund/`, data);
-    return response.data;
-  },
-};
-
-export const paymentMethodsService = {
-  async list(): Promise<PaymentMethod[]> {
-    const response = await api.get('/payment-methods/');
-    return response.data.results ?? response.data;
-  },
-};
-```
-
-### 2. Update Reservation Service (services/reservations.ts)
-
-Update your existing `checkOut` method:
-
-```typescript
-async checkOut(id: number, data?: { create_invoice?: boolean; notes?: string }): Promise<{
-  status: string;
-  checked_out_at: string;
-  invoice_created?: boolean;
-  invoice_id?: number;
-  invoice_number?: string;
-  invoice_total?: string;
-  housekeeping_task_created: boolean;
-  message: string;
+async cancel(
+  invoiceId: number, 
+  data: CancelInvoiceRequest
+): Promise<{ 
+  success: boolean; 
+  message: string; 
+  version: number;
+  invoice_status: string;
 }> {
-  const response = await api.post(`/reservations/${id}/check-out/`, data || {});
+  const response = await api.post(`/invoices/${invoiceId}/cancel/`, data);
+  return response.data;
+}
+
+async applyDiscount(
+  invoiceId: number,
+  data: ApplyDiscountRequest
+): Promise<{
+  success: boolean;
+  version: number;
+  new_total: string;
+  new_balance_due: string;
+}> {
+  const response = await api.post(`/invoices/${invoiceId}/apply_discount/`, data);
   return response.data;
 }
 ```
 
-### 3. Invoice Details Component (components/invoices/InvoiceDetails.tsx)
+#### Step 4: Update Frontend Components
 
 ```typescript
+// InvoiceDetails.tsx
+
+const handleCancel = async () => {
+  if (!invoice) return;
+  
+  const result = await showConfirmDialog({
+    title: 'Cancel Invoice',
+    message: `Cancel invoice ${invoice.invoice_number}?`,
+    confirmText: 'Cancel Invoice',
+    confirmColor: 'error',
+    inputLabel: 'Cancellation Reason',
+    inputRequired: true,
+  });
+  
+  if (!result.confirmed) return;
+
+  setActionLoading(true);
+  try {
+    // ✅ Include version
+    const response = await invoicesService.cancel(invoice.id, { 
+      reason: result.value!,
+      version: invoice.version 
+    });
+    
+    // ✅ Update local state with new version
+    setInvoice(prev => prev ? { 
+      ...prev, 
+      version: response.version,
+      status: response.invoice_status 
+    } : null);
+    
+    showSnackbar('Invoice cancelled successfully', 'success');
+    await loadInvoice();
+    onInvoiceCancelled?.();
+    
+  } catch (error: any) {
+    // ✅ Handle version conflict (409)
+    if (error?.response?.status === 409) {
+      showSnackbar(
+        'Invoice was modified by another user. Refreshing...',
+        'warning'
+      );
+      await loadInvoice(); // Reload to get latest version
+    } else {
+      showSnackbar(
+        error?.response?.data?.error || 'Failed to cancel invoice',
+        'error'
+      );
+    }
+  } finally {
+    setActionLoading(false);
+  }
+};
+```
+
+---
+
+### 2. Replace prompt() and alert() with Proper Dialogs
+
+**Impact:** Poor UX, not accessible, blocks UI, no validation
+
+**Problems:**
+- `prompt()` blocks the entire browser
+- `alert()` can't be styled or controlled
+- Not accessible to screen readers
+- No input validation
+- Poor mobile experience
+
+**Solution: Create Reusable Dialog System**
+
+#### Create ConfirmDialog Component
+
+```typescript
+// components/common/ConfirmDialog.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Button,
-  Divider,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Stack,
-  Grid,
-  List,
-  ListItem,
-  ListItemText,
-  CircularProgress,
+  TextField,
+  Typography,
+  Alert,
 } from '@mui/material';
-import { Payment as PaymentIcon, Undo, Email, Print } from '@mui/icons-material';
-import { invoicesService, Invoice } from '../../services/invoices';
-import { PaymentDialog } from './PaymentDialog';
-import { RefundDialog } from './RefundDialog';
-import dayjs from 'dayjs';
 
-interface InvoiceDetailsProps {
-  invoiceId: number;
-  onClose?: () => void;
-  onPaymentProcessed?: () => void;
+interface ConfirmDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (value?: string) => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  confirmColor?: 'primary' | 'error' | 'warning' | 'success';
+  inputLabel?: string;
+  inputRequired?: boolean;
+  inputType?: 'text' | 'number';
+  inputPlaceholder?: string;
+  inputHelperText?: string;
+  inputMultiline?: boolean;
+  inputRows?: number;
+  validationError?: string;
+  maxValue?: number;
 }
 
-export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
-  invoiceId,
+export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  open,
   onClose,
-  onPaymentProcessed,
+  onConfirm,
+  title,
+  message,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  confirmColor = 'primary',
+  inputLabel,
+  inputRequired = false,
+  inputType = 'text',
+  inputPlaceholder,
+  inputHelperText,
+  inputMultiline = false,
+  inputRows = 3,
+  validationError,
+  maxValue,
 }) => {
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState('');
 
-  const loadInvoice = async () => {
-    setLoading(true);
-    try {
-      const data = await invoicesService.retrieve(invoiceId);
-      setInvoice(data);
-    } catch (error) {
-      console.error('Failed to load invoice:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Reset on open
   useEffect(() => {
-    loadInvoice();
-  }, [invoiceId]);
+    if (open) {
+      setInputValue('');
+      setError('');
+    }
+  }, [open]);
 
-  const handlePaymentProcessed = () => {
-    loadInvoice();
-    onPaymentProcessed?.();
-    setPaymentDialogOpen(false);
+  const handleConfirm = () => {
+    // Validation
+    if (inputRequired && !inputValue.trim()) {
+      setError(`${inputLabel || 'Input'} is required`);
+      return;
+    }
+
+    if (inputType === 'number' && inputValue) {
+      const num = parseFloat(inputValue);
+      if (isNaN(num) || num <= 0) {
+        setError('Please enter a valid positive number');
+        return;
+      }
+      if (maxValue && num > maxValue) {
+        setError(`Value cannot exceed ${maxValue}`);
+        return;
+      }
+    }
+
+    onConfirm(inputValue);
+    handleClose();
   };
 
-  const handleRefundProcessed = () => {
-    loadInvoice();
-    onPaymentProcessed?.();
-    setRefundDialogOpen(false);
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (!invoice) {
-    return <Typography>Invoice not found</Typography>;
-  }
-
-  const getStatusColor = (status: Invoice['status']) => {
-    const colors = {
-      draft: 'default',
-      pending: 'warning',
-      partial: 'info',
-      paid: 'success',
-      overdue: 'error',
-      cancelled: 'default',
-      refunded: 'secondary',
-    };
-    return colors[status] || 'default';
+  const handleClose = () => {
+    setInputValue('');
+    setError('');
+    onClose();
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Box>
-              <Typography variant="h4" gutterBottom>
-                {invoice.invoice_number}
-              </Typography>
-              <Chip
-                label={invoice.status}
-                color={getStatusColor(invoice.status) as any}
-                sx={{ textTransform: 'capitalize' }}
-              />
-            </Box>
-            <Stack direction="row" spacing={1}>
-              <Button variant="outlined" startIcon={<Email />}>
-                Email
-              </Button>
-              <Button variant="outlined" startIcon={<Print />} onClick={() => window.print()}>
-                Print
-              </Button>
-              {onClose && <Button onClick={onClose}>Close</Button>}
-            </Stack>
-          </Box>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth="sm" 
+      fullWidth
+    >
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body1" sx={{ mb: inputLabel ? 2 : 0 }}>
+          {message}
+        </Typography>
 
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Bill To
-              </Typography>
-              <Typography variant="body1" fontWeight={600}>
-                {invoice.guest_name}
-              </Typography>
-              {invoice.guest_email && (
-                <Typography variant="body2" color="text.secondary">
-                  {invoice.guest_email}
-                </Typography>
-              )}
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Stack spacing={1}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Invoice Date:
-                  </Typography>
-                  <Typography variant="body2">
-                    {dayjs(invoice.date).format('MMM D, YYYY')}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Due Date:
-                  </Typography>
-                  <Typography variant="body2">
-                    {dayjs(invoice.due_date).format('MMM D, YYYY')}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+        {inputLabel && (
+          <TextField
+            autoFocus
+            label={inputLabel}
+            type={inputType}
+            value={inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setError('');
+            }}
+            fullWidth
+            required={inputRequired}
+            placeholder={inputPlaceholder}
+            helperText={error || inputHelperText}
+            error={!!error}
+            multiline={inputMultiline}
+            rows={inputMultiline ? inputRows : 1}
+            sx={{ mt: 2 }}
+            inputProps={{
+              min: inputType === 'number' ? 0.01 : undefined,
+              max: inputType === 'number' && maxValue ? maxValue : undefined,
+              step: inputType === 'number' ? 0.01 : undefined,
+            }}
+          />
+        )}
 
-      {/* Line Items */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Services / Items
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Description</TableCell>
-                  <TableCell align="center">Qty</TableCell>
-                  <TableCell align="right">Unit Price</TableCell>
-                  <TableCell align="right">Tax Rate</TableCell>
-                  <TableCell align="right">Line Total</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {invoice.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={600}>
-                        {item.product_name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">{item.quantity}</TableCell>
-                    <TableCell align="right">
-                      ${parseFloat(item.unit_price).toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right">
-                      {parseFloat(item.tax_rate).toFixed(1)}%
-                    </TableCell>
-                    <TableCell align="right">
-                      ${parseFloat(item.line_total).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+        {validationError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {validationError}
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose}>{cancelText}</Button>
+        <Button 
+          onClick={handleConfirm} 
+          variant="contained" 
+          color={confirmColor}
+          disabled={inputRequired && !inputValue.trim()}
+        >
+          {confirmText}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+```
 
-          {/* Totals */}
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Box sx={{ minWidth: 300 }}>
-              <Stack spacing={1}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Subtotal:</Typography>
-                  <Typography variant="body2">
-                    ${parseFloat(invoice.subtotal).toFixed(2)}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Tax:</Typography>
-                  <Typography variant="body2">
-                    ${parseFloat(invoice.tax).toFixed(2)}
-                  </Typography>
-                </Box>
-                {parseFloat(invoice.discount) > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="success.main">
-                      Discount:
-                    </Typography>
-                    <Typography variant="body2" color="success.main">
-                      -${parseFloat(invoice.discount).toFixed(2)}
-                    </Typography>
-                  </Box>
-                )}
-                <Divider />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="h6">Total:</Typography>
-                  <Typography variant="h6" fontWeight={700}>
-                    ${parseFloat(invoice.total).toFixed(2)}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Amount Paid:
-                  </Typography>
-                  <Typography variant="body2" fontWeight={600}>
-                    ${parseFloat(invoice.amount_paid).toFixed(2)}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography
-                    variant="h6"
-                    color={
-                      parseFloat(invoice.balance_due) > 0
-                        ? 'error.main'
-                        : 'success.main'
-                    }
-                  >
-                    Balance Due:
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    fontWeight={700}
-                    color={
-                      parseFloat(invoice.balance_due) > 0
-                        ? 'error.main'
-                        : 'success.main'
-                    }
-                  >
-                    ${parseFloat(invoice.balance_due).toFixed(2)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+#### Create useConfirmDialog Hook
 
-      {/* Payment History */}
-      {invoice.payments && invoice.payments.length > 0 && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Payment History
-            </Typography>
-            <List>
-              {invoice.payments.map((payment) => (
-                <ListItem
-                  key={payment.id}
-                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1 }}
-                >
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body1" fontWeight={600}>
-                          {payment.is_refund ? 'Refund' : 'Payment'} - {payment.payment_method_name || payment.method}
-                        </Typography>
-                        <Typography
-                          variant="body1"
-                          fontWeight={700}
-                          color={payment.is_refund ? 'error.main' : 'success.main'}
-                        >
-                          {payment.is_refund ? '-' : '+'}${Math.abs(parseFloat(payment.amount)).toFixed(2)}
-                        </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      <Typography variant="caption" display="block">
-                        {dayjs(payment.payment_date).format('MMM D, YYYY h:mm A')}
-                        {payment.notes && ` • ${payment.notes}`}
-                      </Typography>
-                    }
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </CardContent>
-        </Card>
-      )}
+```typescript
+// components/common/useConfirmDialog.tsx
 
-      {/* Actions */}
-      {invoice.status !== 'cancelled' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Actions
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              {invoice.can_be_paid && (
-                <Button
-                  variant="contained"
-                  startIcon={<PaymentIcon />}
-                  onClick={() => setPaymentDialogOpen(true)}
-                >
-                  Process Payment
-                </Button>
-              )}
-              {invoice.can_be_refunded && (
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<Undo />}
-                  onClick={() => setRefundDialogOpen(true)}
-                >
-                  Process Refund
-                </Button>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+import { useState, useCallback } from 'react';
 
-      {/* Payment Dialog */}
-      <PaymentDialog
-        open={paymentDialogOpen}
-        onClose={() => setPaymentDialogOpen(false)}
-        invoice={invoice}
-        onPaymentProcessed={handlePaymentProcessed}
-      />
+interface ConfirmDialogConfig {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  confirmColor?: 'primary' | 'error' | 'warning' | 'success';
+  inputLabel?: string;
+  inputRequired?: boolean;
+  inputType?: 'text' | 'number';
+  inputPlaceholder?: string;
+  inputHelperText?: string;
+  inputMultiline?: boolean;
+  inputRows?: number;
+  maxValue?: number;
+}
 
-      {/* Refund Dialog */}
-      <RefundDialog
-        open={refundDialogOpen}
-        onClose={() => setRefundDialogOpen(false)}
-        invoice={invoice}
-        onRefundProcessed={handleRefundProcessed}
-      />
+interface ConfirmDialogResult {
+  confirmed: boolean;
+  value?: string;
+}
+
+export const useConfirmDialog = () => {
+  const [config, setConfig] = useState<ConfirmDialogConfig | null>(null);
+  const [resolver, setResolver] = useState<((result: ConfirmDialogResult) => void) | null>(null);
+
+  const showConfirmDialog = useCallback((config: ConfirmDialogConfig): Promise<ConfirmDialogResult> => {
+    return new Promise((resolve) => {
+      setConfig(config);
+      setResolver(() => resolve);
+    });
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (resolver) {
+      resolver({ confirmed: false });
+    }
+    setConfig(null);
+    setResolver(null);
+  }, [resolver]);
+
+  const handleConfirm = useCallback((value?: string) => {
+    if (resolver) {
+      resolver({ confirmed: true, value });
+    }
+    setConfig(null);
+    setResolver(null);
+  }, [resolver]);
+
+  return {
+    showConfirmDialog,
+    dialogProps: {
+      open: !!config,
+      onClose: handleClose,
+      onConfirm: handleConfirm,
+      ...config,
+    },
+  };
+};
+```
+
+#### Usage Example
+
+```typescript
+// InvoiceDetails.tsx
+
+import { useConfirmDialog } from '../common/useConfirmDialog';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+
+export const InvoiceDetails: React.FC<InvoiceDetailsProps> = (props) => {
+  const { showConfirmDialog, dialogProps } = useConfirmDialog();
+
+  // ✅ Cancel invoice with dialog
+  const handleCancel = async () => {
+    const result = await showConfirmDialog({
+      title: 'Cancel Invoice',
+      message: `Are you sure you want to cancel invoice ${invoice?.invoice_number}?`,
+      confirmText: 'Cancel Invoice',
+      confirmColor: 'error',
+      inputLabel: 'Cancellation Reason',
+      inputRequired: true,
+      inputMultiline: true,
+      inputPlaceholder: 'e.g., Guest cancelled appointment',
+    });
+    
+    if (!result.confirmed) return;
+    // ... process cancellation
+  };
+
+  // ✅ Apply discount with validation
+  const handleApplyDiscount = async () => {
+    const result = await showConfirmDialog({
+      title: 'Apply Discount',
+      message: `Current total: ${formatCurrency(invoice?.total || '0')}`,
+      confirmText: 'Apply Discount',
+      inputLabel: 'Discount Amount',
+      inputRequired: true,
+      inputType: 'number',
+      inputPlaceholder: '10.00',
+      inputHelperText: `Maximum: ${formatCurrency(invoice?.subtotal || '0')}`,
+      maxValue: parseFloat(invoice?.subtotal || '0'),
+    });
+    
+    if (!result.confirmed) return;
+
+    // Optional: Ask for reason
+    const reasonResult = await showConfirmDialog({
+      title: 'Discount Reason',
+      message: 'Please provide a reason for this discount',
+      inputLabel: 'Reason',
+      inputMultiline: true,
+      inputPlaceholder: 'e.g., Loyalty member - 10% off',
+    });
+
+    // ... process discount
+  };
+
+  return (
+    <Box>
+      {/* ... existing JSX ... */}
+      <ConfirmDialog {...dialogProps} />
     </Box>
   );
 };
 ```
 
-### 4. Payment Dialog Component (components/invoices/PaymentDialog.tsx)
+---
+
+### 3. Add Snackbar for Success/Error Messages
+
+**Replace all `alert()` calls with Material-UI Snackbar**
+
+#### Create useSnackbar Hook
 
 ```typescript
-import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Typography,
-  Box,
-  Alert,
-  CircularProgress,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  InputAdornment,
-} from '@mui/material';
-import {
-  invoicesService,
-  paymentMethodsService,
-  Invoice,
-  PaymentMethod,
-} from '../../services/invoices';
+// components/common/useSnackbar.tsx
 
-interface PaymentDialogProps {
+import { useState, useCallback } from 'react';
+import { Snackbar, Alert, AlertColor } from '@mui/material';
+
+interface SnackbarState {
   open: boolean;
-  onClose: () => void;
-  invoice: Invoice;
-  onPaymentProcessed: () => void;
+  message: string;
+  severity: AlertColor;
 }
 
-export const PaymentDialog: React.FC<PaymentDialogProps> = ({
-  open,
-  onClose,
-  invoice,
-  onPaymentProcessed,
-}) => {
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
-  const [amount, setAmount] = useState(invoice.balance_due);
-  const [paymentType, setPaymentType] = useState<'full' | 'partial' | 'deposit'>('full');
-  const [referenceNumber, setReferenceNumber] = useState('');
-  const [transactionId, setTransactionId] = useState('');
-  const [notes, setNotes] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
+export const useSnackbar = () => {
+  const [snackbar, setSnackbar] = useState<SnackbarState>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
 
-  useEffect(() => {
-    const loadPaymentMethods = async () => {
-      try {
-        const methods = await paymentMethodsService.list();
+  const showSnackbar = useCallback((
+    message: string, 
+    severity: AlertColor = 'info'
+  ) => {
+    setSnackbar({ open: true, message, severity });
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  }, []);
+
+  const SnackbarComponent = (
+    <Snackbar
+      open={snackbar.open}
+      autoHideDuration={6000}
+      onClose={handleClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+    >
+      <Alert 
+        onClose={handleClose} 
+        severity={snackbar.severity} 
+        sx={{ width: '100%' }}
+        variant="filled"
+      >
+        {snackbar.message}
+      </Alert>
+    </Snackbar>
+  );
+
+  return { showSnackbar, SnackbarComponent };
+};
+```
+
+#### Usage
+
+```typescript
+// InvoiceDetails.tsx
+
+import { useSnackbar } from '../common/useSnackbar';
+
+export const InvoiceDetails: React.FC<InvoiceDetailsProps> = (props) => {
+  const { showSnackbar, SnackbarComponent } = useSnackbar();
+
+  // ✅ Replace alert() with snackbar
+  const handleSendEmail = async () => {
+    if (!invoice) return;
+
+    setActionLoading(true);
+    try {
+      await invoicesService.sendToGuest(invoice.id, {});
+      showSnackbar('Invoice sent successfully', 'success');
+    } catch (error: any) {
+      showSnackbar(
+        error?.response?.data?.error || 'Failed to send invoice',
+        'error'
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <Box>
+      {/* ... existing JSX ... */}
+      {SnackbarComponent}
+    </Box>
+  );
+};
+```
+
+---
+
+### 4. Fix Memory Leaks in useEffect
+
+**Problem:** Setting state after component unmounts causes memory leaks
+
+**Current Code (PaymentDialog.tsx):**
+```typescript
+// ❌ Memory leak - no cleanup
+useEffect(() => {
+  const loadPaymentMethods = async (retryCount = 0) => {
+    try {
+      const methods = await paymentMethodsService.list();
+      setPaymentMethods(methods); // May update after unmount
+    } catch (error: any) {
+      setTimeout(() => {
+        loadPaymentMethods(retryCount + 1); // Timeout not cancelled
+      }, 1000);
+    }
+  };
+  if (open) {
+    loadPaymentMethods();
+  }
+}, [open]);
+```
+
+**Solution:**
+
+```typescript
+// ✅ Proper cleanup
+useEffect(() => {
+  let mounted = true;
+  let timeoutId: NodeJS.Timeout | null = null;
+  let retryCount = 0;
+
+  const loadPaymentMethods = async () => {
+    try {
+      const methods = await paymentMethodsService.list();
+      
+      // Only update if still mounted
+      if (mounted) {
         setPaymentMethods(methods);
         if (methods.length > 0) {
           setSelectedMethod(methods[0]);
         }
-      } catch (error) {
-        console.error('Failed to load payment methods:', error);
+        setError('');
       }
-    };
-    if (open) {
-      loadPaymentMethods();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      setAmount(invoice.balance_due);
-      setPaymentType('full');
-      setReferenceNumber('');
-      setTransactionId('');
-      setNotes('');
-      setError('');
-    }
-  }, [open, invoice]);
-
-  const handleSubmit = async () => {
-    setError('');
-
-    if (!selectedMethod) {
-      setError('Please select a payment method');
-      return;
-    }
-
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue <= 0) {
-      setError('Please enter a valid amount');
-      return;
-    }
-
-    if (amountValue > parseFloat(invoice.balance_due)) {
-      setError('Amount cannot exceed balance due');
-      return;
-    }
-
-    if (selectedMethod.requires_reference && !referenceNumber) {
-      setError(`${selectedMethod.name} requires a reference number`);
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      await invoicesService.processPayment(invoice.id, {
-        amount: amount,
-        payment_method: selectedMethod.id,
-        payment_type: paymentType,
-        reference_number: referenceNumber || undefined,
-        transaction_id: transactionId || undefined,
-        notes: notes || undefined,
-      });
-
-      onPaymentProcessed();
     } catch (error: any) {
-      setError(error?.response?.data?.error || 'Failed to process payment');
-      setProcessing(false);
+      if (!mounted) return;
+      
+      console.error('Failed to load payment methods:', error);
+      
+      // Retry on auth errors (token might be refreshing)
+      if (error?.response?.status === 401 && retryCount < 2) {
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            retryCount++;
+            loadPaymentMethods();
+          }
+        }, 1000);
+      } else {
+        setError('Failed to load payment methods');
+      }
     }
   };
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Process Payment</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 2 }}>
-          {/* Invoice Summary */}
-          <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Invoice: {invoice.invoice_number}
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" fontWeight={600}>
-                Balance Due:
-              </Typography>
-              <Typography variant="body2" fontWeight={700} color="error.main">
-                ${parseFloat(invoice.balance_due).toFixed(2)}
-              </Typography>
-            </Box>
-          </Box>
-
-          {error && <Alert severity="error">{error}</Alert>}
-
-          {/* Payment Amount */}
-          <TextField
-            label="Payment Amount"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            fullWidth
-            required
-            InputProps={{
-              startAdornment: <InputAdornment position="start">$</InputAdornment>,
-            }}
-            inputProps={{
-              min: 0.01,
-              max: parseFloat(invoice.balance_due),
-              step: 0.01,
-            }}
-          />
-
-          {/* Payment Method */}
-          <FormControl fullWidth required>
-            <InputLabel>Payment Method</InputLabel>
-            <Select
-              value={selectedMethod?.id || ''}
-              onChange={(e) => {
-                const method = paymentMethods.find((m) => m.id === e.target.value);
-                setSelectedMethod(method || null);
-              }}
-              label="Payment Method"
-            >
-              {paymentMethods.map((method) => (
-                <MenuItem key={method.id} value={method.id}>
-                  {method.icon && `${method.icon} `}
-                  {method.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {/* Reference Number */}
-          {selectedMethod?.requires_reference && (
-            <TextField
-              label="Reference Number"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              fullWidth
-              required
-              placeholder="Last 4 digits, check number, etc."
-            />
-          )}
-
-          {/* Transaction ID */}
-          <TextField
-            label="Transaction ID"
-            value={transactionId}
-            onChange={(e) => setTransactionId(e.target.value)}
-            fullWidth
-            placeholder="Processor transaction ID"
-          />
-
-          {/* Notes */}
-          <TextField
-            label="Notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            fullWidth
-            multiline
-            rows={3}
-            placeholder="Additional notes..."
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={processing}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={processing || !selectedMethod}
-        >
-          {processing ? <CircularProgress size={24} /> : `Process Payment (${amount})`}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-```
-
-### 5. Refund Dialog Component (components/invoices/RefundDialog.tsx)
-
-```typescript
-import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Stack,
-  Typography,
-  Box,
-  Alert,
-  CircularProgress,
-  InputAdornment,
-} from '@mui/material';
-import { invoicesService, Invoice } from '../../services/invoices';
-
-interface RefundDialogProps {
-  open: boolean;
-  onClose: () => void;
-  invoice: Invoice;
-  onRefundProcessed: () => void;
-}
-
-export const RefundDialog: React.FC<RefundDialogProps> = ({
-  open,
-  onClose,
-  invoice,
-  onRefundProcessed,
-}) => {
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const [notes, setNotes] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      setAmount(invoice.amount_paid);
-      setReason('');
-      setNotes('');
-      setError('');
-    }
-  }, [open, invoice]);
-
-  const handleSubmit = async () => {
-    setError('');
-
-    if (!reason.trim()) {
-      setError('Please enter a reason for the refund');
-      return;
-    }
-
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue <= 0) {
-      setError('Please enter a valid refund amount');
-      return;
-    }
-
-    if (amountValue > parseFloat(invoice.amount_paid)) {
-      setError('Refund amount cannot exceed amount paid');
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      await invoicesService.refund(invoice.id, {
-        amount: amount,
-        reason: reason,
-        notes: notes || undefined,
-      });
-
-      onRefundProcessed();
-    } catch (error: any) {
-      setError(error?.response?.data?.error || 'Failed to process refund');
-      setProcessing(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Process Refund</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 2 }}>
-          <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Invoice: {invoice.invoice_number}
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" fontWeight={600}>
-                Amount Paid:
-              </Typography>
-              <Typography variant="body2" fontWeight={700} color="success.main">
-                ${parseFloat(invoice.amount_paid).toFixed(2)}
-              </Typography>
-            </Box>
-          </Box>
-
-          {error && <Alert severity="error">{error}</Alert>}
-
-          <Alert severity="warning">
-            This will create a refund payment and update the invoice balance.
-            Loyalty points will be deducted.
-          </Alert>
-
-          <TextField
-            label="Refund Amount"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            fullWidth
-            required
-            InputProps={{
-              startAdornment: <InputAdornment position="start">$</InputAdornment>,
-            }}
-          />
-
-          <TextField
-            label="Refund Reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            fullWidth
-            required
-            multiline
-            rows={3}
-            placeholder="e.g., Guest cancelled service, Service not satisfactory..."
-          />
-
-          <TextField
-            label="Additional Notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            fullWidth
-            multiline
-            rows={2}
-            placeholder="Optional internal notes..."
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={processing}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="warning"
-          onClick={handleSubmit}
-          disabled={processing || !reason.trim()}
-        >
-          {processing ? <CircularProgress size={24} /> : `Process Refund (${amount})`}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-```
-
----
-
-## Integration Steps
-
-### Step 1: Update ReservationManagement Component
-
-Add these imports at the top:
-
-```typescript
-import { InvoiceDetails } from '../components/invoices/InvoiceDetails';
-```
-
-Add these state variables (around line 50):
-
-```typescript
-const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
-const [createdInvoiceId, setCreatedInvoiceId] = useState<number | null>(null);
-```
-
-Update the `performAction` function for check_out (around line 280):
-
-```typescript
-if (action === 'check_out') {
-  // Check out with automatic invoice creation
-  const checkoutResult = await reservationsService.checkOut(targetReservation.id, {
-    create_invoice: true,
-    notes: 'Automatic invoice creation on checkout'
-  });
-  
-  // If invoice was created, show it
-  if (checkoutResult.invoice_created && checkoutResult.invoice_id) {
-    setCreatedInvoiceId(checkoutResult.invoice_id);
-    setInvoiceDialogOpen(true);
-    
-    setSnackbar({
-      open: true,
-      message: `Checked out. Invoice ${checkoutResult.invoice_number} created (${checkoutResult.invoice_total}).`,
-      severity: 'success',
-    });
-  } else {
-    setSnackbar({
-      open: true,
-      message: 'Checked out. Room marked dirty and housekeeping task created.',
-      severity: 'success',
-    });
+  if (open) {
+    loadPaymentMethods();
   }
-  
-  // Close the reservation drawer
-  if (!reservation) setDrawerOpen(false);
-}
-```
 
-Add the Invoice Dialog before the closing `</PageWrapper>` tag:
-
-```typescript
-{/* Invoice Dialog */}
-<Dialog
-  open={invoiceDialogOpen}
-  onClose={() => {
-    setInvoiceDialogOpen(false);
-    setCreatedInvoiceId(null);
-  }}
-  maxWidth="lg"
-  fullWidth
-  PaperProps={{
-    sx: {
-      height: '90vh',
-      maxHeight: '90vh',
+  // Cleanup function
+  return () => {
+    mounted = false;
+    if (timeoutId) {
+      clearTimeout(timeoutId);
     }
-  }}
->
-  <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <Typography variant="h6">Invoice & Payment</Typography>
-    <IconButton
-      onClick={() => {
-        setInvoiceDialogOpen(false);
-        setCreatedInvoiceId(null);
-      }}
-      size="small"
-    >
-      <Cancel />
-    </IconButton>
-  </DialogTitle>
-  <DialogContent sx={{ p: 0, overflow: 'auto' }}>
-    {createdInvoiceId && (
-      <InvoiceDetails
-        invoiceId={createdInvoiceId}
-        onClose={() => {
-          setInvoiceDialogOpen(false);
-          setCreatedInvoiceId(null);
-        }}
-        onPaymentProcessed={() => {
-          loadReservations();
-        }}
-      />
-    )}
-  </DialogContent>
-</Dialog>
+  };
+}, [open]);
 ```
 
-### Step 2: Run Database Migrations
-
-```bash
-# Create migrations
-python manage.py makemigrations invoices
-
-# Apply migrations
-python manage.py migrate
-
-# Create default payment methods
-python manage.py create_payment_methods
-```
-
-### Step 3: Update Django URLs
-
-In your main `urls.py`:
-
-```python
-from django.urls import path, include
-
-urlpatterns = [
-    # ... existing patterns
-    path('api/invoices/', include('invoices.urls')),
-]
-```
-
-### Step 4: Install Frontend Dependencies
-
-If needed:
-
-```bash
-npm install dayjs
-```
+**Apply this pattern to all async useEffect hooks in:**
+- InvoiceDetails.tsx (loadInvoice)
+- PaymentDialog.tsx (loadPaymentMethods)
+- RefundDialog.tsx (any async operations)
 
 ---
 
-## Workflow Documentation
+### 5. Add Error Boundaries
 
-### Complete Guest Journey
+**Problem:** Unhandled errors crash the entire app
 
-```
-1. BOOKING
-   ├─> Staff creates reservation
-   ├─> Services selected and added
-   └─> Reservation status: 'booked'
-
-2. ARRIVAL
-   ├─> Staff clicks "Check-in"
-   ├─> Room marked as occupied
-   └─> Reservation status: 'checked_in'
-
-3. SERVICE START
-   ├─> Staff clicks "Start Service"
-   ├─> Timer begins
-   └─> Reservation status: 'in_service'
-
-4. SERVICE END
-   ├─> Staff clicks "Complete Service"
-   └─> Reservation status: 'completed'
-
-5. DEPARTURE
-   ├─> Staff clicks "Check-out"
-   ├─> Reservation status: 'checked_out'
-   ├─> Room marked dirty and unoccupied
-   ├─> Housekeeping task created
-   ├─> Invoice automatically created
-   └─> Invoice dialog displayed
-
-6. PAYMENT
-   ├─> Staff clicks "Process Payment"
-   ├─> Selects payment method
-   ├─> Enters amount and details
-   ├─> Payment recorded
-   ├─> Invoice status updated
-   ├─> Guest loyalty points added
-   └─> Receipt available
-```
-
-### Payment Processing Flow
-
-```
-INVOICE CREATED (status: 'pending')
-   ├─> Balance Due: $108.00
-   └─> Amount Paid: $0.00
-
-STAFF CLICKS "PROCESS PAYMENT"
-   ├─> Dialog opens
-   ├─> Balance pre-filled
-   └─> Payment methods loaded
-
-STAFF ENTERS PAYMENT DETAILS
-   ├─> Amount: $108.00
-   ├─> Method: Credit Card
-   ├─> Reference: VISA-4532
-   └─> Notes: "Paid in full"
-
-SYSTEM VALIDATES
-   ├─> Amount ≤ Balance? ✓
-   ├─> Method active? ✓
-   ├─> Reference required? ✓
-   └─> Reference provided? ✓
-
-PAYMENT PROCESSED
-   ├─> Payment record created
-   ├─> Invoice totals recalculated
-   ├─> Invoice status: 'paid'
-   ├─> Loyalty points: +108
-   └─> Success message shown
-
-RESULT
-   ├─> Invoice paid in full
-   ├─> Guest can leave
-   └─> Financial records complete
-```
-
-### Refund Processing Flow
-
-```
-PAID INVOICE
-   ├─> Total: $108.00
-   ├─> Amount Paid: $108.00
-   └─> Balance Due: $0.00
-
-STAFF CLICKS "PROCESS REFUND"
-   ├─> Dialog opens
-   ├─> Amount paid pre-filled
-   └─> Reason required
-
-STAFF ENTERS REFUND DETAILS
-   ├─> Amount: $50.00
-   ├─> Reason: "Guest cancelled - partial refund"
-   └─> Notes: "Refunded to original card"
-
-SYSTEM VALIDATES
-   ├─> Amount ≤ Amount Paid? ✓
-   ├─> Reason provided? ✓
-   └─> Invoice can be refunded? ✓
-
-REFUND PROCESSED
-   ├─> Refund payment created (negative amount)
-   ├─> Invoice totals recalculated
-   ├─> Invoice status: 'partial'
-   ├─> Loyalty points: -50
-   └─> Success message shown
-
-RESULT
-   ├─> Amount Paid: $58.00
-   ├─> Balance Due: $50.00
-   └─> Financial records updated
-```
-
----
-
-## Testing Checklist
-
-### ✅ Reservation Flow Tests
-
-- [ ] **Create Reservation**
-  - Create with single service
-  - Create with multiple services
-  - Verify total price calculation
-  - Verify duration calculation
-
-- [ ] **Check-in Process**
-  - Check-in with clean room
-  - Attempt check-in with occupied room (should fail)
-  - Attempt check-in with OOS room (should warn)
-  - Verify room status changes to occupied
-
-- [ ] **Service Flow**
-  - Start service and verify timer
-  - Complete service
-  - Verify status transitions
-
-- [ ] **Check-out Process**
-  - Check-out from completed status
-  - Verify invoice creation
-  - Verify invoice dialog appears
-  - Verify room marked dirty
-  - Verify housekeeping task created
-
-### ✅ Invoice Display Tests
-
-- [ ] **Invoice Information**
-  - All services listed correctly
-  - Quantities accurate
-  - Unit prices correct
-  - Tax calculated properly
-  - Subtotal correct
-  - Total matches expected amount
-  - Guest information displayed
-  - Invoice number generated
-
-- [ ] **Invoice Items**
-  - Each service appears as line item
-  - Duration shown correctly
-  - Prices match reservation services
-  - Tax rate applied correctly
-
-### ✅ Payment Processing Tests
-
-- [ ] **Full Payment**
-  - Pay exact balance due
-  - Verify invoice status changes to 'paid'
-  - Verify balance due becomes $0.00
-  - Verify loyalty points added
-  - Verify payment appears in history
-
-- [ ] **Partial Payment**
-  - Pay less than balance due
-  - Verify invoice status changes to 'partial'
-  - Verify remaining balance correct
-  - Verify can make additional payments
-  - Verify loyalty points for partial amount
-
-- [ ] **Multiple Payments**
-  - Make first partial payment
-  - Make second partial payment
-  - Make final payment
-  - Verify all payments in history
-  - Verify total loyalty points correct
-
-- [ ] **Payment Methods**
-  - Cash payment (no reference required)
-  - Credit card payment (reference required)
-  - Mobile payment (reference required)
-  - Verify method validation works
-
-- [ ] **Payment Validation**
-  - Try to pay $0 (should fail)
-  - Try to pay more than balance (should fail)
-  - Try card payment without reference (should fail)
-  - Try to pay cancelled invoice (should fail)
-
-### ✅ Refund Processing Tests
-
-- [ ] **Full Refund**
-  - Refund entire paid amount
-  - Verify invoice status changes to 'refunded'
-  - Verify balance due equals total
-  - Verify loyalty points deducted
-  - Verify refund in payment history
-
-- [ ] **Partial Refund**
-  - Refund portion of paid amount
-  - Verify invoice status changes to 'partial'
-  - Verify balance due updated correctly
-  - Verify loyalty points partially deducted
-  - Verify can still accept payments
-
-- [ ] **Refund Validation**
-  - Try to refund $0 (should fail)
-  - Try to refund more than paid (should fail)
-  - Try to refund with no reason (should fail)
-  - Try to refund unpaid invoice (should fail)
-
-### ✅ Edge Cases & Error Handling
-
-- [ ] **Duplicate Invoice Prevention**
-  - Check-out twice on same reservation
-  - Verify second attempt returns existing invoice
-  - Verify no duplicate created
-
-- [ ] **Concurrent Operations**
-  - Two users processing payment simultaneously
-  - Verify no double-payment
-  - Verify totals remain accurate
-
-- [ ] **Network Errors**
-  - Payment fails mid-transaction
-  - Verify rollback occurs
-  - Verify no partial data saved
-
-- [ ] **Invalid States**
-  - Try to check-out non-completed reservation
-  - Try to pay cancelled invoice
-  - Try to process payment on paid invoice
-
-### ✅ UI/UX Tests
-
-- [ ] **Dialog Behavior**
-  - Invoice dialog opens after checkout
-  - Dialog closes properly
-  - Can reopen invoice from reservation
-  - Data loads correctly
-
-- [ ] **Form Validation**
-  - Required fields marked
-  - Error messages clear
-  - Validation happens before submit
-  - Success messages appear
-
-- [ ] **Loading States**
-  - Loading indicators show during API calls
-  - Buttons disabled during processing
-  - No duplicate submissions possible
-
-- [ ] **Responsiveness**
-  - Dialogs work on mobile
-  - Tables scroll on small screens
-  - Buttons accessible on touch devices
-
-### ✅ Data Integrity Tests
-
-- [ ] **Total Calculations**
-  - Subtotal = sum of line items
-  - Tax = calculated from line items
-  - Total = subtotal + tax - discount
-  - Balance due = total - amount paid
-  - All decimals round correctly to 2 places
-
-- [ ] **Status Transitions**
-  - pending → partial (on partial payment)
-  - partial → paid (on final payment)
-  - paid → partial (on partial refund)
-  - partial → refunded (on full refund)
-  - Cannot transition from cancelled
-
-- [ ] **Loyalty Points**
-  - Points added equal to payment amount
-  - Points deducted equal to refund amount
-  - Points never go negative
-  - Total spent tracks accurately
-
-### ✅ Reporting & Audit Tests
-
-- [ ] **Payment History**
-  - All payments listed chronologically
-  - Payment types indicated correctly
-  - Refunds shown as negative
-  - Processed by information captured
-
-- [ ] **Invoice Search**
-  - Search by invoice number works
-  - Search by guest name works
-  - Filter by status works
-  - Date range filtering works
-
-- [ ] **Financial Reports**
-  - Daily totals accurate
-  - Payment method breakdown correct
-  - Refund totals accurate
-  - Net revenue calculated correctly
-
----
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### Issue: Invoice not created on checkout
-
-**Symptoms:**
-- Check-out succeeds but invoice dialog doesn't appear
-- No invoice in database
-
-**Solutions:**
-1. Check backend logs for errors
-2. Verify `create_invoice=True` in checkout request
-3. Ensure reservation has services
-4. Check invoice creation permissions
-5. Verify Invoice model imported correctly
-
-```python
-# Add debug logging
-import logging
-logger = logging.getLogger(__name__)
-
-try:
-    invoice = Invoice.objects.create(...)
-    logger.info(f"Invoice {invoice.invoice_number} created successfully")
-except Exception as e:
-    logger.error(f"Invoice creation failed: {str(e)}")
-    raise
-```
-
-#### Issue: Payment processing fails
-
-**Symptoms:**
-- "Failed to process payment" error
-- Payment not recorded in database
-
-**Solutions:**
-1. Check payment amount validation
-2. Verify payment method exists and is active
-3. Ensure invoice status allows payments
-4. Check for database transaction errors
-5. Verify user has payment processing permissions
-
-```python
-# Add detailed error logging
-try:
-    payment = Payment.objects.create(...)
-except Exception as e:
-    logger.error(f"Payment creation failed: {str(e)}")
-    logger.error(f"Invoice: {invoice.id}, Amount: {amount}, Method: {payment_method_id}")
-    raise
-```
-
-#### Issue: Loyalty points not updating
-
-**Symptoms:**
-- Payment successful but points unchanged
-- Points calculation incorrect
-
-**Solutions:**
-1. Verify guest model has loyalty_points field
-2. Check Payment.save() method for point logic
-3. Ensure guest save() is called
-4. Check for signal conflicts
-5. Verify decimal precision in calculations
-
-```python
-# Add loyalty point logging
-if hasattr(guest, 'loyalty_points'):
-    old_points = guest.loyalty_points
-    guest.loyalty_points += points_change
-    guest.save()
-    logger.info(f"Guest {guest.id} points: {old_points} → {guest.loyalty_points}")
-else:
-    logger.warning(f"Guest {guest.id} has no loyalty_points field")
-```
-
-#### Issue: Invoice totals incorrect
-
-**Symptoms:**
-- Totals don't match line items
-- Balance due calculation wrong
-- Tax not applied correctly
-
-**Solutions:**
-1. Call `invoice.recalculate_totals()` after changes
-2. Verify line_total calculation in InvoiceItem
-3. Check tax_rate applied correctly
-4. Ensure decimal precision (2 places)
-5. Verify discount applied properly
-
-```python
-# Debug total calculation
-def recalculate_totals(self):
-    items_data = self.items.aggregate(...)
-    logger.debug(f"Items aggregate: {items_data}")
-    logger.debug(f"Subtotal: {self.subtotal}, Tax: {self.tax}, Discount: {self.discount}")
-    logger.debug(f"Total: {self.total}, Paid: {self.amount_paid}, Balance: {self.balance_due}")
-```
-
-#### Issue: Room not marked dirty after checkout
-
-**Symptoms:**
-- Check-out succeeds but room still clean
-- Housekeeping task not created
-
-**Solutions:**
-1. Verify location exists on reservation
-2. Check location save() is called
-3. Ensure HousekeepingTask model exists
-4. Verify transaction commits
-5. Check for permission issues
-
-```python
-# Add room status logging
-if reservation.location:
-    logger.info(f"Marking room {reservation.location.name} as dirty")
-    reservation.location.is_clean = False
-    reservation.location.save()
-    logger.info(f"Room status updated: clean={reservation.location.is_clean}")
-```
-
-#### Issue: Dialog not opening
-
-**Symptoms:**
-- Check-out succeeds but invoice dialog doesn't show
-- Console shows no errors
-
-**Solutions:**
-1. Check `invoiceDialogOpen` state updated
-2. Verify `createdInvoiceId` is set
-3. Ensure InvoiceDetails component imported
-4. Check dialog conditional rendering
-5. Verify no CSS hiding dialog
+**Solution: Create Error Boundary Component**
 
 ```typescript
-// Add debug logging
-const checkoutResult = await reservationsService.checkOut(...);
-console.log('Checkout result:', checkoutResult);
+// components/common/ErrorBoundary.tsx
 
-if (checkoutResult.invoice_created) {
-  console.log('Setting invoice ID:', checkoutResult.invoice_id);
-  setCreatedInvoiceId(checkoutResult.invoice_id);
-  setInvoiceDialogOpen(true);
-  console.log('Dialog should be open');
+import React from 'react';
+import { Alert, Button, Box, Typography, Paper } from '@mui/material';
+import { ErrorOutline, Refresh } from '@mui/icons-material';
+
+interface Props {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  onReset?: () => void;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+  errorInfo?: React.ErrorInfo;
+}
+
+export class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+    this.setState({ errorInfo });
+    
+    // TODO: Send to error tracking service
+    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+  }
+
+  handleReset = () => {
+    this.setState({ 
+      hasError: false, 
+      error: undefined, 
+      errorInfo: undefined 
+    });
+    this.props.onReset?.();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      // Use custom fallback if provided
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      // Default error UI
+      return (
+        <Box sx={{ p: 3, maxWidth: 800, mx: 'auto' }}>
+          <Paper elevation={3} sx={{ p: 3 }}>
+            <Alert 
+              severity="error"
+              icon={<ErrorOutline fontSize="large" />}
+              action={
+                <Button 
+                  color="inherit" 
+                  size="small"
+                  onClick={this.handleReset}
+                  startIcon={<Refresh />}
+                >
+                  Try Again
+                </Button>
+              }
+            >
+              <Typography variant="h6" gutterBottom>
+                Something went wrong
+              </Typography>
+              <Typography variant="body2" paragraph>
+                {this.state.error?.message || 'An unexpected error occurred'}
+              </Typography>
+              
+              {/* Show stack trace in development */}
+              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                <Box 
+                  sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    bgcolor: 'grey.100', 
+                    borderRadius: 1, 
+                    fontSize: '0.75rem',
+                    maxHeight: 300,
+                    overflow: 'auto',
+                  }}
+                >
+                  <Typography variant="caption" fontWeight="bold" display="block" mb={1}>
+                    Component Stack:
+                  </Typography>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {this.state.errorInfo.componentStack}
+                  </pre>
+                </Box>
+              )}
+            </Alert>
+          </Paper>
+        </Box>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 ```
 
-#### Issue: Payment method validation fails
+#### Usage
 
-**Symptoms:**
-- "Invalid payment method" error
-- Payment methods not loading
+```typescript
+// App.tsx or parent component
 
-**Solutions:**
-1. Run `python manage.py create_payment_methods`
-2. Verify payment methods marked as active
-3. Check API endpoint returns methods
-4. Ensure frontend service calls correct endpoint
-5. Verify CORS settings if cross-origin
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-```bash
-# Check payment methods exist
-python manage.py shell
->>> from invoices.models import PaymentMethod
->>> PaymentMethod.objects.filter(is_active=True).count()
-5  # Should return > 0
-```
+function App() {
+  return (
+    <ErrorBoundary onReset={() => window.location.reload()}>
+      <InvoiceManagementApp />
+    </ErrorBoundary>
+  );
+}
 
-#### Issue: Transaction rollback on error
+// Or wrap individual features
+<ErrorBoundary>
+  <InvoiceDetails invoiceId={42} />
+</ErrorBoundary>
 
-**Symptoms:**
-- Partial data created then disappears
-- Inconsistent state after error
-
-**Solutions:**
-1. Ensure using `transaction.atomic()`
-2. Don't catch exceptions inside atomic block
-3. Let exceptions bubble up for rollback
-4. Check for nested transactions
-5. Verify database supports transactions
-
-```python
-# Correct transaction usage
-with transaction.atomic():
-    invoice = Invoice.objects.create(...)
-    for item_data in items:
-        InvoiceItem.objects.create(...)
-    # Any exception here triggers full rollback
-```
-
-### Performance Optimization
-
-#### Slow invoice loading
-
-**Solutions:**
-1. Use `prefetch_related` for items and payments
-2. Use `select_related` for guest and reservation
-3. Add database indexes
-4. Paginate large lists
-5. Cache frequently accessed data
-
-```python
-# Optimized queryset
-Invoice.objects.all()\
-    .select_related('guest', 'reservation', 'created_by')\
-    .prefetch_related('items', 'payments__payment_method')
-```
-
-#### Slow payment processing
-
-**Solutions:**
-1. Minimize database queries in transaction
-2. Bulk update when possible
-3. Use database-level calculations
-4. Optimize loyalty point updates
-5. Consider background tasks for heavy operations
-
-```python
-# Optimize loyalty point update
-from django.db.models import F
-
-Guest.objects.filter(id=guest_id).update(
-    loyalty_points=F('loyalty_points') + points,
-    total_spent=F('total_spent') + amount
-)
+<ErrorBoundary>
+  <PaymentDialog open={open} invoice={invoice} />
+</ErrorBoundary>
 ```
 
 ---
 
-## Additional Features
+## 🟡 High Priority Issues
 
-### Email Invoice to Guest
+### 6. Backend - Add Version to All Write Responses
 
-Add email functionality:
+**All write operations should return the new version**
 
 ```python
-# invoices/views.py
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
+# views.py - Apply to all write operations
 
 @action(detail=True, methods=['post'])
-def send_to_guest(self, request, pk=None):
+def apply_discount(self, request, pk=None):
+    """Apply discount with version tracking"""
     invoice = self.get_object()
-    email = request.data.get('email', invoice.guest.email)
     
-    # Render email template
-    html_content = render_to_string('invoices/email_invoice.html', {
-        'invoice': invoice,
-        'guest': invoice.guest,
+    # Check version
+    version = request.data.get('version')
+    if version is not None and invoice.version != version:
+        return Response(
+            {'error': 'Invoice was modified by another user.', 'conflict': True},
+            status=status.HTTP_409_CONFLICT
+        )
+    
+    # ... validation and business logic ...
+    
+    with transaction.atomic():
+        invoice = Invoice.objects.select_for_update().get(pk=pk)
+        invoice.discount = discount
+        if reason:
+            invoice.notes = f"{invoice.notes}\n\nDiscount: {reason}".strip()
+        invoice.version += 1  # ✅ Increment version
+        invoice.save(update_fields=['discount', 'notes', 'version'])
+        
+        invoice.recalculate_totals()
+    
+    invoice.refresh_from_db()
+    
+    return Response({
+        'success': True,
+        'version': invoice.version,  # ✅ Return new version
+        'previous_total': str(previous_total),
+        'discount_applied': str(discount),
+        'new_total': str(invoice.total),
+        'new_balance_due': str(invoice.balance_due),
+        'message': f'Discount of ${discount} applied'
     })
+```
+
+---
+
+### 7. Add Input Validation to Frontend
+
+**Current:** Minimal validation before API calls  
+**Issue:** Poor user experience, unnecessary API calls
+
+#### Create Validation Utilities
+
+```typescript
+// utils/validation.ts
+
+export const validateAmount = (
+  value: string,
+  min: number = 0.01,
+  max?: number
+): { valid: boolean; error?: string } => {
+  const num = parseFloat(value);
+  
+  if (!value || value.trim() === '') {
+    return { valid: false, error: 'Amount is required' };
+  }
+  
+  if (isNaN(num)) {
+    return { valid: false, error: 'Please enter a valid number' };
+  }
+  
+  if (num < min) {
+    return { valid: false, error: `Amount must be at least $${min.toFixed(2)}` };
+  }
+  
+  if (max && num > max) {
+    return { valid: false, error: `Amount cannot exceed $${max.toFixed(2)}` };
+  }
+  
+  return { valid: true };
+};
+
+export const validateRequired = (
+  value: string,
+  fieldName: string = 'Field'
+): { valid: boolean; error?: string } => {
+  if (!value || value.trim() === '') {
+    return { valid: false, error: `${fieldName} is required` };
+  }
+  return { valid: true };
+};
+
+export const formatCurrency = (amount: string | number): string => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return `$${num.toFixed(2)}`;
+};
+```
+
+#### Use in Components
+
+```typescript
+// PaymentDialog.tsx
+
+import { validateAmount, validateRequired } from '../../utils/validation';
+
+const handleSubmit = async () => {
+  setError('');
+
+  // ✅ Frontend validation
+  if (!selectedMethod) {
+    setError('Please select a payment method');
+    return;
+  }
+
+  const amountValidation = validateAmount(
+    amount, 
+    0.01, 
+    parseFloat(invoice.balance_due)
+  );
+  
+  if (!amountValidation.valid) {
+    setError(amountValidation.error!);
+    return;
+  }
+
+  if (selectedMethod.requires_reference) {
+    const refValidation = validateRequired(referenceNumber, 'Reference number');
+    if (!refValidation.valid) {
+      setError(refValidation.error!);
+      return;
+    }
+  }
+
+  // ✅ Proceed with API call
+  setProcessing(true);
+  try {
+    await invoicesService.processPayment(invoice.id, {
+      amount,
+      payment_method: selectedMethod.id,
+      payment_type: paymentType,
+      reference: referenceNumber || undefined,
+      transaction_id: transactionId || undefined,
+      notes: notes || undefined,
+      idempotency_key: `${invoice.id}-${selectedMethod.id}-${amount}-${Date.now()}`,
+      version: invoice.version, // ✅ Include version
+    });
     
-    # Send email
-    send_mail(
-        subject=f'Invoice {invoice.invoice_number}',
-        message='Please see attached invoice.',
-        from_email='noreply@yourspa.com',
-        recipient_list=[email],
-        html_message=html_content,
+    showSnackbar('Payment processed successfully', 'success');
+    onPaymentProcessed();
+    onClose();
+    
+  } catch (error: any) {
+    if (error?.response?.status === 409) {
+      setError('Invoice was modified. Please refresh and try again.');
+    } else {
+      setError(error?.response?.data?.error || 'Failed to process payment');
+    }
+  } finally {
+    setProcessing(false);
+  }
+};
+```
+
+---
+
+### 8. Improve Error Handling
+
+**Current:** Generic error messages  
+**Better:** Specific, actionable messages
+
+#### Create Error Handler Utility
+
+```typescript
+// utils/errorHandler.ts
+
+interface ApiError {
+  response?: {
+    status: number;
+    data?: {
+      error?: string;
+      message?: string;
+      detail?: string;
+      [key: string]: any;
+    };
+  };
+  message?: string;
+}
+
+export const getErrorMessage = (error: any): string => {
+  const apiError = error as ApiError;
+  
+  // Network error
+  if (!apiError.response) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  
+  const { status, data } = apiError.response;
+  
+  // Specific status codes
+  switch (status) {
+    case 400:
+      return data?.error || data?.detail || 'Invalid request. Please check your input.';
+    
+    case 401:
+      return 'Your session has expired. Please log in again.';
+    
+    case 403:
+      return 'You do not have permission to perform this action.';
+    
+    case 404:
+      return 'The requested resource was not found.';
+    
+    case 409:
+      return data?.error || 'Conflict: The resource was modified by another user.';
+    
+    case 422:
+      return data?.error || 'Validation error. Please check your input.';
+    
+    case 500:
+      return 'Server error. Please try again later.';
+    
+    case 503:
+      return 'Service temporarily unavailable. Please try again later.';
+    
+    default:
+      return data?.error || data?.message || data?.detail || 'An unexpected error occurred.';
+  }
+};
+
+export const handleApiError = (
+  error: any,
+  showSnackbar: (message: string, severity: 'error' | 'warning') => void,
+  onConflict?: () => void
+) => {
+  const apiError = error as ApiError;
+  
+  if (apiError.response?.status === 409 && onConflict) {
+    showSnackbar(
+      'The resource was modified by another user. Refreshing...',
+      'warning'
+    );
+    onConflict();
+    return;
+  }
+  
+  const message = getErrorMessage(error);
+  showSnackbar(message, 'error');
+};
+```
+
+#### Usage
+
+```typescript
+// InvoiceDetails.tsx
+
+import { handleApiError } from '../../utils/errorHandler';
+
+const handleCancel = async () => {
+  if (!invoice) return;
+  
+  // ... dialog and validation ...
+
+  setActionLoading(true);
+  try {
+    await invoicesService.cancel(invoice.id, { 
+      reason: result.value!,
+      version: invoice.version 
+    });
+    showSnackbar('Invoice cancelled successfully', 'success');
+    await loadInvoice();
+    onInvoiceCancelled?.();
+    
+  } catch (error: any) {
+    // ✅ Centralized error handling
+    handleApiError(error, showSnackbar, loadInvoice);
+  } finally {
+    setActionLoading(false);
+  }
+};
+```
+
+---
+
+### 9. Add Loading States for All Actions
+
+**Current:** Some actions missing loading indicators
+
+```typescript
+// InvoiceDetails.tsx
+
+const [loadingStates, setLoadingStates] = useState({
+  cancelling: false,
+  applyingDiscount: false,
+  sendingEmail: false,
+});
+
+const setLoadingState = (key: keyof typeof loadingStates, value: boolean) => {
+  setLoadingStates(prev => ({ ...prev, [key]: value }));
+};
+
+// ✅ Use specific loading states
+const handleCancel = async () => {
+  // ... validation ...
+  
+  setLoadingState('cancelling', true);
+  try {
+    // ... API call ...
+  } finally {
+    setLoadingState('cancelling', false);
+  }
+};
+
+// In JSX
+<Button
+  variant="outlined"
+  color="error"
+  startIcon={loadingStates.cancelling ? <CircularProgress size={20} /> : <Cancel />}
+  onClick={handleCancel}
+  disabled={loadingStates.cancelling}
+>
+  {loadingStates.cancelling ? 'Cancelling...' : 'Cancel Invoice'}
+</Button>
+```
+
+---
+
+### 10. Backend - Add Request Validation Middleware
+
+**Add comprehensive request validation**
+
+```python
+# utils/validators.py
+
+from decimal import Decimal, InvalidOperation
+from rest_framework import serializers
+
+def validate_positive_decimal(value, field_name="Value"):
+    """Validate positive decimal amount"""
+    try:
+        decimal_value = Decimal(str(value))
+        if decimal_value <= 0:
+            raise serializers.ValidationError(
+                f"{field_name} must be greater than zero"
+            )
+        return decimal_value
+    except (InvalidOperation, ValueError):
+        raise serializers.ValidationError(
+            f"{field_name} must be a valid number"
+        )
+
+def validate_amount_against_balance(amount, balance_due):
+    """Validate payment amount doesn't exceed balance"""
+    if amount > balance_due:
+        raise serializers.ValidationError(
+            f"Amount ${amount} cannot exceed balance due of ${balance_due}"
+        )
+
+def validate_refund_amount(amount, amount_paid):
+    """Validate refund amount doesn't exceed amount paid"""
+    if amount > amount_paid:
+        raise serializers.ValidationError(
+            f"Refund amount ${amount} cannot exceed amount paid ${amount_paid}"
+        )
+```
+
+**Use in serializers:**
+
+```python
+# serializers.py
+
+class ProcessPaymentSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        required=True
     )
     
-    return Response({'success': True, 'sent_to': email})
+    # ... other fields ...
+    
+    def validate_amount(self, value):
+        """Additional amount validation"""
+        from .utils.validators import validate_positive_decimal
+        return validate_positive_decimal(value, "Payment amount")
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        payment_method = data.get('payment_method')
+        reference = data.get('reference', '')
+        
+        if payment_method and payment_method.requires_reference and not reference:
+            raise serializers.ValidationError({
+                'reference': f'{payment_method.name} requires a reference number'
+            })
+        
+        return data
 ```
 
-### PDF Invoice Generation
+---
 
-Add PDF export:
+## 🟠 Medium Priority Issues
+
+### 11. Add Retry Logic for Failed Requests
+
+**Handle transient failures gracefully**
+
+```typescript
+// utils/retry.ts
+
+interface RetryConfig {
+  maxRetries?: number;
+  delay?: number;
+  backoff?: number;
+  onRetry?: (attempt: number, error: any) => void;
+}
+
+export const retryAsync = async <T>(
+  fn: () => Promise<T>,
+  config: RetryConfig = {}
+): Promise<T> => {
+  const {
+    maxRetries = 3,
+    delay = 1000,
+    backoff = 2,
+    onRetry,
+  } = config;
+
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      // Don't retry on client errors (4xx except 408, 429)
+      const status = error?.response?.status;
+      if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+        throw error;
+      }
+
+      // Don't retry on last attempt
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff
+      const retryDelay = delay * Math.pow(backoff, attempt);
+      
+      onRetry?.(attempt + 1, error);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
+
+  throw lastError;
+};
+```
+
+**Usage:**
+
+```typescript
+// services/invoices.ts
+
+import { retryAsync } from '../utils/retry';
+
+export const invoicesService = {
+  async retrieve(id: number): Promise<Invoice> {
+    return retryAsync(
+      async () => {
+        const response = await api.get(`/invoices/${id}/`);
+        return response.data;
+      },
+      {
+        maxRetries: 3,
+        delay: 1000,
+        onRetry: (attempt, error) => {
+          console.log(`Retrying invoice fetch (attempt ${attempt})`, error);
+        },
+      }
+    );
+  },
+  
+  // Don't retry write operations - use idempotency instead
+  async processPayment(invoiceId: number, data: ProcessPaymentRequest) {
+    const response = await api.post(`/invoices/${invoiceId}/process_payment/`, data);
+    return response.data;
+  },
+};
+```
+
+---
+
+### 12. Improve Currency Formatting
+
+**Current:** Inconsistent formatting  
+**Better:** Centralized, locale-aware formatting
+
+```typescript
+// utils/currency.ts
+
+interface CurrencyFormatOptions {
+  locale?: string;
+  currency?: string;
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+}
+
+export const formatCurrency = (
+  amount: string | number,
+  options: CurrencyFormatOptions = {}
+): string => {
+  const {
+    locale = 'en-US',
+    currency = 'USD',
+    minimumFractionDigits = 2,
+    maximumFractionDigits = 2,
+  } = options;
+
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+
+  if (isNaN(num)) {
+    return '$0.00';
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits,
+    maximumFractionDigits,
+  }).format(num);
+};
+
+export const parseCurrency = (value: string): number => {
+  // Remove currency symbols and commas
+  const cleaned = value.replace(/[$,]/g, '');
+  return parseFloat(cleaned) || 0;
+};
+
+export const validateCurrencyInput = (value: string): boolean => {
+  // Allow digits, one decimal point, and up to 2 decimal places
+  const regex = /^\d+(\.\d{0,2})?$/;
+  return regex.test(value);
+};
+```
+
+**Usage:**
+
+```typescript
+// InvoiceDetails.tsx
+
+import { formatCurrency } from '../../utils/currency';
+
+// ✅ Consistent formatting throughout
+<Typography variant="h6">
+  Total: {formatCurrency(invoice.total)}
+</Typography>
+
+<Typography variant="body2">
+  Balance Due: {formatCurrency(invoice.balance_due)}
+</Typography>
+```
+
+---
+
+### 13. Add Optimistic UI Updates
+
+**Update UI immediately, rollback on error**
+
+```typescript
+// InvoiceDetails.tsx
+
+const handleApplyDiscount = async () => {
+  if (!invoice) return;
+
+  const result = await showConfirmDialog({
+    title: 'Apply Discount',
+    inputLabel: 'Discount Amount',
+    inputRequired: true,
+    inputType: 'number',
+    maxValue: parseFloat(invoice.subtotal),
+  });
+
+  if (!result.confirmed) return;
+
+  const discountAmount = result.value!;
+  
+  // ✅ Optimistic update - update UI immediately
+  const previousInvoice = { ...invoice };
+  const newTotal = parseFloat(invoice.total) - parseFloat(discountAmount);
+  const newBalanceDue = parseFloat(invoice.balance_due) - parseFloat(discountAmount);
+  
+  setInvoice(prev => prev ? {
+    ...prev,
+    discount: discountAmount,
+    total: newTotal.toFixed(2),
+    balance_due: newBalanceDue.toFixed(2),
+  } : null);
+
+  try {
+    const response = await invoicesService.applyDiscount(invoice.id, {
+      discount: discountAmount,
+      version: invoice.version,
+    });
+    
+    // ✅ Update with server response
+    setInvoice(prev => prev ? {
+      ...prev,
+      ...response,
+      version: response.version,
+    } : null);
+    
+    showSnackbar('Discount applied successfully', 'success');
+    
+  } catch (error: any) {
+    // ✅ Rollback on error
+    setInvoice(previousInvoice);
+    handleApiError(error, showSnackbar, loadInvoice);
+  }
+};
+```
+
+---
+
+### 14. Add Debouncing for Search/Filter
+
+**Prevent excessive API calls during typing**
+
+```typescript
+// hooks/useDebounce.ts
+
+import { useState, useEffect } from 'react';
+
+export const useDebounce = <T>(value: T, delay: number = 500): T => {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+```
+
+**Usage in invoice search:**
+
+```typescript
+// InvoiceList.tsx (example)
+
+const [searchTerm, setSearchTerm] = useState('');
+const debouncedSearch = useDebounce(searchTerm, 500);
+
+useEffect(() => {
+  // Only triggers 500ms after user stops typing
+  if (debouncedSearch) {
+    fetchInvoices({ search: debouncedSearch });
+  }
+}, [debouncedSearch]);
+
+<TextField
+  label="Search Invoices"
+  value={searchTerm}
+  onChange={(e) => setSearchTerm(e.target.value)}
+  placeholder="Search by invoice number, guest name..."
+/>
+```
+
+---
+
+### 15. Add Caching for Payment Methods
+
+**Cache payment methods to reduce API calls**
+
+```typescript
+// services/cache.ts
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+class SimpleCache {
+  private cache = new Map<string, CacheEntry<any>>();
+  private defaultTTL = 5 * 60 * 1000; // 5 minutes
+
+  set<T>(key: string, data: T, ttl: number = this.defaultTTL): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now() + ttl,
+    });
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    
+    if (!entry) {
+      return null;
+    }
+
+    // Check if expired
+    if (Date.now() > entry.timestamp) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  clear(key?: string): void {
+    if (key) {
+      this.cache.delete(key);
+    } else {
+      this.cache.clear();
+    }
+  }
+}
+
+export const cache = new SimpleCache();
+```
+
+**Use in payment methods service:**
+
+```typescript
+// services/invoices.ts
+
+import { cache } from './cache';
+
+export const paymentMethodsService = {
+  async list(): Promise<PaymentMethod[]> {
+    const CACHE_KEY = 'payment_methods';
+    
+    // ✅ Check cache first
+    const cached = cache.get<PaymentMethod[]>(CACHE_KEY);
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from API
+    const response = await api.get('/payment-methods/');
+    const methods = response.data.results ?? response.data;
+    
+    // ✅ Cache for 10 minutes
+    cache.set(CACHE_KEY, methods, 10 * 60 * 1000);
+    
+    return methods;
+  },
+  
+  // Clear cache when methods are modified
+  clearCache(): void {
+    cache.clear('payment_methods');
+  },
+};
+```
+
+---
+
+## 🟢 Best Practices & Enhancements
+
+### 16. Add TypeScript Strict Mode
+
+**Enable stricter type checking**
+
+```json
+// tsconfig.json
+
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
+
+---
+
+### 17. Add Logging Service
+
+**Centralized logging for debugging and monitoring**
+
+```typescript
+// services/logger.ts
+
+enum LogLevel {
+  DEBUG = 'debug',
+  INFO = 'info',
+  WARN = 'warn',
+  ERROR = 'error',
+}
+
+interface LogEntry {
+  level: LogLevel;
+  message: string;
+  context?: Record<string, any>;
+  timestamp: string;
+}
+
+class Logger {
+  private isDevelopment = process.env.NODE_ENV === 'development';
+
+  private log(level: LogLevel, message: string, context?: Record<string, any>): void {
+    const entry: LogEntry = {
+      level,
+      message,
+      context,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Console output
+    if (this.isDevelopment) {
+      const consoleMethod = level === LogLevel.ERROR ? 'error' : 
+                           level === LogLevel.WARN ? 'warn' : 'log';
+      console[consoleMethod](`[${level.toUpperCase()}]`, message, context || '');
+    }
+
+    // TODO: Send to logging service (e.g., Sentry, LogRocket)
+    // this.sendToService(entry);
+  }
+
+  debug(message: string, context?: Record<string, any>): void {
+    this.log(LogLevel.DEBUG, message, context);
+  }
+
+  info(message: string, context?: Record<string, any>): void {
+    this.log(LogLevel.INFO, message, context);
+  }
+
+  warn(message: string, context?: Record<string, any>): void {
+    this.log(LogLevel.WARN, message, context);
+  }
+
+  error(message: string, error?: any, context?: Record<string, any>): void {
+    const errorContext = {
+      ...context,
+      error: error?.message,
+      stack: error?.stack,
+      response: error?.response?.data,
+    };
+    this.log(LogLevel.ERROR, message, errorContext);
+  }
+}
+
+export const logger = new Logger();
+```
+
+**Usage:**
+
+```typescript
+// InvoiceDetails.tsx
+
+import { logger } from '../../services/logger';
+
+const loadInvoice = async () => {
+  setLoading(true);
+  try {
+    logger.info('Loading invoice', { invoiceId });
+    const data = await invoicesService.retrieve(invoiceId);
+    setInvoice(data);
+    logger.debug('Invoice loaded successfully', { invoice: data });
+  } catch (error) {
+    logger.error('Failed to load invoice', error, { invoiceId });
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+---
+
+### 18. Add API Request Interceptors
+
+**Centralized request/response handling**
+
+```typescript
+// services/api.ts
+
+import axios from 'axios';
+import { logger } from './logger';
+
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor - add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    logger.debug('API Request', {
+      method: config.method,
+      url: config.url,
+      data: config.data,
+    });
+    
+    return config;
+  },
+  (error) => {
+    logger.error('Request interceptor error', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor - handle errors
+api.interceptors.response.use(
+  (response) => {
+    logger.debug('API Response', {
+      url: response.config.url,
+      status: response.status,
+    });
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Token refresh logic
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        const response = await axios.post('/api/token/refresh/', {
+          refresh: refreshToken,
+        });
+        
+        const newToken = response.data.access;
+        localStorage.setItem('authToken', newToken);
+        
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed - logout user
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+
+    logger.error('API Error', error, {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
+
+    return Promise.reject(error);
+  }
+);
+
+export { api };
+```
+
+---
+
+### 19. Backend - Add Rate Limiting
+
+**Protect against abuse and DDoS**
 
 ```python
-# invoices/views.py
-from reportlab.pdfgen import canvas
-from django.http import HttpResponse
+# settings.py
 
-@action(detail=True, methods=['get'])
-def download_pdf(self, request, pk=None):
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'payment': '50/hour',  # Custom rate for payment processing
+    },
+}
+```
+
+```python
+# throttles.py
+
+from rest_framework.throttling import UserRateThrottle
+
+class PaymentRateThrottle(UserRateThrottle):
+    """Stricter rate limit for payment processing"""
+    scope = 'payment'
+    
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return f'throttle_payment_{request.user.pk}'
+        return None
+```
+
+```python
+# views.py
+
+from .throttles import PaymentRateThrottle
+
+class InvoiceViewSet(viewsets.ModelViewSet):
+    @action(detail=True, methods=['post'], throttle_classes=[PaymentRateThrottle])
+    def process_payment(self, request, pk=None):
+        """Process payment with rate limiting"""
+        # ... implementation ...
+```
+
+---
+
+### 20. Add Comprehensive Logging in Backend
+
+**Track all important operations**
+
+```python
+# utils/logging.py
+
+import logging
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+def log_payment_attempt(invoice, user, amount, payment_method):
+    """Log payment processing attempt"""
+    logger.info(
+        f"Payment attempt: Invoice {invoice.invoice_number}, "
+        f"Amount: ${amount}, Method: {payment_method}, "
+        f"User: {user.username}"
+    )
+
+def log_payment_success(invoice, payment):
+    """Log successful payment"""
+    logger.info(
+        f"Payment successful: Invoice {invoice.invoice_number}, "
+        f"Payment ID: {payment.id}, Amount: ${payment.amount}"
+    )
+
+def log_payment_failure(invoice, user, error):
+    """Log payment failure"""
+    logger.error(
+        f"Payment failed: Invoice {invoice.invoice_number}, "
+        f"User: {user.username}, Error: {str(error)}"
+    )
+
+def log_refund_request(invoice, user, amount, reason):
+    """Log refund request"""
+    logger.warning(
+        f"Refund requested: Invoice {invoice.invoice_number}, "
+        f"Amount: ${amount}, Reason: {reason}, "
+        f"Requested by: {user.username}"
+    )
+
+def log_invoice_cancellation(invoice, user, reason):
+    """Log invoice cancellation"""
+    logger.warning(
+        f"Invoice cancelled: {invoice.invoice_number}, "
+        f"Reason: {reason}, Cancelled by: {user.username}"
+    )
+```
+
+**Use in views:**
+
+```python
+# views.py
+
+from .utils.logging import (
+    log_payment_attempt,
+    log_payment_success,
+    log_payment_failure,
+)
+
+@action(detail=True, methods=['post'])
+def process_payment(self, request, pk=None):
     invoice = self.get_object()
+    serializer = ProcessPaymentSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
     
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{invoice.invoice_number}.pdf"'
+    amount = serializer.validated_data['amount']
+    payment_method = serializer.validated_data['payment_method']
     
-    # Generate PDF
-    p = canvas.Canvas(response)
-    p.drawString(100, 800, f"Invoice {invoice.invoice_number}")
-    p.drawString(100, 780, f"Guest: {invoice.guest_name}")
-    p.drawString(100, 760, f"Total: ${invoice.total}")
-    # Add more content...
-    p.showPage()
-    p.save()
+    # ✅ Log attempt
+    log_payment_attempt(invoice, request.user, amount, payment_method.name)
     
-    return response
-```
-
-### Payment Plans / Installments
-
-Add installment support:
-
-```python
-# invoices/models.py
-class PaymentPlan(models.Model):
-    invoice = models.OneToOneField(Invoice, on_delete=models.CASCADE)
-    installments = models.IntegerField()
-    installment_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    frequency = models.CharField(max_length=20)  # weekly, monthly
-    next_due_date = models.DateField()
-    
-    def create_next_installment(self):
-        # Logic to create next payment reminder
-        pass
-```
-
-### Discount / Coupon Codes
-
-Add discount management:
-
-```python
-# invoices/models.py
-class DiscountCode(models.Model):
-    code = models.CharField(max_length=50, unique=True)
-    discount_type = models.CharField(max_length=20)  # percentage, fixed
-    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
-    valid_from = models.DateField()
-    valid_until = models.DateField()
-    max_uses = models.IntegerField(null=True)
-    times_used = models.IntegerField(default=0)
-    
-    def is_valid(self):
-        if self.times_used >= self.max_uses:
-            return False
-        if timezone.now().date() > self.valid_until:
-            return False
-        return True
-    
-    def apply_to_invoice(self, invoice):
-        if not self.is_valid():
-            raise ValueError("Discount code is not valid")
+    try:
+        with transaction.atomic():
+            # ... payment processing ...
+            payment = Payment.objects.create(...)
+            
+        # ✅ Log success
+        log_payment_success(invoice, payment)
         
-        if self.discount_type == 'percentage':
-            invoice.discount = invoice.subtotal * (self.discount_value / 100)
-        else:
-            invoice.discount = self.discount_value
+        return Response({...})
         
-        invoice.save()
-        self.times_used += 1
-        self.save()
-```
-
-### Tips / Gratuity Handling
-
-Add tip support:
-
-```python
-# invoices/models.py
-class InvoiceTip(models.Model):
-    invoice = models.OneToOneField(Invoice, on_delete=models.CASCADE)
-    tip_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    tip_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True)
-    employee = models.ForeignKey('employees.Employee', on_delete=models.SET_NULL, null=True)
-    
-    def save(self, *args, **kwargs):
-        # Add tip to invoice total
-        super().save(*args, **kwargs)
-        self.invoice.total += self.tip_amount
-        self.invoice.save()
+    except Exception as e:
+        # ✅ Log failure
+        log_payment_failure(invoice, request.user, e)
+        raise
 ```
 
 ---
 
-## Database Schema
+## 🔒 Security Recommendations
 
-### Entity Relationship Diagram
+### 21. Add CSRF Protection for State-Changing Operations
 
-```
-┌─────────────────┐
-│     Guest       │
-│─────────────────│
-│ id (PK)         │
-│ first_name      │
-│ last_name       │
-│ email           │
-│ loyalty_points  │
-│ total_spent     │
-└─────────────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐
-│  Reservation    │
-│─────────────────│
-│ id (PK)         │
-│ guest_id (FK)   │
-│ status          │
-│ start_time      │
-│ end_time        │
-│ total_price     │
-└─────────────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐       ┌─────────────────┐
-│    Invoice      │───────│  InvoiceItem    │
-│─────────────────│  1:N  │─────────────────│
-│ id (PK)         │       │ id (PK)         │
-│ invoice_number  │       │ invoice_id (FK) │
-│ guest_id (FK)   │       │ product_name    │
-│ reservation(FK) │       │ quantity        │
-│ total           │       │ unit_price      │
-│ amount_paid     │       │ line_total      │
-│ balance_due     │       └─────────────────┘
-│ status          │
-└─────────────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐       ┌─────────────────┐
-│    Payment      │───────│ PaymentMethod   │
-│─────────────────│  N:1  │─────────────────│
-│ id (PK)         │       │ id (PK)         │
-│ invoice_id (FK) │       │ name            │
-│ method          │       │ code            │
-│ amount          │       │ requires_ref    │
-│ payment_date    │       │ is_active       │
-│ status          │       └─────────────────┘
-│ notes           │
-└─────────────────┘
+**Already handled by Django REST Framework, but ensure it's configured**
+
+```python
+# settings.py
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',  # ✅ Includes CSRF
+    ],
+}
+
+# Ensure CSRF cookie is set
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read for AJAX
+CSRF_COOKIE_SAMESITE = 'Strict'
+CSRF_TRUSTED_ORIGINS = ['https://yourdomain.com']
 ```
 
-### Key Indexes
+**Frontend - Include CSRF token:**
 
-```sql
--- Performance indexes
-CREATE INDEX idx_invoice_guest ON invoices_invoice(guest_id);
-CREATE INDEX idx_invoice_reservation ON invoices_invoice(reservation_id);
-CREATE INDEX idx_invoice_status ON invoices_invoice(status);
-CREATE INDEX idx_invoice_date ON invoices_invoice(date DESC);
-CREATE INDEX idx_payment_invoice ON invoices_payment(invoice_id);
-CREATE INDEX idx_payment_date ON invoices_payment(payment_date DESC);
-CREATE INDEX idx_payment_status ON invoices_payment(status);
+```typescript
+// services/api.ts
+
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL,
+  withCredentials: true,  // ✅ Include cookies
+});
+
+// Add CSRF token to requests
+api.interceptors.request.use((config) => {
+  const csrfToken = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('csrftoken='))
+    ?.split('=')[1];
+    
+  if (csrfToken && config.method !== 'get') {
+    config.headers['X-CSRFToken'] = csrfToken;
+  }
+  
+  return config;
+});
 ```
 
 ---
 
-## Security Considerations
+### 22. Add Input Sanitization
 
-### Permission Requirements
+**Prevent XSS attacks**
+
+```typescript
+// utils/sanitize.ts
+
+import DOMPurify from 'dompurify';
+
+export const sanitizeHtml = (dirty: string): string => {
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'br'],
+    ALLOWED_ATTR: [],
+  });
+};
+
+export const sanitizeInput = (input: string): string => {
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .substring(0, 1000); // Limit length
+};
+```
+
+**Use before displaying user input:**
+
+```typescript
+// InvoiceDetails.tsx
+
+<Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+  {sanitizeHtml(invoice.notes)}
+</Typography>
+```
+
+---
+
+### 23. Add Permission Checks
+
+**Backend - Ensure proper permissions**
 
 ```python
-# invoices/permissions.py
+# permissions.py
+
 from rest_framework import permissions
 
-class CanProcessPayment(permissions.BasePermission):
+class CanProcessPayments(permissions.BasePermission):
+    """Only users with payment processing permission"""
+    
     def has_permission(self, request, view):
-        return request.user.has_perm('invoices.process_payment')
+        return request.user.has_perm('pos.process_payments')
 
-class CanRefund(permissions.BasePermission):
+class CanIssueRefunds(permissions.BasePermission):
+    """Only users with refund permission"""
+    
     def has_permission(self, request, view):
-        return request.user.has_perm('invoices.process_refund')
+        # Check if user has specific permission
+        if not request.user.has_perm('pos.issue_refunds'):
+            return False
+        
+        # Additional check: refunds over $500 require manager approval
+        if view.action == 'refund':
+            amount = request.data.get('amount', 0)
+            if float(amount) > 500 and not request.user.is_manager:
+                return False
+        
+        return True
+```
 
-# Apply to views
+**Use in views:**
+
+```python
+# views.py
+
 class InvoiceViewSet(viewsets.ModelViewSet):
-    @action(detail=True, methods=['post'], permission_classes=[CanProcessPayment])
-    def process_payment(self, request, pk=None):
-        ...
-```
-
-### Audit Logging
-
-```python
-# Add audit log for all financial transactions
-class AuditLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    action = models.CharField(max_length=50)
-    model_name = models.CharField(max_length=50)
-    object_id = models.IntegerField()
-    changes = models.JSONField()
-    ip_address = models.GenericIPAddressField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-# Log payment processing
-def log_payment(user, payment, ip_address):
-    AuditLog.objects.create(
-        user=user,
-        action='process_payment',
-        model_name='Payment',
-        object_id=payment.id,
-        changes={'amount': str(payment.amount), 'method': payment.method},
-        ip_address=ip_address
+    @action(
+        detail=True, 
+        methods=['post'],
+        permission_classes=[IsAuthenticated, CanProcessPayments]
     )
+    def process_payment(self, request, pk=None):
+        # ... implementation ...
+    
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[IsAuthenticated, CanIssueRefunds]
+    )
+    def refund(self, request, pk=None):
+        # ... implementation ...
 ```
 
-### Input Validation
+---
+
+### 24. Sensitive Data Handling
+
+**Don't log sensitive information**
 
 ```python
-# Strict validation for financial data
-from decimal import Decimal, InvalidOperation
+# utils/logging.py
 
-def validate_amount(amount):
-    try:
-        amount = Decimal(str(amount))
-        if amount < Decimal('0.01'):
-            raise ValueError("Amount must be at least $0.01")
-        if amount > Decimal('999999.99'):
-            raise ValueError("Amount exceeds maximum")
-        # Ensure 2 decimal places
-        if amount != amount.quantize(Decimal('0.01')):
-            raise ValueError("Amount must have at most 2 decimal places")
-        return amount
-    except (InvalidOperation, ValueError) as e:
-        raise ValidationError(str(e))
+def sanitize_payment_data(data):
+    """Remove sensitive payment info from logs"""
+    sanitized = data.copy()
+    
+    # Mask card numbers
+    if 'reference' in sanitized:
+        ref = sanitized['reference']
+        if len(ref) > 4:
+            sanitized['reference'] = f"****{ref[-4:]}"
+    
+    # Remove transaction IDs
+    if 'transaction_id' in sanitized:
+        sanitized['transaction_id'] = '***REDACTED***'
+    
+    return sanitized
+
+# Use when logging
+logger.info("Payment processed", sanitize_payment_data(payment_data))
 ```
 
 ---
 
-## Deployment Checklist
+## ⚡ Performance Optimizations
 
-### Pre-Deployment
+### 25. Backend - Add Database Indexes
 
-- [ ] Run all tests
-- [ ] Create database backup
-- [ ] Review security settings
-- [ ] Check environment variables
-- [ ] Verify payment method configuration
-- [ ] Test on staging environment
-- [ ] Review error logging
-- [ ] Check CORS settings
-- [ ] Verify SSL certificates
-- [ ] Document API endpoints
-
-### Post-Deployment
-
-- [ ] Run migrations
-- [ ] Create default payment methods
-- [ ] Test invoice creation
-- [ ] Test payment processing
-- [ ] Test refund processing
-- [ ] Verify email notifications
-- [ ] Check error tracking
-- [ ] Monitor performance
-- [ ] Review logs for errors
-- [ ] Verify data integrity
-
-### Monitoring
+**Your models already have some indexes, but add more:**
 
 ```python
-# Set up monitoring for key metrics
-- Invoice creation rate
-- Payment success rate
-- Refund frequency
-- Average transaction amount
-- Failed payment attempts
-- API response times
-- Database query performance
+# models.py
+
+class Invoice(models.Model):
+    # ... existing fields ...
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['-date']),
+            models.Index(fields=['guest', '-date']),
+            models.Index(fields=['status']),
+            models.Index(fields=['invoice_number']),
+            models.Index(fields=['reservation']),
+            models.Index(fields=['status', 'balance_due']),
+            # ✅ Add these for better query performance
+            models.Index(fields=['status', '-date']),
+            models.Index(fields=['guest', 'status']),
+            models.Index(fields=['due_date', 'status']),
+            models.Index(fields=['created_at']),
+        ]
+
+class Payment(models.Model):
+    # ... existing fields ...
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['-payment_date']),
+            models.Index(fields=['invoice', '-payment_date']),
+            models.Index(fields=['status']),
+            models.Index(fields=['method']),
+            models.Index(fields=['idempotency_key']),
+            # ✅ Add these
+            models.Index(fields=['invoice', 'status']),
+            models.Index(fields=['payment_method', '-payment_date']),
+            models.Index(fields=['processed_by', '-payment_date']),
+        ]
 ```
 
 ---
 
-## Support & Maintenance
+### 26. Backend - Optimize Queries with select_related and prefetch_related
 
-### Regular Tasks
+**Your views already do this well, but ensure consistency:**
 
-**Daily:**
-- Monitor failed payments
-- Review refund requests
-- Check for overdue invoices
-- Verify reconciliation
+```python
+# views.py
 
-**Weekly:**
-- Generate financial reports
-- Review payment method usage
-- Check for anomalies
-- Update payment method availability
-
-**Monthly:**
-- Analyze revenue trends
-- Review discount effectiveness
-- Audit loyalty point calculations
-- Database optimization
-
-### Backup Strategy
-
-```bash
-# Automated daily backup
-#!/bin/bash
-DATE=$(date +%Y%m%d)
-pg_dump spa_db > backups/spa_db_$DATE.sql
-aws s3 cp backups/spa_db_$DATE.sql s3://spa-backups/
-```
-
----
-
-## Conclusion
-
-This integration provides a complete, production-ready invoice and payment system that seamlessly integrates with your spa reservation management. The system handles the complete financial lifecycle from service completion to payment processing, with robust error handling, audit trails, and guest loyalty integration.
-
-### Key Benefits
-
-✅ **Automated Workflow** - Invoice created automatically on checkout
-✅ **Multiple Payment Methods** - Cash, card, mobile, bank transfer
-✅ **Flexible Payment Options** - Full, partial, installments
-✅ **Refund Support** - Full or partial refunds with audit trail
-✅ **Loyalty Integration** - Automatic point calculation
-✅ **Financial Accuracy** - Automatic total calculations
-✅ **Audit Trail** - Complete payment history
-✅ **Room Management** - Integrated with housekeeping
-✅ **User-Friendly** - Intuitive dialogs and workflows
-✅ **Production-Ready** - Error handling, validation, logging
-
-For support or questions, refer to the troubleshooting section or consult the API documentation.
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** 2025-01-15  
-**Author:** Integration Guide Generator
+class InvoiceViewSet(viewsets.ModelViewSet):
+    def get_queryset(self):
+        queryset = Invoice.objects.all()
+        
+        # ✅ Always prefetch related data
+        queryset = queryset.prefetch_related(
+            'items',
+            'items__service',
+            'payments',
+            'payments__payment_method',
+            'payments__processed_by',
+            'refunds',
+            'refunds__requested_by',
+        ).select_related(
+            'guest',
+            'reservation',
+            'created_by',
+        )
+        
+        # Apply filters
+        # ... your existing filter logic ...
+        
+        return quer
