@@ -201,6 +201,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         transaction_id = serializer.validated_data.get('transaction_id', '')
         notes = serializer.validated_data.get('notes', '')
         idempotency_key = serializer.validated_data.get('idempotency_key', '')
+        requested_version = request.data.get('version', None)
 
         # Idempotency short-circuit
         if idempotency_key:
@@ -220,6 +221,18 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                     'payment_status': existing.status,
                     'message': 'Payment already processed (idempotency key matched)'
                 })
+
+        # Optimistic locking
+        if requested_version is not None and invoice.version != requested_version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'conflict': True,
+                    'current_version': invoice.version,
+                    'requested_version': requested_version,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
 
         # Check if invoice can accept payments
         if not invoice.can_be_paid():
@@ -281,6 +294,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'invoice_status': invoice.status,
             'payment_status': payment.status,
             'loyalty_points_earned': int(payment.amount),
+            'version': invoice.version,
             'message': f'Payment of ${payment.amount} processed successfully'
         })
     
@@ -330,6 +344,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         payment_method = serializer.validated_data.get('payment_method', 'refund')
         notes = serializer.validated_data.get('notes', '')
         payment_to_refund = serializer.validated_data.get('payment_id')
+        requested_version = request.data.get('version', None)
+
+        # Optimistic locking
+        if requested_version is not None and invoice.version != requested_version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'conflict': True,
+                    'current_version': invoice.version,
+                    'requested_version': requested_version,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
         
         # Check if invoice can be refunded
         if not invoice.can_be_refunded():
@@ -404,6 +431,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'balance_due': str(invoice.balance_due),
             'invoice_status': invoice.status,
             'loyalty_points_deducted': int(amount),
+            'version': invoice.version,
             'message': f'Refund of ${amount} processed successfully'
         })
     
@@ -515,16 +543,34 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             )
         
         reason = request.data.get('reason', '')
-        
-        # Cancel invoice
-        invoice.status = 'cancelled'
-        if reason:
-            invoice.notes = f"{invoice.notes}\n\nCancelled: {reason}".strip()
-        invoice.save(update_fields=['status', 'notes'])
+        requested_version = request.data.get('version', None)
+
+        # Optimistic locking
+        if requested_version is not None and invoice.version != requested_version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'conflict': True,
+                    'current_version': invoice.version,
+                    'requested_version': requested_version,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+
+        # Cancel invoice with row lock and bump version
+        with transaction.atomic():
+            locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            locked.status = 'cancelled'
+            if reason:
+                locked.notes = f"{locked.notes}\n\nCancelled: {reason}".strip()
+            locked.version = (locked.version or 0) + 1
+            locked.save(update_fields=['status', 'notes', 'version'])
+            invoice.refresh_from_db()
         
         return Response({
             'success': True,
             'invoice_status': invoice.status,
+            'version': invoice.version,
             'message': 'Invoice cancelled successfully'
         })
     
@@ -683,6 +729,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         discount = request.data.get('discount')
         reason = request.data.get('reason', '')
+        requested_version = request.data.get('version', None)
+
+        # Optimistic locking
+        if requested_version is not None and invoice.version != requested_version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'conflict': True,
+                    'current_version': invoice.version,
+                    'requested_version': requested_version,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
         
         if discount is None:
             return Response(
@@ -728,6 +787,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'discount_applied': str(discount),
             'new_total': str(invoice.total),
             'new_balance_due': str(invoice.balance_due),
+            'version': invoice.version,
             'message': f'Discount of ${discount} applied'
         })
     

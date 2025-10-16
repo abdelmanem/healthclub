@@ -87,6 +87,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
         reason: reason,
         notes: notes || undefined,
         payment_id: typeof targetPaymentId === 'number' ? targetPaymentId : undefined,
+        version: invoice.version,
       });
 
       // Show success message

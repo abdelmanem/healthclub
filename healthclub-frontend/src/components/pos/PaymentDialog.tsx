@@ -148,6 +148,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         notes: notes || undefined,
         // Simple idempotency key to prevent duplicate submissions
         idempotency_key: `${invoice.id}-${selectedMethod.id}-${amount}-${Date.now()}`,
+        version: invoice.version,
       });
 
       // Show success message

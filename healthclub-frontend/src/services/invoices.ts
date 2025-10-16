@@ -93,6 +93,7 @@ export interface Invoice {
   created_by_name?: string;
   created_at: string;
   updated_at: string;
+  version?: number;
 }
 
 export interface InvoiceListItem {
@@ -116,6 +117,7 @@ export interface ProcessPaymentRequest {
   transaction_id?: string;
   notes?: string;
   idempotency_key?: string;
+  version?: number;
 }
 
 export interface ProcessPaymentResponse {
@@ -129,6 +131,7 @@ export interface ProcessPaymentResponse {
   invoice_status: string;
   payment_status: string;
   loyalty_points_earned?: number;
+  version?: number;
   message: string;
 }
 
@@ -138,6 +141,7 @@ export interface RefundRequest {
   payment_method?: string;
   notes?: string;
   payment_id?: number;
+  version?: number;
 }
 
 export interface RefundResponse {
@@ -395,8 +399,8 @@ export const invoicesService = {
    */
   async cancel(
     invoiceId: number,
-    data: { reason?: string }
-  ): Promise<{ success: boolean; message: string }> {
+    data: { reason?: string; version?: number }
+  ): Promise<{ success: boolean; message: string; version?: number; invoice_status?: string }> {
     const response = await api.post(`/invoices/${invoiceId}/cancel/`, data);
     return response.data;
   },
@@ -463,13 +467,14 @@ export const invoicesService = {
    */
   async applyDiscount(
     invoiceId: number,
-    data: { discount: string; reason?: string }
+    data: { discount: string; reason?: string; version?: number }
   ): Promise<{
     success: boolean;
     previous_total: string;
     discount_applied: string;
     new_total: string;
     new_balance_due: string;
+    version?: number;
     message: string;
   }> {
     const response = await api.post(`/invoices/${invoiceId}/apply_discount/`, data);

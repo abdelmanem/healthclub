@@ -87,7 +87,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
 
     setActionLoading(true);
     try {
-      await invoicesService.cancel(invoice.id, { reason });
+      await invoicesService.cancel(invoice.id, { reason, version: invoice.version });
       await loadInvoice();
       onInvoiceCancelled?.();
     } catch (error: any) {
@@ -125,7 +125,8 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
     try {
       await invoicesService.applyDiscount(invoice.id, { 
         discount, 
-        reason: reason || undefined 
+        reason: reason || undefined,
+        version: invoice.version,
       });
       await loadInvoice();
     } catch (error: any) {
