@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -25,12 +25,28 @@ interface CreateGuestDialogProps {
 export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onClose, onCreated }) => {
   const { membershipTiers } = useConfiguration();
 
-  // Basic country list; can be replaced with a full ISO list later
-  const countries = [
-    'United States', 'Canada', 'United Kingdom', 'Egypt', 'Saudi Arabia', 'United Arab Emirates',
-    'Germany', 'France', 'Spain', 'Italy', 'India', 'Pakistan', 'Bangladesh', 'Nigeria', 'South Africa',
-    'Australia', 'New Zealand', 'Brazil', 'Mexico', 'China', 'Japan', 'South Korea'
-  ];
+  // Build country list at runtime using Intl APIs (no mock data)
+  const countryOptions = useMemo(() => {
+    try {
+      const hasSupportedValues = (Intl as any)?.supportedValuesOf instanceof Function;
+      const regionCodes: string[] = hasSupportedValues ? (Intl as any).supportedValuesOf('region') : [];
+      const hasDisplayNames = (Intl as any)?.DisplayNames instanceof Function;
+      const display = hasDisplayNames ? new (Intl as any).DisplayNames(['en'], { type: 'region' }) : null;
+      const items = regionCodes
+        .map(code => ({ code, name: display ? display.of(code) : code }))
+        .filter((x: any) => !!x.name)
+        .sort((a: any, b: any) => (a.name as string).localeCompare(b.name as string));
+      return items as Array<{ code: string; name: string }>;
+    } catch {
+      return [] as Array<{ code: string; name: string }>;
+    }
+  }, []);
+
+  const defaultCountryName = useMemo(() => {
+    // Prefer 'US' if available, otherwise first option
+    const us = countryOptions.find(c => c.code === 'US');
+    return us?.name || countryOptions[0]?.name || '';
+  }, [countryOptions]);
 
   const [form, setForm] = useState<CreateGuestInput>({
     first_name: '',
@@ -40,7 +56,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
     email: '',
     phone: '',
     membership_tier: '',
-    country: 'United States',
+    country: defaultCountryName || 'United States',
     medical_notes: '',
     email_notifications: true,
     sms_notifications: true,
@@ -53,7 +69,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
         city: '',
         state: '',
         postal_code: '',
-        country: 'United States',
+        country: defaultCountryName || 'United States',
         is_primary: true,
       } as unknown as GuestAddress,
     ],
@@ -87,8 +103,8 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
       onClose();
       setForm({
         first_name: '', last_name: '', gender: undefined, date_of_birth: undefined, email: '', phone: '', membership_tier: '',
-        country: 'United States', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
-        addresses: [{ id: 0 as any, address_type: 'home', street_address: '', city: '', state: '', postal_code: '', country: 'United States', is_primary: true } as unknown as GuestAddress],
+        country: defaultCountryName || 'United States', medical_notes: '', email_notifications: true, sms_notifications: true, marketing_emails: false,
+        addresses: [{ id: 0 as any, address_type: 'home', street_address: '', city: '', state: '', postal_code: '', country: defaultCountryName || 'United States', is_primary: true } as unknown as GuestAddress],
         emergency_contacts: [{ id: 0 as any, name: '', relationship: '', phone: '', email: '', is_primary: true } as unknown as EmergencyContact],
       });
       showSnackbar('Guest created successfully', 'success');
@@ -210,8 +226,8 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
                   }));
                 }}
               >
-                {countries.map((c) => (
-                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                {countryOptions.map((c) => (
+                  <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
