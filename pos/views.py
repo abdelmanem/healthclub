@@ -574,6 +574,90 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'message': 'Invoice cancelled successfully'
         })
     
+    @action(detail=True, methods=['post'])
+    def apply_discount(self, request, pk=None):
+        """
+        Apply discount to invoice with optimistic locking
+        
+        Endpoint: POST /api/invoices/{id}/apply-discount/
+        
+        Request body:
+        {
+            "discount": "10.00",
+            "reason": "Loyalty member - 10% off",
+            "version": 1
+        }
+        
+        Response:
+        {
+            "success": true,
+            "version": 2,
+            "previous_total": "108.00",
+            "discount_applied": "10.00",
+            "new_total": "98.00",
+            "new_balance_due": "98.00",
+            "message": "Discount of $10.00 applied"
+        }
+        """
+        invoice = self.get_object()
+        
+        # Get request data
+        discount_amount = Decimal(request.data.get('discount', '0'))
+        reason = request.data.get('reason', '')
+        requested_version = request.data.get('version', None)
+        
+        # Validate discount amount
+        if discount_amount <= 0:
+            return Response(
+                {'error': 'Discount amount must be greater than zero'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if discount_amount > invoice.subtotal:
+            return Response(
+                {'error': f'Discount cannot exceed subtotal of ${invoice.subtotal}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Optimistic locking check
+        if requested_version is not None and invoice.version != requested_version:
+            return Response(
+                {
+                    'error': 'Invoice was modified by another user. Please refresh.',
+                    'conflict': True,
+                    'current_version': invoice.version,
+                    'requested_version': requested_version,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+        
+        # Apply discount with row lock and version bump
+        with transaction.atomic():
+            locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            previous_total = locked.total
+            
+            locked.discount = discount_amount
+            if reason:
+                locked.notes = f"{locked.notes}\n\nDiscount: {reason}".strip()
+            
+            # Recalculate totals
+            locked.total = locked.subtotal + locked.tax + locked.service_charge - locked.discount
+            locked.balance_due = locked.total - locked.amount_paid
+            locked.version = (locked.version or 0) + 1
+            locked.save(update_fields=['discount', 'notes', 'total', 'balance_due', 'version'])
+            
+            invoice.refresh_from_db()
+        
+        return Response({
+            'success': True,
+            'version': invoice.version,
+            'previous_total': str(previous_total),
+            'discount_applied': str(discount_amount),
+            'new_total': str(invoice.total),
+            'new_balance_due': str(invoice.balance_due),
+            'message': f'Discount of ${discount_amount} applied'
+        })
+    
     @action(detail=True, methods=['get'])
     def payment_history(self, request, pk=None):
         """

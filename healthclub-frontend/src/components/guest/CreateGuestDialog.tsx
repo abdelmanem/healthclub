@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -25,21 +25,44 @@ interface CreateGuestDialogProps {
 export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onClose, onCreated }) => {
   const { membershipTiers } = useConfiguration();
 
-  // Build country list at runtime using Intl APIs (no mock data)
-  const countryOptions = useMemo(() => {
-    try {
-      const hasSupportedValues = (Intl as any)?.supportedValuesOf instanceof Function;
-      const regionCodes: string[] = hasSupportedValues ? (Intl as any).supportedValuesOf('region') : [];
-      const hasDisplayNames = (Intl as any)?.DisplayNames instanceof Function;
-      const display = hasDisplayNames ? new (Intl as any).DisplayNames(['en'], { type: 'region' }) : null;
-      const items = regionCodes
-        .map(code => ({ code, name: display ? display.of(code) : code }))
-        .filter((x: any) => !!x.name)
-        .sort((a: any, b: any) => (a.name as string).localeCompare(b.name as string));
-      return items as Array<{ code: string; name: string }>;
-    } catch {
-      return [] as Array<{ code: string; name: string }>;
-    }
+  // Build country list using Intl first, then REST Countries API, with a final minimal fallback
+  const [countryOptions, setCountryOptions] = useState<Array<{ code: string; name: string }>>([]);
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const hasSupportedValues = (Intl as any)?.supportedValuesOf instanceof Function;
+        const hasDisplayNames = (Intl as any)?.DisplayNames instanceof Function;
+        if (hasSupportedValues && hasDisplayNames) {
+          const regionCodes: string[] = (Intl as any).supportedValuesOf('region');
+          if (Array.isArray(regionCodes) && regionCodes.length > 0) {
+            const display = new (Intl as any).DisplayNames(['en'], { type: 'region' });
+            const items = regionCodes
+              .filter((c: string) => /^[A-Z]{2,3}$/.test(c))
+              .map(code => ({ code, name: display.of(code) || code }))
+              .filter((x: any) => !!x.name)
+              .sort((a: any, b: any) => (a.name as string).localeCompare(b.name as string));
+            setCountryOptions(items as Array<{ code: string; name: string }>);
+            return;
+          }
+        }
+      } catch {}
+      try {
+        const resp = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2');
+        const data = await resp.json();
+        const items = (Array.isArray(data) ? data : [])
+          .map((r: any) => ({ code: r.cca2, name: r?.name?.common }))
+          .filter((r: any) => r.code && r.name)
+          .sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setCountryOptions(items);
+      } catch {
+        setCountryOptions([
+          { code: 'US', name: 'United States' },
+          { code: 'CA', name: 'Canada' },
+          { code: 'GB', name: 'United Kingdom' },
+        ]);
+      }
+    };
+    loadCountries();
   }, []);
 
   const [form, setForm] = useState<CreateGuestInput>({
@@ -93,7 +116,7 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
         addresses: [{ ...prev.addresses![0], country: chosen } as GuestAddress],
       }));
     }
-  }, [countryOptions]);
+  }, [countryOptions, form.country]);
 
   const handleChange = (field: keyof CreateGuestInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));

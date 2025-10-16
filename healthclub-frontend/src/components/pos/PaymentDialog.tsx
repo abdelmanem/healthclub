@@ -29,6 +29,8 @@ import {
 } from '@mui/material';
 import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '../../services/invoices';
 import { useSnackbar } from '../common/useSnackbar';
+import { handleApiError } from '../../utils/errorHandler';
+import { validateAmount, validateRequired } from '../../utils/validation';
 
 interface PaymentDialogProps {
   open: boolean;
@@ -118,30 +120,33 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     }
   }, [amount, invoice.balance_due]);
 
-  // Handle submit
+  // Handle submit with proper validation and error handling
   const handleSubmit = async () => {
     setError('');
 
-    // Validation
+    // ✅ Frontend validation
     if (!selectedMethod) {
       setError('Please select a payment method');
       return;
     }
 
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue <= 0) {
-      setError('Please enter a valid amount');
+    const amountValidation = validateAmount(
+      amount, 
+      0.01, 
+      parseFloat(invoice.balance_due)
+    );
+    
+    if (!amountValidation.valid) {
+      setError(amountValidation.error!);
       return;
     }
 
-    if (amountValue > parseFloat(invoice.balance_due)) {
-      setError('Amount cannot exceed balance due');
-      return;
-    }
-
-    if (selectedMethod.requires_reference && !referenceNumber.trim()) {
-      setError(`${selectedMethod.name} requires a reference number`);
-      return;
+    if (selectedMethod.requires_reference) {
+      const refValidation = validateRequired(referenceNumber, 'Reference number');
+      if (!refValidation.valid) {
+        setError(refValidation.error!);
+        return;
+      }
     }
 
     setProcessing(true);
@@ -154,7 +159,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         reference: referenceNumber || undefined,
         transaction_id: transactionId || undefined,
         notes: notes || undefined,
-        // Simple idempotency key to prevent duplicate submissions
         idempotency_key: `${invoice.id}-${selectedMethod.id}-${amount}-${Date.now()}`,
         version: invoice.version,
       });
@@ -164,8 +168,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       onPaymentProcessed();
       onClose();
     } catch (error: any) {
-      setError(error?.response?.data?.error || 'Failed to process payment');
-      showSnackbar(error?.response?.data?.error || 'Failed to process payment', 'error');
+      if (error?.response?.status === 409) {
+        setError('Invoice was modified. Please refresh and try again.');
+        showSnackbar('Invoice was modified by another user. Refreshing...', 'warning');
+      } else {
+        handleApiError(error, showSnackbar);
+        setError(error?.response?.data?.error || 'Failed to process payment');
+      }
     } finally {
       setProcessing(false);
     }

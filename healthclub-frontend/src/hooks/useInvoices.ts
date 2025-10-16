@@ -240,10 +240,12 @@ export const usePaymentProcessing = () => {
     paymentData: {
       amount: string;
       payment_method: number;
-      payment_type?: 'full' | 'partial' | 'deposit';
+      payment_type: 'full' | 'partial' | 'deposit';
       reference?: string;
       transaction_id?: string;
       notes?: string;
+      idempotency_key: string;
+      version: number;
     }
   ) => {
     setProcessing(true);
@@ -266,6 +268,8 @@ export const usePaymentProcessing = () => {
       reason: string;
       payment_method?: string;
       notes?: string;
+      payment_id?: number;
+      version: number;
     }
   ) => {
     setProcessing(true);

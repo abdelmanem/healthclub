@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -52,6 +52,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState('');
 
+  // Reset on open
   useEffect(() => {
     if (open) {
       setInputValue('');
@@ -60,10 +61,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   }, [open]);
 
   const handleConfirm = () => {
+    // Validation
     if (inputRequired && !inputValue.trim()) {
       setError(`${inputLabel || 'Input'} is required`);
       return;
     }
+
     if (inputType === 'number' && inputValue) {
       const num = parseFloat(inputValue);
       if (isNaN(num) || num <= 0) {
@@ -75,12 +78,24 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         return;
       }
     }
+
     onConfirm(inputValue);
+    handleClose();
+  };
+
+  const handleClose = () => {
+    setInputValue('');
+    setError('');
     onClose();
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth="sm" 
+      fullWidth
+    >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Typography variant="body1" sx={{ mb: inputLabel ? 2 : 0 }}>
@@ -120,13 +135,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{cancelText}</Button>
-        <Button onClick={handleConfirm} variant="contained" color={confirmColor} disabled={inputRequired && !inputValue.trim()}>
+        <Button onClick={handleClose}>{cancelText}</Button>
+        <Button 
+          onClick={handleConfirm} 
+          variant="contained" 
+          color={confirmColor}
+          disabled={inputRequired && !inputValue.trim()}
+        >
           {confirmText}
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
-
-

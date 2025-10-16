@@ -9,13 +9,6 @@ import {
   Button,
   Stack,
   Chip,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Typography,
   Box,
 } from '@mui/material';
 import {
@@ -23,7 +16,6 @@ import {
   PlayArrow,
   CheckCircle,
   Logout,
-  Receipt,
   Cancel,
 } from '@mui/icons-material';
 import { CheckOutDialog } from './CheckOutDialog';
@@ -128,6 +120,17 @@ export const ReservationActions: React.FC<ReservationActionsProps> = ({
             disabled={processing}
           >
             Start Service
+          </Button>,
+          <Button
+            key="cancel"
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<Cancel />}
+            onClick={() => handleStatusChange('cancel')}
+            disabled={processing}
+          >
+            Cancel
           </Button>
         );
         break;
@@ -160,6 +163,14 @@ export const ReservationActions: React.FC<ReservationActionsProps> = ({
             Check Out
           </Button>
         );
+        break;
+        
+      case 'checked_out':
+        // No actions available for checked out reservations
+        break;
+        
+      case 'cancelled':
+        // No actions available for cancelled reservations
         break;
     }
     

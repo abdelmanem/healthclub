@@ -30,7 +30,7 @@ import {
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { CancellationDialog } from './CancellationDialog';
 import { api } from '../../services/api';
-import { CalendarToday, ChevronLeft, ChevronRight, Today, Cancel } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Today, Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { guestsService } from '../../services/guests';
 import { reservationsService } from '../../services/reservations';
@@ -90,7 +90,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [drawer, setDrawer] = React.useState<{ open: boolean; reservation?: Reservation | null }>({ open: false, reservation: null });
-  const [workingHours, setWorkingHours] = React.useState<{ start: string; end: string }>({ start: '00:00:00', end: '23:59:59' });
   const [calendarAnchor, setCalendarAnchor] = React.useState<null | HTMLElement>(null);
   const [monthlyReservations, setMonthlyReservations] = React.useState<Record<string, number>>({});
   const [localDate, setLocalDate] = React.useState(new Date());
@@ -126,10 +125,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [createdInvoiceId, setCreatedInvoiceId] = React.useState<number | null>(null);
 
   // Mini calendar helper functions
-  const handleCalendarClick = (event: React.MouseEvent<HTMLElement>) => {
-    setCalendarAnchor(event.currentTarget);
-    loadMonthlyReservations(selectedDate);
-  };
 
   const handleCalendarClose = () => {
     setCalendarAnchor(null);
@@ -872,13 +867,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const servicesLines = servicesText ? String(servicesText).split(', ') : [];
             const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
             const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
-            const servicesHtml = servicesLines.length > 0 ? `<div style=\"font-size:11px;opacity:.95;\">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
+            const servicesHtml = servicesLines.length > 0 ? `<div style="font-size:11px;opacity:.95;">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
             const html = `
               <div style="padding:3px 4px;line-height:1.15;">
                 <div style="font-size:11px;opacity:.95;">${start}</div>
                 <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
                 ${servicesHtml}
-                ${typeof totalDurationMin === 'number' ? `<div style=\"font-size:11px;opacity:.95;\"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
+                ${typeof totalDurationMin === 'number' ? `<div style="font-size:11px;opacity:.95;"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
                 <div style="font-size:11px;opacity:.95;">${end}</div>
               </div>`;
             return { html };
@@ -1062,7 +1057,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                 {drawer.reservation.status === 'in_service' && (
                   <Button variant="contained" color="success" onClick={() => act('complete')} disabled={isActing}>Complete</Button>
                 )}
-                {drawer.reservation.status !== 'completed' && (
+                {(drawer.reservation.status === 'booked' || drawer.reservation.status === 'checked_in') && (
                   <Button variant="outlined" color="error" onClick={() => act('cancel')} disabled={isActing}>Cancel Reservation</Button>
                 )}
               </Stack>
@@ -1181,7 +1176,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           if (status === 'completed') return (<MenuItem onClick={() => act('check_out')} disabled={isActing}>Check Out Guest</MenuItem>);
           return null;
         })()}
-        {menuAnchor?.reservation && menuAnchor.reservation.status !== 'completed' && menuAnchor.reservation.status !== 'cancelled' && [
+        {menuAnchor?.reservation && (menuAnchor.reservation.status === 'booked' || menuAnchor.reservation.status === 'checked_in') && [
           <Divider key="menu-divider-cancel" />,
           <MenuItem key="menu-item-cancel" onClick={() => act('cancel')} sx={{ color: 'error.main' }} disabled={isActing}>Cancel Reservation</MenuItem>
         ]}

@@ -93,7 +93,60 @@ export interface Invoice {
   created_by_name?: string;
   created_at: string;
   updated_at: string;
-  version?: number;
+  version: number; // ✅ Required for optimistic locking
+}
+
+// ✅ New interfaces for optimistic locking
+export interface CancelInvoiceRequest {
+  reason: string;
+  version: number;
+}
+
+export interface ApplyDiscountRequest {
+  discount: string;
+  reason?: string;
+  version: number;
+}
+
+export interface ProcessPaymentRequest {
+  amount: string;
+  payment_method: number;
+  payment_type: 'full' | 'partial' | 'deposit';
+  reference?: string;
+  transaction_id?: string;
+  notes?: string;
+  idempotency_key: string;
+  version: number;
+}
+
+export interface RefundRequest {
+  amount: string;
+  reason: string;
+  payment_method?: string;
+  notes?: string;
+  payment_id?: number;
+  version: number;
+}
+
+// ✅ Response interfaces for optimistic locking
+export interface ProcessPaymentResponse {
+  success: boolean;
+  payment_id: number;
+  amount: string;
+  new_balance_due: string;
+  invoice_status: string;
+  version: number;
+  message: string;
+}
+
+export interface RefundResponse {
+  success: boolean;
+  refund_id: number;
+  amount: string;
+  new_balance_due: string;
+  invoice_status: string;
+  version: number;
+  message: string;
 }
 
 export interface InvoiceListItem {
@@ -109,52 +162,6 @@ export interface InvoiceListItem {
   status: Invoice['status'];
 }
 
-export interface ProcessPaymentRequest {
-  amount: string;
-  payment_method: number;
-  payment_type?: 'full' | 'partial' | 'deposit';
-  reference?: string;
-  transaction_id?: string;
-  notes?: string;
-  idempotency_key?: string;
-  version?: number;
-}
-
-export interface ProcessPaymentResponse {
-  success: boolean;
-  payment_id: number;
-  amount_paid: string;
-  invoice_total: string;
-  amount_previously_paid: string;
-  total_paid: string;
-  balance_due: string;
-  invoice_status: string;
-  payment_status: string;
-  loyalty_points_earned?: number;
-  version?: number;
-  message: string;
-}
-
-export interface RefundRequest {
-  amount: string;
-  reason: string;
-  payment_method?: string;
-  notes?: string;
-  payment_id?: number;
-  version?: number;
-}
-
-export interface RefundResponse {
-  success: boolean;
-  refund_id: number;
-  refund_amount: string;
-  refund_reason: string;
-  remaining_paid: string;
-  balance_due: string;
-  invoice_status: string;
-  loyalty_points_deducted?: number;
-  message: string;
-}
 
 export interface InvoiceSummary {
   total_invoices: number;
@@ -386,21 +393,27 @@ export const invoicesService = {
   },
 
   /**
-   * Cancel invoice
+   * Cancel invoice with optimistic locking
    * 
    * @param invoiceId - Invoice ID
-   * @param data - Cancellation reason
-   * @returns Result
+   * @param data - Cancellation data with version
+   * @returns Result with new version
    * 
    * @example
    * await invoicesService.cancel(42, {
-   *   reason: 'Guest no-show'
+   *   reason: 'Guest no-show',
+   *   version: 1
    * });
    */
   async cancel(
     invoiceId: number,
-    data: { reason?: string; version?: number }
-  ): Promise<{ success: boolean; message: string; version?: number; invoice_status?: string }> {
+    data: CancelInvoiceRequest
+  ): Promise<{ 
+    success: boolean; 
+    message: string; 
+    version: number; 
+    invoice_status: string;
+  }> {
     const response = await api.post(`/invoices/${invoiceId}/cancel/`, data);
     return response.data;
   },
@@ -453,21 +466,22 @@ export const invoicesService = {
   },
 
   /**
-   * Apply discount to invoice
+   * Apply discount to invoice with optimistic locking
    * 
    * @param invoiceId - Invoice ID
-   * @param data - Discount data
-   * @returns Result
+   * @param data - Discount data with version
+   * @returns Result with new version and totals
    * 
    * @example
    * const result = await invoicesService.applyDiscount(42, {
    *   discount: '10.00',
-   *   reason: 'Loyalty member - 10% off'
+   *   reason: 'Loyalty member - 10% off',
+   *   version: 1
    * });
    */
   async applyDiscount(
     invoiceId: number,
-    data: { discount: string; reason?: string; version?: number }
+    data: ApplyDiscountRequest
   ): Promise<{
     success: boolean;
     previous_total: string;

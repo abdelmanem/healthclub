@@ -14,12 +14,15 @@ export const useSnackbar = () => {
     severity: 'info',
   });
 
-  const showSnackbar = useCallback((message: string, severity: AlertColor = 'info') => {
+  const showSnackbar = useCallback((
+    message: string, 
+    severity: AlertColor = 'info'
+  ) => {
     setSnackbar({ open: true, message, severity });
   }, []);
 
   const handleClose = useCallback(() => {
-    setSnackbar((prev) => ({ ...prev, open: false }));
+    setSnackbar(prev => ({ ...prev, open: false }));
   }, []);
 
   const SnackbarComponent = (
@@ -29,7 +32,12 @@ export const useSnackbar = () => {
       onClose={handleClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
     >
-      <Alert onClose={handleClose} severity={snackbar.severity} sx={{ width: '100%' }} variant="filled">
+      <Alert 
+        onClose={handleClose} 
+        severity={snackbar.severity} 
+        sx={{ width: '100%' }}
+        variant="filled"
+      >
         {snackbar.message}
       </Alert>
     </Snackbar>
@@ -37,5 +45,3 @@ export const useSnackbar = () => {
 
   return { showSnackbar, SnackbarComponent };
 };
-
-

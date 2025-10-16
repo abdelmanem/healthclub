@@ -25,31 +25,48 @@ export const useConfirmDialog = () => {
   const [config, setConfig] = useState<ConfirmDialogConfig | null>(null);
   const [resolver, setResolver] = useState<((result: ConfirmDialogResult) => void) | null>(null);
 
-  const showConfirmDialog = useCallback((cfg: ConfirmDialogConfig): Promise<ConfirmDialogResult> => {
+  const showConfirmDialog = useCallback((config: ConfirmDialogConfig): Promise<ConfirmDialogResult> => {
     return new Promise((resolve) => {
-      setConfig(cfg);
+      setConfig(config);
       setResolver(() => resolve);
     });
   }, []);
 
   const handleClose = useCallback(() => {
-    if (resolver) resolver({ confirmed: false });
+    if (resolver) {
+      resolver({ confirmed: false });
+    }
     setConfig(null);
     setResolver(null);
   }, [resolver]);
 
   const handleConfirm = useCallback((value?: string) => {
-    if (resolver) resolver({ confirmed: true, value });
+    if (resolver) {
+      resolver({ confirmed: true, value });
+    }
     setConfig(null);
     setResolver(null);
   }, [resolver]);
 
   return {
     showConfirmDialog,
-    dialogConfig: config,
-    onDialogClose: handleClose,
-    onDialogConfirm: handleConfirm,
+    dialogProps: {
+      open: !!config,
+      onClose: handleClose,
+      onConfirm: handleConfirm,
+      title: config?.title || '',
+      message: config?.message || '',
+      confirmText: config?.confirmText,
+      cancelText: config?.cancelText,
+      confirmColor: config?.confirmColor,
+      inputLabel: config?.inputLabel,
+      inputRequired: config?.inputRequired,
+      inputType: config?.inputType,
+      inputPlaceholder: config?.inputPlaceholder,
+      inputHelperText: config?.inputHelperText,
+      inputMultiline: config?.inputMultiline,
+      inputRows: config?.inputRows,
+      maxValue: config?.maxValue,
+    },
   };
 };
-
-

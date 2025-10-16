@@ -42,6 +42,8 @@ import dayjs from 'dayjs';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useConfirmDialog } from '../common/useConfirmDialog';
 import { useSnackbar } from '../common/useSnackbar';
+import { handleApiError } from '../../utils/errorHandler';
+import { validateAmount } from '../../utils/validation';
 
 interface InvoiceDetailsProps {
   invoiceId: number;
@@ -64,7 +66,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
 
-  const { showConfirmDialog, dialogConfig, onDialogClose, onDialogConfirm } = useConfirmDialog();
+  const { showConfirmDialog, dialogProps } = useConfirmDialog();
   const { showSnackbar, SnackbarComponent } = useSnackbar();
 
   // Load invoice details (with cleanup to avoid setting state after unmount)
@@ -99,7 +101,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
     };
   }, [invoiceId]);
 
-  // Handle cancel invoice
+  // Handle cancel invoice with optimistic locking
   const handleCancel = async () => {
     if (!invoice) return;
 
@@ -119,12 +121,34 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
 
     setActionLoading(true);
     try {
-      await invoicesService.cancel(invoice.id, { reason: result.value, version: invoice.version });
+      // ✅ Include version for optimistic locking
+      const response = await invoicesService.cancel(invoice.id, { 
+        reason: result.value!, 
+        version: invoice.version 
+      });
+      
+      // ✅ Update local state with new version
+      setInvoice(prev => prev ? { 
+        ...prev, 
+        version: response.version,
+        status: response.invoice_status as Invoice['status']
+      } : null);
+      
+      showSnackbar('Invoice cancelled successfully', 'success');
       await loadInvoice();
       onInvoiceCancelled?.();
-      showSnackbar('Invoice cancelled successfully', 'success');
+      
     } catch (error: any) {
-      showSnackbar(error?.response?.data?.error || 'Failed to cancel invoice', 'error');
+      // ✅ Handle version conflict (409)
+      if (error?.response?.status === 409) {
+        showSnackbar(
+          'Invoice was modified by another user. Refreshing...',
+          'warning'
+        );
+        await loadInvoice(); // Reload to get latest version
+      } else {
+        handleApiError(error, showSnackbar, loadInvoice);
+      }
     } finally {
       setActionLoading(false);
     }
@@ -137,15 +161,15 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
     setActionLoading(true);
     try {
       await invoicesService.sendToGuest(invoice.id, {});
-      alert('Invoice sent successfully');
+      showSnackbar('Invoice sent successfully', 'success');
     } catch (error: any) {
-      alert(error?.response?.data?.error || 'Failed to send invoice');
+      handleApiError(error, showSnackbar);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Handle apply discount
+  // Handle apply discount with optimistic locking
   const handleApplyDiscount = async () => {
     if (!invoice) return;
 
@@ -162,6 +186,18 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
     });
     if (!discountResult.confirmed) return;
 
+    // ✅ Frontend validation
+    const amountValidation = validateAmount(
+      discountResult.value!, 
+      0.01, 
+      parseFloat(invoice.subtotal)
+    );
+    
+    if (!amountValidation.valid) {
+      showSnackbar(amountValidation.error!, 'error');
+      return;
+    }
+
     const reasonResult = await showConfirmDialog({
       title: 'Discount Reason',
       message: 'Please provide a reason for this discount (optional)',
@@ -172,17 +208,51 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
       inputPlaceholder: 'e.g., Loyalty member - 10% off',
     });
 
+    // ✅ Optimistic update - update UI immediately
+    const previousInvoice = { ...invoice };
+    const discountAmount = parseFloat(discountResult.value!);
+    const newTotal = parseFloat(invoice.total) - discountAmount;
+    const newBalanceDue = parseFloat(invoice.balance_due) - discountAmount;
+    
+    setInvoice(prev => prev ? {
+      ...prev,
+      discount: discountAmount.toFixed(2),
+      total: newTotal.toFixed(2),
+      balance_due: newBalanceDue.toFixed(2),
+    } : null);
+
     setActionLoading(true);
     try {
-      await invoicesService.applyDiscount(invoice.id, {
-        discount: discountResult.value || '0',
+      const response = await invoicesService.applyDiscount(invoice.id, {
+        discount: discountResult.value!,
         reason: reasonResult.value || undefined,
         version: invoice.version,
       });
-      await loadInvoice();
+      
+      // ✅ Update with server response
+      setInvoice(prev => prev ? {
+        ...prev,
+        discount: response.discount_applied,
+        total: response.new_total,
+        balance_due: response.new_balance_due,
+        version: response.version || prev.version,
+      } : null);
+      
       showSnackbar('Discount applied successfully', 'success');
+      
     } catch (error: any) {
-      showSnackbar(error?.response?.data?.error || 'Failed to apply discount', 'error');
+      // ✅ Rollback on error
+      setInvoice(previousInvoice);
+      
+      if (error?.response?.status === 409) {
+        showSnackbar(
+          'Invoice was modified by another user. Refreshing...',
+          'warning'
+        );
+        await loadInvoice();
+      } else {
+        handleApiError(error, showSnackbar, loadInvoice);
+      }
     } finally {
       setActionLoading(false);
     }
@@ -224,25 +294,6 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
 
   return (
     <Box>
-      <ConfirmDialog
-        open={!!dialogConfig}
-        onClose={onDialogClose}
-        onConfirm={onDialogConfirm}
-        title={dialogConfig?.title || ''}
-        message={dialogConfig?.message || ''}
-        confirmText={dialogConfig?.confirmText}
-        cancelText={dialogConfig?.cancelText}
-        confirmColor={dialogConfig?.confirmColor}
-        inputLabel={dialogConfig?.inputLabel}
-        inputRequired={dialogConfig?.inputRequired}
-        inputType={dialogConfig?.inputType}
-        inputPlaceholder={dialogConfig?.inputPlaceholder}
-        inputHelperText={dialogConfig?.inputHelperText}
-        inputMultiline={dialogConfig?.inputMultiline}
-        inputRows={dialogConfig?.inputRows}
-        maxValue={dialogConfig?.maxValue}
-      />
-      {SnackbarComponent}
       {/* Header */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -662,6 +713,12 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
           }}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog {...dialogProps} />
+
+      {/* Snackbar */}
+      {SnackbarComponent}
     </Box>
   );
 };
