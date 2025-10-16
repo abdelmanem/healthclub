@@ -29,6 +29,13 @@ export interface CreateGuestInput {
   email: string;
   phone: string;
   membership_tier?: string | null;
+  country?: string;
+  medical_notes?: string;
+  email_notifications?: boolean;
+  sms_notifications?: boolean;
+  marketing_emails?: boolean;
+  addresses?: GuestAddress[];
+  emergency_contacts?: EmergencyContact[];
 }
 
 export interface UpdateGuestInput extends Partial<CreateGuestInput> {
@@ -116,12 +123,7 @@ export const guestsService = {
   },
 
   async create(payload: CreateGuestInput): Promise<Guest> {
-    // Backend requires membership_id (unique) and specific membership_tier codes
-    const normalized: any = { ...payload };
-    if (!('membership_id' in normalized) || !normalized.membership_id) {
-      normalized.membership_id = `M-${Date.now()}`;
-    }
-    const response = await api.post('/guests/', normalized);
+    const response = await api.post('/guests/', payload);
     return response.data;
   },
 
