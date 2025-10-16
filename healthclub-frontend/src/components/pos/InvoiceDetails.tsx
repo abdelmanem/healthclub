@@ -39,6 +39,9 @@ import { invoicesService, Invoice } from '../../services/invoices';
 import { PaymentDialog } from './PaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import dayjs from 'dayjs';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { useConfirmDialog } from '../common/useConfirmDialog';
+import { useSnackbar } from '../common/useSnackbar';
 
 interface InvoiceDetailsProps {
   invoiceId: number;
@@ -61,7 +64,10 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
 
-  // Load invoice details
+  const { showConfirmDialog, dialogConfig, onDialogClose, onDialogConfirm } = useConfirmDialog();
+  const { showSnackbar, SnackbarComponent } = useSnackbar();
+
+  // Load invoice details (with cleanup to avoid setting state after unmount)
   const loadInvoice = async () => {
     setLoading(true);
     try {
@@ -75,23 +81,50 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   };
 
   useEffect(() => {
-    loadInvoice();
+    let mounted = true;
+    const doLoad = async () => {
+      setLoading(true);
+      try {
+        const data = await invoicesService.retrieve(invoiceId);
+        if (mounted) setInvoice(data);
+      } catch (error) {
+        if (mounted) console.error('Failed to load invoice:', error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    doLoad();
+    return () => {
+      mounted = false;
+    };
   }, [invoiceId]);
 
   // Handle cancel invoice
   const handleCancel = async () => {
     if (!invoice) return;
-    
-    const reason = prompt('Enter cancellation reason:');
-    if (!reason) return;
+
+    const result = await showConfirmDialog({
+      title: 'Cancel Invoice',
+      message: `Cancel invoice ${invoice.invoice_number}? This cannot be undone.`,
+      confirmText: 'Cancel Invoice',
+      confirmColor: 'error',
+      inputLabel: 'Cancellation Reason',
+      inputRequired: true,
+      inputMultiline: true,
+      inputRows: 3,
+      inputPlaceholder: 'e.g., Guest cancelled appointment',
+    });
+
+    if (!result.confirmed) return;
 
     setActionLoading(true);
     try {
-      await invoicesService.cancel(invoice.id, { reason, version: invoice.version });
+      await invoicesService.cancel(invoice.id, { reason: result.value, version: invoice.version });
       await loadInvoice();
       onInvoiceCancelled?.();
+      showSnackbar('Invoice cancelled successfully', 'success');
     } catch (error: any) {
-      alert(error?.response?.data?.error || 'Failed to cancel invoice');
+      showSnackbar(error?.response?.data?.error || 'Failed to cancel invoice', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -116,21 +149,40 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const handleApplyDiscount = async () => {
     if (!invoice) return;
 
-    const discount = prompt('Enter discount amount:');
-    if (!discount) return;
+    const discountResult = await showConfirmDialog({
+      title: 'Apply Discount',
+      message: `Current total: $${parseFloat(invoice.total).toFixed(2)}`,
+      confirmText: 'Apply Discount',
+      inputLabel: 'Discount Amount',
+      inputRequired: true,
+      inputType: 'number',
+      inputPlaceholder: '10.00',
+      inputHelperText: `Maximum: $${parseFloat(invoice.subtotal).toFixed(2)}`,
+      maxValue: parseFloat(invoice.subtotal),
+    });
+    if (!discountResult.confirmed) return;
 
-    const reason = prompt('Enter discount reason (optional):');
+    const reasonResult = await showConfirmDialog({
+      title: 'Discount Reason',
+      message: 'Please provide a reason for this discount (optional)',
+      confirmText: 'Continue',
+      inputLabel: 'Reason',
+      inputMultiline: true,
+      inputRows: 3,
+      inputPlaceholder: 'e.g., Loyalty member - 10% off',
+    });
 
     setActionLoading(true);
     try {
-      await invoicesService.applyDiscount(invoice.id, { 
-        discount, 
-        reason: reason || undefined,
+      await invoicesService.applyDiscount(invoice.id, {
+        discount: discountResult.value || '0',
+        reason: reasonResult.value || undefined,
         version: invoice.version,
       });
       await loadInvoice();
+      showSnackbar('Discount applied successfully', 'success');
     } catch (error: any) {
-      alert(error?.response?.data?.error || 'Failed to apply discount');
+      showSnackbar(error?.response?.data?.error || 'Failed to apply discount', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -172,6 +224,25 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
 
   return (
     <Box>
+      <ConfirmDialog
+        open={!!dialogConfig}
+        onClose={onDialogClose}
+        onConfirm={onDialogConfirm}
+        title={dialogConfig?.title || ''}
+        message={dialogConfig?.message || ''}
+        confirmText={dialogConfig?.confirmText}
+        cancelText={dialogConfig?.cancelText}
+        confirmColor={dialogConfig?.confirmColor}
+        inputLabel={dialogConfig?.inputLabel}
+        inputRequired={dialogConfig?.inputRequired}
+        inputType={dialogConfig?.inputType}
+        inputPlaceholder={dialogConfig?.inputPlaceholder}
+        inputHelperText={dialogConfig?.inputHelperText}
+        inputMultiline={dialogConfig?.inputMultiline}
+        inputRows={dialogConfig?.inputRows}
+        maxValue={dialogConfig?.maxValue}
+      />
+      {SnackbarComponent}
       {/* Header */}
       <Card sx={{ mb: 3 }}>
         <CardContent>

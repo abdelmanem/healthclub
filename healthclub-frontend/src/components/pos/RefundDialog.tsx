@@ -26,6 +26,7 @@ import {
   Undo as UndoIcon,
 } from '@mui/icons-material';
 import { invoicesService, Invoice } from '../../services/invoices';
+import { useSnackbar } from '../common/useSnackbar';
 
 interface RefundDialogProps {
   open: boolean;
@@ -46,6 +47,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
   const [targetPaymentId, setTargetPaymentId] = useState<number | ''>('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const { showSnackbar, SnackbarComponent } = useSnackbar();
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -90,13 +92,13 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
         version: invoice.version,
       });
 
-      // Show success message
-      alert(`Refund processed successfully! ${result.message}`);
+      showSnackbar(result.message || 'Refund processed successfully', 'success');
       
       onRefundProcessed();
       onClose();
     } catch (error: any) {
       setError(error?.response?.data?.error || 'Failed to process refund');
+      showSnackbar(error?.response?.data?.error || 'Failed to process refund', 'error');
     } finally {
       setProcessing(false);
     }
@@ -321,6 +323,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
           {processing ? 'Processing...' : `Process Refund ${formatCurrency(amount || '0')}`}
         </Button>
       </DialogActions>
+      {SnackbarComponent}
     </Dialog>
   );
 };

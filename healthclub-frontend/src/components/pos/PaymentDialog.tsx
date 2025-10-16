@@ -27,12 +27,8 @@ import {
   InputAdornment,
   Chip,
 } from '@mui/material';
-import {
-  invoicesService,
-  paymentMethodsService,
-  Invoice,
-  PaymentMethod,
-} from '../../services/invoices';
+import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '../../services/invoices';
+import { useSnackbar } from '../common/useSnackbar';
 
 interface PaymentDialogProps {
   open: boolean;
@@ -56,34 +52,46 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const { showSnackbar, SnackbarComponent } = useSnackbar();
 
-  // Load payment methods
+  // Load payment methods (with cleanup to avoid memory leaks)
   useEffect(() => {
-    const loadPaymentMethods = async (retryCount = 0) => {
+    let mounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let retryCount = 0;
+
+    const loadPaymentMethods = async () => {
       try {
         const methods = await paymentMethodsService.list();
+        if (!mounted) return;
         setPaymentMethods(methods);
         if (methods.length > 0) {
           setSelectedMethod(methods[0]);
         }
         setError(''); // Clear any previous errors
       } catch (error: any) {
+        if (!mounted) return;
         console.error('Failed to load payment methods:', error);
-        
         // If it's a 401 error and we haven't retried yet, wait a bit and retry
         if (error?.response?.status === 401 && retryCount < 2) {
-          console.log('Payment methods loading failed due to auth, retrying...');
-          setTimeout(() => {
-            loadPaymentMethods(retryCount + 1);
-          }, 1000); // Wait 1 second for token refresh
+          retryCount += 1;
+          timeoutId = setTimeout(() => {
+            if (mounted) loadPaymentMethods();
+          }, 1000);
         } else {
           setError('Failed to load payment methods');
         }
       }
     };
+
     if (open) {
       loadPaymentMethods();
     }
+
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [open]);
 
   // Reset form when dialog opens
@@ -151,13 +159,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         version: invoice.version,
       });
 
-      // Show success message
-      alert(`Payment processed successfully! ${result.message}`);
+      showSnackbar(result.message || 'Payment processed successfully', 'success');
       
       onPaymentProcessed();
       onClose();
     } catch (error: any) {
       setError(error?.response?.data?.error || 'Failed to process payment');
+      showSnackbar(error?.response?.data?.error || 'Failed to process payment', 'error');
     } finally {
       setProcessing(false);
     }
@@ -377,6 +385,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           {processing ? 'Processing...' : `Process Payment ${formatCurrency(amount || '0')}`}
         </Button>
       </DialogActions>
+      {SnackbarComponent}
     </Dialog>
   );
 };
