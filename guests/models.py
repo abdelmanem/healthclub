@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ObjectDoesNotExist
 from simple_history.models import HistoricalRecords
+import uuid
 
 
 class Guest(models.Model):
@@ -97,6 +98,35 @@ class Guest(models.Model):
             'priority_booking': bool(getattr(tier, 'priority_booking', False)),
             'free_services': int(getattr(tier, 'free_services_count', 0)),
         }
+
+    @staticmethod
+    def generate_membership_id() -> str:
+        """Generate a unique, human-friendly membership ID.
+        Format: MEM-YYYYMMDD-XXXXXX where X is base36.
+        Ensures uniqueness with a short retry loop.
+        """
+        from datetime import datetime
+        date_part = datetime.utcnow().strftime('%Y%m%d')
+        # 6 chars base36 from UUID
+        random_part = uuid.uuid4().int % (36 ** 6)
+        base36 = ''
+        alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        n = random_part
+        for _ in range(6):
+            base36 = alphabet[n % 36] + base36
+            n //= 36
+        return f"MEM-{date_part}-{base36}"
+
+    def save(self, *args, **kwargs):
+        """Auto-generate membership_id on create if missing."""
+        if not self.membership_id:
+            # Retry a few times in the rare case of collision
+            for _ in range(5):
+                candidate = Guest.generate_membership_id()
+                if not Guest.objects.filter(membership_id=candidate).exists():
+                    self.membership_id = candidate
+                    break
+        super().save(*args, **kwargs)
 
 
 class GuestAddress(models.Model):
