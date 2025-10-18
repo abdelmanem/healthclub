@@ -14,6 +14,7 @@ export interface Guest {
   date_of_birth?: string; // YYYY-MM-DD
   email: string;
   phone: string;
+  country?: string;
   membership_tier?: string | MembershipTierObject;
   addresses?: GuestAddress[];
   emergency_contacts?: EmergencyContact[];

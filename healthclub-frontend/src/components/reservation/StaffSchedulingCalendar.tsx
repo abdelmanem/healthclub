@@ -30,7 +30,24 @@ import {
 import { ReservationBookingForm } from './ReservationBookingForm';
 import { CancellationDialog } from './CancellationDialog';
 import { api } from '../../services/api';
-import { ChevronLeft, ChevronRight, Today, Cancel } from '@mui/icons-material';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Today, 
+  Cancel,
+  Event,
+  Person,
+  Schedule,
+  CheckCircle,
+  Phone,
+  Email as EmailIcon,
+  LocationOn,
+  LocalActivity,
+  AccessTime,
+  AttachMoney,
+  Star,
+  Visibility
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { guestsService } from '../../services/guests';
 import { reservationsService } from '../../services/reservations';
@@ -76,12 +93,23 @@ const getEmployeeDisplayName = (e?: Employee | null) => {
 
 const statusColor = (status?: string) => {
   switch (status) {
-    case 'booked': return '#1976d2'; // blue
-    case 'checked_in': return '#ed6c02'; // orange
-    case 'in_service': return '#c56000'; // dark orange
-    case 'completed': return '#2e7d32'; // green
-    case 'cancelled': return '#d32f2f'; // red
-    default: return '#0288d1';
+    case 'booked': return '#3b82f6'; // blue
+    case 'checked_in': return '#f59e0b'; // amber
+    case 'in_service': return '#8b5cf6'; // purple
+    case 'completed': return '#10b981'; // green
+    case 'cancelled': return '#ef4444'; // red
+    default: return '#6366f1';
+  }
+};
+
+const statusGradient = (status?: string) => {
+  switch (status) {
+    case 'booked': return 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)';
+    case 'checked_in': return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+    case 'in_service': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+    case 'completed': return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+    case 'cancelled': return 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+    default: return 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)';
   }
 };
 
@@ -108,15 +136,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
       setEditDialog({ open: true, reservation: full as any });
     } catch (e) {
       console.error('Failed to load reservation for edit', e);
-      // fallback to minimal data
       if (drawer.reservation) setEditDialog({ open: true, reservation: drawer.reservation });
     }
   };
 
-  // Use local state for date management
   const selectedDate = localDate;
   const setSelectedDate = setLocalDate;
-  // Backend now provides is_first_for_guest; no local heuristic needed
   const [createDialog, setCreateDialog] = React.useState<{ open: boolean; start?: string; employeeId?: number; locationId?: number }>({ open: false });
   const [menuAnchor, setMenuAnchor] = React.useState<{ element: HTMLElement; reservation: Reservation } | null>(null);
   const [isCancellationDialogOpen, setIsCancellationDialogOpen] = React.useState<boolean>(false);
@@ -124,15 +149,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [invoiceDialogOpen, setInvoiceDialogOpen] = React.useState(false);
   const [createdInvoiceId, setCreatedInvoiceId] = React.useState<number | null>(null);
 
-  // Mini calendar helper functions
-
   const handleCalendarClose = () => {
     setCalendarAnchor(null);
   };
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
-    // Update the FullCalendar to show the selected date
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
       calendarApi.gotoDate(date);
@@ -153,7 +175,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
       const response = await api.get(`/reservations/?start_time__gte=${startDate}&start_time__lte=${endDate}`);
       const reservations = response.data.results || response.data || [];
       
-      // Count reservations by date
       const counts: Record<string, number> = {};
       reservations.forEach((reservation: any) => {
         const reservationDate = new Date(reservation.start_time).toISOString().split('T')[0];
@@ -185,7 +206,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
     return isSameDay(date, new Date());
   };
 
-  // Mini calendar component
   const renderMiniCalendar = () => {
     const currentMonth = selectedDate.getMonth();
     const currentYear = selectedDate.getFullYear();
@@ -201,20 +221,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
     
     const days = [];
     
-    // Empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
       days.push(
-        <Box key={`empty-${i}`} sx={{ 
-          width: 32, 
-          height: 32, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center' 
-        }} />
+        <Box key={`empty-${i}`} sx={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
       );
     }
     
-    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day);
       const isSelected = isSameDay(date, selectedDate);
@@ -236,12 +248,14 @@ export const StaffSchedulingCalendar: React.FC = () => {
             borderRadius: 1,
             fontSize: '0.875rem',
             fontWeight: isSelected ? 600 : 400,
-            backgroundColor: isSelected ? theme.palette.primary.main : 'transparent',
-            color: isSelected ? 'white' : isTodayDate ? theme.palette.primary.main : 'inherit',
-            border: isTodayDate && !isSelected ? `1px solid ${theme.palette.primary.main}` : 'none',
+            background: isSelected ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+            color: isSelected ? 'white' : isTodayDate ? '#667eea' : 'inherit',
+            border: isTodayDate && !isSelected ? '2px solid #667eea' : 'none',
             position: 'relative',
+            transition: 'all 0.2s ease',
             '&:hover': {
-              backgroundColor: isSelected ? theme.palette.primary.dark : theme.palette.action.hover,
+              background: isSelected ? 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)' : 'rgba(102, 126, 234, 0.1)',
+              transform: 'scale(1.05)',
             }
           }}
         >
@@ -255,8 +269,9 @@ export const StaffSchedulingCalendar: React.FC = () => {
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                backgroundColor: isSelected ? 'white' : theme.palette.secondary.main,
-                opacity: 0.8
+                background: isSelected ? 'white' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                opacity: 0.9,
+                boxShadow: '0 0 4px rgba(0,0,0,0.2)'
               }}
             />
           )}
@@ -265,9 +280,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
     }
     
     return (
-      <Box sx={{ p: 2, minWidth: 280 }}>
-        {/* Month/Year Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+      <Box sx={{ p: 3, minWidth: 320, background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <IconButton 
             size="small" 
             onClick={() => {
@@ -279,11 +293,16 @@ export const StaffSchedulingCalendar: React.FC = () => {
               }
               loadMonthlyReservations(prevMonth);
             }}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)' }
+            }}
           >
             <ChevronLeft />
           </IconButton>
           
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
             {monthNames[currentMonth]} {currentYear}
           </Typography>
           
@@ -298,13 +317,17 @@ export const StaffSchedulingCalendar: React.FC = () => {
               }
               loadMonthlyReservations(nextMonth);
             }}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              '&:hover': { background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)' }
+            }}
           >
             <ChevronRight />
           </IconButton>
         </Box>
         
-        {/* Day Names Header */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, mb: 1 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5, mb: 1 }}>
           {dayNames.map((dayName) => (
             <Box key={dayName} sx={{ 
               display: 'flex', 
@@ -312,21 +335,20 @@ export const StaffSchedulingCalendar: React.FC = () => {
               justifyContent: 'center',
               height: 32,
               fontSize: '0.75rem',
-              fontWeight: 600,
-              color: theme.palette.text.secondary
+              fontWeight: 700,
+              color: '#64748b',
+              letterSpacing: '0.5px'
             }}>
               {dayName}
             </Box>
           ))}
         </Box>
         
-        {/* Calendar Days */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
           {days}
         </Box>
         
-        {/* Today Button */}
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
           <Button 
             size="small" 
             onClick={() => {
@@ -339,6 +361,20 @@ export const StaffSchedulingCalendar: React.FC = () => {
               handleCalendarClose();
             }}
             startIcon={<Today />}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              fontWeight: 600,
+              textTransform: 'none',
+              px: 3,
+              py: 1,
+              borderRadius: 2,
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+                boxShadow: '0 6px 16px rgba(102, 126, 234, 0.5)',
+              }
+            }}
           >
             Today
           </Button>
@@ -347,26 +383,9 @@ export const StaffSchedulingCalendar: React.FC = () => {
     );
   };
 
-  // const loadData = React.useCallback(async () => {
-  //   setIsLoading(true);
-  //   try {
-  //     const dateStr = selectedDate.toISOString().split('T')[0];
-  //     const [empRes, resRes] = await Promise.all([
-  //       api.get('/employees/').catch(() => ({ data: { results: [] } })),
-  //       api.get(`/reservations/?start_time__date=${dateStr}`).catch(() => ({ data: { results: [] } })),
-  //     ]);
-  //     const emp = (empRes.data.results ?? empRes.data ?? []) as Employee[];
-  //     const res = (resRes.data.results ?? resRes.data ?? []) as Reservation[];
-  //     setEmployees(emp);
-  //     setReservations(res);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // }, [selectedDate]);
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      // Get the current view's date range from FullCalendar
       const calendarApi = calendarRef.current?.getApi();
       let startDate: string;
       let endDate: string;
@@ -376,7 +395,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
         startDate = dayjs(view.activeStart).format('YYYY-MM-DD');
         endDate = dayjs(view.activeEnd).format('YYYY-MM-DD');
       } else {
-        // Fallback: use selected date with buffer
         const start = dayjs(selectedDate).startOf('week');
         const end = dayjs(selectedDate).endOf('week');
         startDate = start.format('YYYY-MM-DD');
@@ -399,14 +417,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   React.useEffect(() => { loadData(); }, [loadData]);
 
-  // Load weekly schedules and compute background blocks whenever view or employees change
   React.useEffect(() => {
     const loadWeekly = async () => {
       try {
         const calendarApi = calendarRef.current?.getApi();
         const view = calendarApi?.view;
         const rangeStart = view ? new Date(view.activeStart) : new Date(selectedDate);
-        // Compute local Sunday as effective_from
         const dow = rangeStart.getDay();
         const ws = new Date(rangeStart);
         ws.setDate(rangeStart.getDate() - dow);
@@ -433,7 +449,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
         }
         setWeeklySchedules(byEmp);
 
-        // Build background blocks for off-hours/day-off per resource for current view range
         const blocks: any[] = [];
         const startDate = view ? new Date(view.activeStart) : new Date(selectedDate);
         const endDate = view ? new Date(view.activeEnd) : new Date(selectedDate);
@@ -444,7 +459,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
           if (parts.length >= 3) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:${parts[2].padStart(2,'0')}`;
           return fallback;
         };
-        // iterate each day
         for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
           const dowIdx = d.getDay();
           const yyyy = d.getFullYear();
@@ -457,19 +471,17 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const resourceId = String(e.id);
             if (!row) continue;
             if (row.is_day_off) {
-              // Block entire day
               blocks.push({
                 id: `off-${resourceId}-${dayStr}`,
                 start: `${dayStr}T00:00:00`,
                 end: `${dayStr}T23:59:59`,
                 resourceIds: [resourceId],
                 display: 'background',
-                backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
               });
             } else {
               const start = toHms(row.start_time, '00:00:00');
               const end = toHms(row.end_time, '23:59:59');
-              // Before shift
               if (start !== '00:00:00') {
                 blocks.push({
                   id: `pre-${resourceId}-${dayStr}`,
@@ -477,10 +489,9 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   end: `${dayStr}T${start}`,
                   resourceIds: [resourceId],
                   display: 'background',
-                  backgroundColor: 'rgba(107, 114, 128, 0.15)',
+                  backgroundColor: 'rgba(148, 163, 184, 0.08)',
                 });
               }
-              // After shift
               if (end !== '23:59:59') {
                 blocks.push({
                   id: `post-${resourceId}-${dayStr}`,
@@ -488,7 +499,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   end: `${dayStr}T23:59:59`,
                   resourceIds: [resourceId],
                   display: 'background',
-                  backgroundColor: 'rgba(107, 114, 128, 0.15)',
+                  backgroundColor: 'rgba(148, 163, 184, 0.08)',
                 });
               }
             }
@@ -504,9 +515,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
     loadWeekly();
   }, [employees, selectedDate]);
 
-  // When the calendar changes date range (navigation/view change), recompute background blocks
   const handleDatesSet = (dateInfo: any) => {
-    // trigger weekly schedules reload by updating selectedDate
     setSelectedDate(dateInfo.start);
   };
 
@@ -525,31 +534,36 @@ export const StaffSchedulingCalendar: React.FC = () => {
     return current >= start && current <= end;
   }, [weeklySchedules]);
 
-  // Style the custom calendar button after the calendar renders
   React.useEffect(() => {
     const styleCalendarButton = () => {
       const button = document.querySelector('.fc-calendarIcon-button');
       if (button) {
         button.innerHTML = '📅';
         (button as HTMLElement).style.cssText = `
-          background: #1976d2 !important;
-          border: 1px solid #1976d2 !important;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+          border: none !important;
           color: white !important;
-          border-radius: 4px !important;
-          padding: 4px 8px !important;
-          font-size: 16px !important;
+          border-radius: 8px !important;
+          padding: 6px 12px !important;
+          font-size: 18px !important;
           cursor: pointer !important;
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
-          min-width: 32px !important;
-          height: 32px !important;
+          min-width: 40px !important;
+          height: 40px !important;
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+          transition: all 0.3s ease !important;
         `;
         const handleMouseEnter = () => {
-          (button as HTMLElement).style.background = '#1565c0 !important';
+          (button as HTMLElement).style.background = 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%) !important';
+          (button as HTMLElement).style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.5) !important';
+          (button as HTMLElement).style.transform = 'translateY(-2px) !important';
         };
         const handleMouseLeave = () => {
-          (button as HTMLElement).style.background = '#1976d2 !important';
+          (button as HTMLElement).style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important';
+          (button as HTMLElement).style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4) !important';
+          (button as HTMLElement).style.transform = 'translateY(0) !important';
         };
         button.addEventListener('mouseenter', handleMouseEnter);
         button.addEventListener('mouseleave', handleMouseLeave);
@@ -595,6 +609,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
       })(),
     },
   }));
+  
   const allEvents = React.useMemo(() => {
     return [...backgroundBlocks, ...events];
   }, [backgroundBlocks, events]);
@@ -619,7 +634,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
     if (!r) return;
     
     try {
-      // Validate against weekly schedule: prevent drops to day off or off-hours
       const newStartDate: Date | null = dropInfo?.event?.start ? new Date(dropInfo.event.start) : null;
       const newEndDate: Date | null = dropInfo?.event?.end ? new Date(dropInfo.event.end) : null;
       const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
@@ -640,15 +654,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
       };
       const resource2 = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
       
-      // Update times first (employee may not be writable on reservation serializer)
       await api.patch(`/reservations/${r.id}/`, body);
       
-      // If resource (employee) changed, use assignment endpoint
       if (resource2) {
         const newEmployeeId = Number(resource2.id);
         
         try {
-          // Load existing assignments for this reservation (client-side filter for safety)
           const listResp = await api.get('/reservation-assignments/');
           const allAssignments = (listResp.data?.results ?? listResp.data ?? []) as Array<any>;
           
@@ -658,17 +669,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
           if (existingPrimary) {
             if (existingPrimary.employee === newEmployeeId) {
-              // Already assigned to this employee; nothing to change
+              // Already assigned
             } else if (targetPrimaryForNew) {
-              // A primary assignment already exists for the new employee: remove the old one
               await api.delete(`/reservation-assignments/${existingPrimary.id}/`);
-              // Keep targetPrimaryForNew as the current primary
             } else {
-              // Switch employee on existing primary
               await api.patch(`/reservation-assignments/${existingPrimary.id}/`, { employee: newEmployeeId });
             }
           } else {
-            // No primary yet: create one
             await api.post('/reservation-assignments/', {
               reservation: r.id,
               employee: newEmployeeId,
@@ -682,7 +689,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const msg = typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg);
             window.alert(`Cannot reassign: ${msg}`);
           } catch {
-            window.alert('Cannot reassign: validation failed (qualification/shift coverage or unique constraint).');
+            window.alert('Cannot reassign: validation failed.');
           }
           dropInfo.revert();
           return;
@@ -698,7 +705,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   const openDrawer = (r: Reservation) => {
     setDrawer({ open: true, reservation: r });
-    // Load guest details each time a reservation is opened
     if (r?.guest) {
       setSelectedGuest(null);
       (async () => {
@@ -726,7 +732,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
     const r = menuAnchor?.reservation || drawer.reservation;
     if (!r) return;
     if (action === 'cancel') {
-      // Open cancellation dialog to collect reason
       setReservationToCancel(r.id);
       setIsCancellationDialogOpen(true);
       setMenuAnchor(null);
@@ -735,16 +740,11 @@ export const StaffSchedulingCalendar: React.FC = () => {
     setIsActing(true);
     try {
       if (action === 'check_out') {
-        // Use proper checkout service that creates invoice
         const checkoutResult = await reservationsService.checkOut(r.id, {
           create_invoice: true,
           notes: 'Checkout from calendar'
         });
         
-        // Debug: Log the checkout result
-        console.log('Checkout result:', checkoutResult);
-        
-        // If invoice was created, show it
         if (checkoutResult.invoice_created && checkoutResult.invoice_id) {
           setCreatedInvoiceId(checkoutResult.invoice_id);
           setInvoiceDialogOpen(true);
@@ -752,20 +752,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
           alert(
             `Check-out successful!\n\n` +
             `Invoice created: ${checkoutResult.invoice_number}\n` +
-            `Total: $${checkoutResult.invoice_total}\n` +
+            `Total: ${checkoutResult.invoice_total}\n` +
             `Housekeeping task created automatically.`
           );
         } else {
-          console.log('Invoice not created or missing fields:', {
-            invoice_created: checkoutResult.invoice_created,
-            invoice_id: checkoutResult.invoice_id,
-            fullResult: checkoutResult
-          });
-          
-          // Try to create invoice manually if checkout didn't create one
           try {
             const invoiceResult = await reservationsService.createInvoice(r.id);
-            console.log('Manual invoice creation result:', invoiceResult);
             
             if (invoiceResult.invoice_id) {
               setCreatedInvoiceId(invoiceResult.invoice_id);
@@ -785,7 +777,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
           }
         }
       } else {
-        // Handle other actions normally
         const endpoint = action === 'check_in' ? 'check-in' : action === 'in_service' ? 'in-service' : action === 'complete' ? 'complete' : 'cancel';
         await api.post(`/reservations/${r.id}/${endpoint}/`, {});
       }
@@ -795,7 +786,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
       setMenuAnchor(null);
     } catch (e: any) {
       console.error(e);
-      const errorMessage = e?.response?.data?.error || e?.response?.data?.message || `Failed to ${action.replace('_', ' ')} reservation. Please try again.`;
+      const errorMessage = e?.response?.data?.error || e?.response?.data?.message || `Failed to ${action.replace('_', ' ')} reservation.`;
       alert(errorMessage);
     } finally {
       setIsActing(false);
@@ -803,8 +794,102 @@ export const StaffSchedulingCalendar: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%)', p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography 
+          variant="h3" 
+          sx={{ 
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            mb: 1
+          }}
+        >
+          Staff Scheduling
+        </Typography>
+        <Typography variant="body1" sx={{ color: '#64748b', fontWeight: 500 }}>
+          Manage appointments and staff schedules
+        </Typography>
+      </Box>
+
+      <Paper 
+        elevation={0}
+        sx={{ 
+          borderRadius: 4, 
+          overflow: 'hidden',
+          boxShadow: '0 10px 40px rgba(102, 126, 234, 0.15)',
+          border: '1px solid rgba(226, 232, 240, 0.8)',
+          '& .fc': {
+            fontFamily: 'inherit',
+          },
+          '& .fc-theme-standard th': {
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+            borderColor: '#e2e8f0',
+            fontWeight: 600,
+            color: '#475569',
+            padding: '12px 8px',
+          },
+          '& .fc-theme-standard td': {
+            borderColor: '#e2e8f0',
+          },
+          '& .fc-col-header-cell': {
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+            fontWeight: 600,
+            color: '#475569',
+          },
+          '& .fc-timegrid-slot': {
+            height: '40px',
+          },
+          '& .fc-timegrid-slot-label': {
+            fontWeight: 500,
+            color: '#64748b',
+          },
+          '& .fc-event': {
+            borderRadius: '6px',
+            border: 'none !important',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+              transform: 'translateY(-1px)',
+            }
+          },
+          '& .fc-button': {
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: 600,
+            textTransform: 'none',
+            padding: '8px 16px',
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+              boxShadow: '0 6px 16px rgba(102, 126, 234, 0.5)',
+            },
+            '&:disabled': {
+              opacity: 0.5,
+              cursor: 'not-allowed',
+            },
+            '&:focus': {
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+            }
+          },
+          '& .fc-button-primary:not(:disabled).fc-button-active': {
+            background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+          },
+          '& .fc-toolbar-title': {
+            fontSize: '1.5rem',
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          },
+        }}
+      >
         <FullCalendar
           ref={calendarRef}
           plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
@@ -853,8 +938,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
           }}
           eventDidMount={(info:any) => {
             try {
-              info.el.style.border = '1px solid #000';
-              info.el.style.boxShadow = 'none';
+              info.el.style.border = 'none';
+              info.el.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
             } catch {}
           }}
           eventContent={(arg:any) => {
@@ -866,15 +951,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
             const servicesLines = servicesText ? String(servicesText).split(', ') : [];
             const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
-            const badge = isFirst ? '<span style="margin-left:6px;padding:1px 4px;border-radius:3px;background:#fff;color:#000;font-size:10px;font-weight:700;">New</span>' : '';
-            const servicesHtml = servicesLines.length > 0 ? `<div style="font-size:11px;opacity:.95;">${servicesLines.map((line:any) => `<div>${line}</div>`).join('')}</div>` : '';
+            const badge = isFirst ? '<span style="margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.95);color:#000;font-size:10px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);">✨ NEW</span>' : '';
+            const servicesHtml = servicesLines.length > 0 ? `<div style="font-size:11px;opacity:.95;margin-top:2px;">${servicesLines.map((line:any) => `<div style="padding:1px 0;">${line}</div>`).join('')}</div>` : '';
             const html = `
-              <div style="padding:3px 4px;line-height:1.15;">
-                <div style="font-size:11px;opacity:.95;">${start}</div>
-                <div style="font-weight:700;font-size:12px;display:flex;align-items:center;">${title}${badge}</div>
+              <div style="padding:6px 8px;line-height:1.3;">
+                <div style="font-size:10px;opacity:.9;font-weight:600;">${start}</div>
+                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${badge}</div>
                 ${servicesHtml}
-                ${typeof totalDurationMin === 'number' ? `<div style="font-size:11px;opacity:.95;"><strong>Total Duration:</strong> ${totalDurationMin} min</div>` : ''}
-                <div style="font-size:11px;opacity:.95;">${end}</div>
+                ${typeof totalDurationMin === 'number' ? `<div style="font-size:10px;opacity:.9;margin-top:2px;"><strong>⏱ ${totalDurationMin} min</strong></div>` : ''}
+                <div style="font-size:10px;opacity:.9;font-weight:600;margin-top:2px;">${end}</div>
               </div>`;
             return { html };
           }}
@@ -883,188 +968,406 @@ export const StaffSchedulingCalendar: React.FC = () => {
         />
       </Paper>
 
+      {/* Enhanced Drawer */}
       <Drawer 
         anchor="right" 
         open={drawer.open} 
         onClose={closeDrawer} 
-        sx={{ '& .MuiDrawer-paper': { width: 360 } }}
+        sx={{ 
+          '& .MuiDrawer-paper': { 
+            width: 420,
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            borderLeft: '1px solid #e2e8f0',
+          } 
+        }}
         disableEnforceFocus
         disableRestoreFocus
       >
-        <Box p={2} display="flex" flexDirection="column" gap={2}>
-          {drawer.reservation ? (
-            <>
-              <Box>
-                <Typography
-                  variant="h6"
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/guests/profile?id=${drawer.reservation!.guest}`)}
-                  title="View full guest profile"
-                >
-                  {drawer.reservation.guest_name}
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Drawer Header */}
+          <Box sx={{ 
+            p: 3, 
+            background: statusGradient(drawer.reservation?.status),
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+          }}>
+            <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+              <Box flex={1}>
+                <Typography variant="h5" fontWeight={700} gutterBottom>
+                  {drawer.reservation?.guest_name}
                 </Typography>
-                <Box mt={1} display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
-                  <Typography variant="body2"><strong>Guest:</strong> {drawer.reservation.guest_name}</Typography>
-                  <Typography variant="body2"><strong>Staff:</strong> {getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}</Typography>
-                  <Typography variant="body2"><strong>Location:</strong> {drawer.reservation.location_name ?? (drawer.reservation.location ? `Location #${drawer.reservation.location}` : '—')}</Typography>
-                  <Typography variant="body2" component="div" display="flex" alignItems="center" gap={1}>
-                    <strong>Status:</strong>
-                    <Chip label={(drawer.reservation.status || '').replace('_',' ')} color={
-                      drawer.reservation.status === 'booked' ? 'primary' :
-                      drawer.reservation.status === 'checked_in' ? 'warning' :
-                      drawer.reservation.status === 'in_service' ? 'warning' :
-                      drawer.reservation.status === 'completed' ? 'success' :
-                      drawer.reservation.status === 'cancelled' ? 'error' : 'default'
-                    } size="small" />
-                  </Typography>
-                  <Typography variant="body2"><strong>Reservation #:</strong> {drawer.reservation.id}</Typography>
-                  {drawer.reservation.is_first_for_guest ? (
-                    <Chip label="First-time Guest" color="info" size="small" sx={{ width: 'fit-content', mt: 0.5 }} />
-                  ) : (
-                    (selectedGuest?.total_visits || selectedGuest?.total_visits === 0) && (
-                      <Chip label={`${selectedGuest.total_visits} visit${selectedGuest.total_visits === 1 ? '' : 's'}`} color="default" size="small" sx={{ width: 'fit-content', mt: 0.5 }} />
-                    )
-                  )}
-                  <Typography variant="body2"><strong>Time:</strong> {dayjs(drawer.reservation.start_time).format('MMM D, YYYY h:mm A')} – {dayjs(drawer.reservation.end_time).format('h:mm A')}</Typography>
-                </Box>
-              </Box>
-
-              <Divider />
-
-              {/* Services breakdown */}
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Services</Typography>
-                {Array.isArray(drawer.reservation.reservation_services) && drawer.reservation.reservation_services.length > 0 ? (
-                  <>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Name</TableCell>
-                          <TableCell align="right">Duration</TableCell>
-                          <TableCell align="right">Qty</TableCell>
-                          <TableCell align="right">Unit Price</TableCell>
-                          <TableCell align="right">Subtotal</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {drawer.reservation.reservation_services.map((rs, idx) => {
-                          const qty = rs.quantity ?? 1;
-                          const duration = rs.service_duration_minutes ?? rs.service_details?.duration_minutes ?? 0;
-                          const unit = rs.unit_price ?? (rs.service_details?.price ?? '0');
-                          const unitNum = Number(unit);
-                          const subtotal = (Number.isFinite(unitNum) ? unitNum : 0) * qty;
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{rs.service_details?.name ?? `Service #${rs.service}`}</TableCell>
-                              <TableCell align="right">{duration} min</TableCell>
-                              <TableCell align="right">{qty}</TableCell>
-                              <TableCell align="right">${unitNum.toFixed(2)}</TableCell>
-                              <TableCell align="right">${subtotal.toFixed(2)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    <Box display="flex" justifyContent="space-between" mt={1}>
-                      <Typography variant="body2"><strong>Total Duration:</strong> {(drawer.reservation.total_duration_minutes ?? drawer.reservation.reservation_services.reduce((acc, rs) => acc + (rs.service_duration_minutes ?? rs.service_details?.duration_minutes ?? 0) * (rs.quantity ?? 1), 0))} min</Typography>
-                      <Typography variant="body2"><strong>Total Price:</strong> ${(
-                        typeof drawer.reservation.total_price === 'number'
-                          ? drawer.reservation.total_price
-                          : drawer.reservation.reservation_services.reduce((acc, rs) => {
-                              const qty = rs.quantity ?? 1;
-                              const unit = Number(rs.unit_price ?? (rs.service_details?.price ?? '0'));
-                              return acc + (Number.isFinite(unit) ? unit : 0) * qty;
-                            }, 0)
-                      ).toFixed(2)}</Typography>
-                    </Box>
-                  </>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">No services</Typography>
-                )}
-              </Box>
-
-              <Divider />
-
-              {/* Status timeline */}
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Status Timeline</Typography>
-                <Box display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
-                  {drawer.reservation.checked_in_at && (
-                    <Typography variant="body2"><strong>Checked in:</strong> {dayjs(drawer.reservation.checked_in_at as any).format('MMM D, YYYY h:mm A')}</Typography>
-                  )}
-                  {drawer.reservation.in_service_at && (
-                    <Typography variant="body2"><strong>In service:</strong> {dayjs(drawer.reservation.in_service_at as any).format('MMM D, YYYY h:mm A')}</Typography>
-                  )}
-                  {drawer.reservation.completed_at && (
-                    <Typography variant="body2"><strong>Completed:</strong> {dayjs(drawer.reservation.completed_at as any).format('MMM D, YYYY h:mm A')}</Typography>
-                  )}
-                  {drawer.reservation.checked_out_at && (
-                    <Typography variant="body2"><strong>Checked out:</strong> {dayjs(drawer.reservation.checked_out_at as any).format('MMM D, YYYY h:mm A')}</Typography>
-                  )}
-                  {drawer.reservation.cancelled_at && (
-                    <Typography variant="body2"><strong>Cancelled:</strong> {dayjs(drawer.reservation.cancelled_at as any).format('MMM D, YYYY h:mm A')}</Typography>
-                  )}
-                  {drawer.reservation.no_show_recorded_at && (
-                    <Typography variant="body2"><strong>No-show:</strong> {dayjs(drawer.reservation.no_show_recorded_at as any).format('MMM D, YYYY h:mm A')}</Typography>
+                <Box display="flex" gap={1} flexWrap="wrap">
+                  <Chip 
+                    label={(drawer.reservation?.status || '').replace('_',' ').toUpperCase()} 
+                    size="small"
+                    sx={{ 
+                      bgcolor: 'rgba(255,255,255,0.25)', 
+                      color: 'white',
+                      fontWeight: 700,
+                      backdropFilter: 'blur(10px)'
+                    }} 
+                  />
+                  {drawer.reservation?.is_first_for_guest && (
+                    <Chip 
+                      icon={<Star sx={{ fontSize: 16, color: 'white !important' }} />}
+                      label="First Visit" 
+                      size="small"
+                      sx={{ 
+                        bgcolor: 'rgba(255,255,255,0.25)', 
+                        color: 'white',
+                        fontWeight: 700,
+                        backdropFilter: 'blur(10px)'
+                      }} 
+                    />
                   )}
                 </Box>
               </Box>
-
-              <Divider />
-
-              {/* Guest details */}
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Guest Details</Typography>
-                {selectedGuest ? (
-                  <Box display="grid" gridTemplateColumns="1fr" rowGap={0.5}>
-                    <Typography variant="body2"><strong>Name:</strong> {selectedGuest.first_name} {selectedGuest.last_name}</Typography>
-                    <Typography variant="body2"><strong>Email:</strong> <a href={`mailto:${selectedGuest.email}`}>{selectedGuest.email}</a></Typography>
-                    <Typography variant="body2"><strong>Phone:</strong> <a href={`tel:${selectedGuest.phone}`}>{selectedGuest.phone}</a></Typography>
-                    {selectedGuest.membership_tier && (
-                      <Typography variant="body2"><strong>Membership:</strong> {typeof selectedGuest.membership_tier === 'string' ? selectedGuest.membership_tier : selectedGuest.membership_tier?.display_name}</Typography>
-                    )}
-                    {typeof selectedGuest.loyalty_points !== 'undefined' && (
-                      <Typography variant="body2"><strong>Loyalty Points:</strong> {selectedGuest.loyalty_points}</Typography>
-                    )}
-                    {typeof selectedGuest.total_visits !== 'undefined' && (
-                      <Typography variant="body2"><strong>Total Visits:</strong> {selectedGuest.total_visits}</Typography>
-                    )}
-                    {typeof selectedGuest.total_spent !== 'undefined' && (
-                      <Typography variant="body2"><strong>Total Spent:</strong> ${Number(selectedGuest.total_spent ?? 0).toFixed(2)}</Typography>
-                    )}
-                    {selectedGuest.last_visit && (
-                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs(selectedGuest.last_visit as any).format('MMM D, YYYY h:mm A')}</Typography>
-                    )}
-                    <Box mt={1}>
-                      <Button variant="outlined" size="small" onClick={() => setIsEditGuestOpen(true)}>Edit Guest</Button>
-                    </Box>
+              <IconButton 
+                onClick={closeDrawer}
+                sx={{ 
+                  color: 'white',
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+                }}
+                size="small"
+              >
+                <Cancel />
+              </IconButton>
+            </Box>
+            
+            <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mt={2}>
+              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Event sx={{ fontSize: 18, color: 'white' }} />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                      Reservation
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} sx={{ color: 'white', fontSize: '0.85rem' }}>
+                      #{drawer.reservation?.id}
+                    </Typography>
                   </Box>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">Loading guest details…</Typography>
-                )}
-              </Box>
+                </Box>
+              </Paper>
+              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Schedule sx={{ fontSize: 18, color: 'white' }} />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                      Duration
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} sx={{ color: 'white', fontSize: '0.85rem' }}>
+                      {drawer.reservation?.total_duration_minutes || 0} min
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+          </Box>
 
-              <Stack spacing={1}>
-                <Button variant="outlined" onClick={() => openEditReservation(drawer.reservation!.id)}>
-                  Edit Reservation
-                </Button>
-                {drawer.reservation.status === 'booked' && (
-                  <Button variant="contained" onClick={() => act('check_in')} disabled={isActing}>Check-in</Button>
+          {/* Scrollable Content */}
+          <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+            {drawer.reservation ? (
+              <Stack spacing={3}>
+                {/* Appointment Details */}
+                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AccessTime sx={{ fontSize: 20, color: '#667eea' }} />
+                    Appointment Details
+                  </Typography>
+                  <Box display="grid" gap={1.5} mt={2}>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">Staff</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {getEmployeeDisplayName(employees.find(e => e.id === drawer.reservation?.employee) || null)}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">Location</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {drawer.reservation.location_name ?? '—'}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">Date & Time</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {dayjs(drawer.reservation.start_time).format('MMM D, h:mm A')}
+                      </Typography>
+                    </Box>
+                    {!drawer.reservation.is_first_for_guest && selectedGuest?.total_visits && (
+                      <Box display="flex" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">Total Visits</Typography>
+                        <Chip 
+                          label={`${selectedGuest.total_visits} visit${selectedGuest.total_visits === 1 ? '' : 's'}`}
+                          size="small"
+                          sx={{ bgcolor: '#e0e7ff', color: '#667eea', fontWeight: 600 }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+
+                {/* Services */}
+                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <LocalActivity sx={{ fontSize: 20, color: '#667eea' }} />
+                    Services
+                  </Typography>
+                  {Array.isArray(drawer.reservation.reservation_services) && drawer.reservation.reservation_services.length > 0 ? (
+                    <Box mt={2}>
+                      {drawer.reservation.reservation_services.map((rs, idx) => {
+                        const qty = rs.quantity ?? 1;
+                        const duration = rs.service_duration_minutes ?? rs.service_details?.duration_minutes ?? 0;
+                        const unit = Number(rs.unit_price ?? (rs.service_details?.price ?? '0'));
+                        const subtotal = unit * qty;
+                        return (
+                          <Box 
+                            key={idx} 
+                            sx={{ 
+                              p: 2, 
+                              mb: 2, 
+                              bgcolor: '#f8fafc', 
+                              borderRadius: 2,
+                              border: '1px solid #e2e8f0'
+                            }}
+                          >
+                            <Box display="flex" justifyContent="space-between" mb={1}>
+                              <Typography variant="body2" fontWeight={700}>
+                                {rs.service_details?.name ?? `Service #${rs.service}`}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={700} sx={{ color: '#667eea' }}>
+                                ${subtotal.toFixed(2)}
+                              </Typography>
+                            </Box>
+                            <Box display="flex" gap={2} flexWrap="wrap">
+                              <Chip label={`${duration} min`} size="small" sx={{ bgcolor: 'white', fontSize: '0.7rem' }} />
+                              <Chip label={`Qty: ${qty}`} size="small" sx={{ bgcolor: 'white', fontSize: '0.7rem' }} />
+                              <Chip label={`${unit.toFixed(2)} each`} size="small" sx={{ bgcolor: 'white', fontSize: '0.7rem' }} />
+                            </Box>
+                          </Box>
+                        );
+                      })}
+                      <Box display="flex" justifyContent="space-between" mt={2} pt={2} borderTop="2px solid #e2e8f0">
+                        <Typography variant="h6" fontWeight={700}>Total</Typography>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: '#667eea' }}>
+                          ${(drawer.reservation.total_price ?? 0).toFixed(2)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>No services</Typography>
+                  )}
+                </Paper>
+
+                {/* Guest Info */}
+                {selectedGuest && (
+                  <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Person sx={{ fontSize: 20, color: '#667eea' }} />
+                      Guest Information
+                    </Typography>
+                    <Box display="grid" gap={2} mt={2}>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Box sx={{ p: 1.5, bgcolor: '#e0e7ff', borderRadius: 2 }}>
+                          <EmailIcon sx={{ fontSize: 20, color: '#667eea' }} />
+                        </Box>
+                        <Box flex={1}>
+                          <Typography variant="caption" color="text.secondary">Email</Typography>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {selectedGuest.email || 'Not provided'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Box sx={{ p: 1.5, bgcolor: '#ddd6fe', borderRadius: 2 }}>
+                          <Phone sx={{ fontSize: 20, color: '#8b5cf6' }} />
+                        </Box>
+                        <Box flex={1}>
+                          <Typography variant="caption" color="text.secondary">Phone</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {selectedGuest.phone || 'Not provided'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      {selectedGuest.membership_tier && (
+                        <Box display="flex" alignItems="center" gap={2}>
+                          <Box sx={{ p: 1.5, bgcolor: '#fef3c7', borderRadius: 2 }}>
+                            <Star sx={{ fontSize: 20, color: '#f59e0b' }} />
+                          </Box>
+                          <Box flex={1}>
+                            <Typography variant="caption" color="text.secondary">Membership</Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {typeof selectedGuest.membership_tier === 'string' ? selectedGuest.membership_tier : selectedGuest.membership_tier?.display_name}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                      <Button 
+                        variant="outlined" 
+                        size="small" 
+                        fullWidth
+                        onClick={() => setIsEditGuestOpen(true)}
+                        sx={{ 
+                          mt: 1,
+                          borderColor: '#667eea',
+                          color: '#667eea',
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          '&:hover': {
+                            borderColor: '#5568d3',
+                            bgcolor: '#e0e7ff'
+                          }
+                        }}
+                      >
+                        Edit Guest Profile
+                      </Button>
+                    </Box>
+                  </Paper>
                 )}
-                {drawer.reservation.status === 'checked_in' && (
-                  <Button variant="contained" color="warning" onClick={() => act('in_service')} disabled={isActing}>Start Service</Button>
-                )}
-                {drawer.reservation.status === 'in_service' && (
-                  <Button variant="contained" color="success" onClick={() => act('complete')} disabled={isActing}>Complete</Button>
-                )}
-                {(drawer.reservation.status === 'booked' || drawer.reservation.status === 'checked_in') && (
-                  <Button variant="outlined" color="error" onClick={() => act('cancel')} disabled={isActing}>Cancel Reservation</Button>
-                )}
+
+                {/* Action Buttons */}
+                <Stack spacing={2}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => openEditReservation(drawer.reservation!.id)}
+                    fullWidth
+                    sx={{
+                      borderColor: '#667eea',
+                      color: '#667eea',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      py: 1.5,
+                      borderRadius: 2,
+                      '&:hover': {
+                        borderColor: '#5568d3',
+                        bgcolor: '#e0e7ff'
+                      }
+                    }}
+                  >
+                    Edit Reservation
+                  </Button>
+                  
+                  {drawer.reservation.status === 'booked' && (
+                    <Button 
+                      variant="contained" 
+                      onClick={() => act('check_in')} 
+                      disabled={isActing}
+                      fullWidth
+                      sx={{
+                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        py: 1.5,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                          boxShadow: '0 6px 16px rgba(59, 130, 246, 0.5)',
+                        }
+                      }}
+                    >
+                      Check-in Guest
+                    </Button>
+                  )}
+                  
+                  {drawer.reservation.status === 'checked_in' && (
+                    <Button 
+                      variant="contained" 
+                      onClick={() => act('in_service')} 
+                      disabled={isActing}
+                      fullWidth
+                      sx={{
+                        background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        py: 1.5,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                          boxShadow: '0 6px 16px rgba(139, 92, 246, 0.5)',
+                        }
+                      }}
+                    >
+                      Start Service
+                    </Button>
+                  )}
+                  
+                  {drawer.reservation.status === 'in_service' && (
+                    <Button 
+                      variant="contained" 
+                      onClick={() => act('complete')} 
+                      disabled={isActing}
+                      fullWidth
+                      sx={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        py: 1.5,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                          boxShadow: '0 6px 16px rgba(16, 185, 129, 0.5)',
+                        }
+                      }}
+                    >
+                      Complete Service
+                    </Button>
+                  )}
+                  
+                  {drawer.reservation.status === 'completed' && (
+                    <Button 
+                      variant="contained" 
+                      onClick={() => act('check_out')} 
+                      disabled={isActing}
+                      fullWidth
+                      sx={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        py: 1.5,
+                        borderRadius: 2,
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                          boxShadow: '0 6px 16px rgba(16, 185, 129, 0.5)',
+                        }
+                      }}
+                    >
+                      Check Out & Create Invoice
+                    </Button>
+                  )}
+                  
+                  {(drawer.reservation.status === 'booked' || drawer.reservation.status === 'checked_in') && (
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => act('cancel')} 
+                      disabled={isActing}
+                      fullWidth
+                      sx={{
+                        borderColor: '#ef4444',
+                        color: '#ef4444',
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        py: 1.5,
+                        borderRadius: 2,
+                        '&:hover': {
+                          borderColor: '#dc2626',
+                          bgcolor: '#fef2f2'
+                        }
+                      }}
+                    >
+                      Cancel Reservation
+                    </Button>
+                  )}
+                </Stack>
               </Stack>
-            </>
-          ) : (
-            <Typography variant="body2">No selection</Typography>
-          )}
+            ) : (
+              <Typography variant="body2" color="text.secondary">No selection</Typography>
+            )}
+          </Box>
         </Box>
       </Drawer>
 
@@ -1082,15 +1385,32 @@ export const StaffSchedulingCalendar: React.FC = () => {
       />
 
       {/* Edit Reservation Dialog */}
-      <Dialog open={editDialog.open} onClose={() => setEditDialog({ open: false, reservation: null })} maxWidth="md" fullWidth>
-        <DialogTitle>Edit Reservation</DialogTitle>
-        <DialogContent>
+      <Dialog 
+        open={editDialog.open} 
+        onClose={() => setEditDialog({ open: false, reservation: null })} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: '1.5rem'
+        }}>
+          Edit Reservation
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
           <ReservationBookingForm
             reservation={editDialog.reservation as any}
             onSaved={async () => {
               setEditDialog({ open: false, reservation: null });
               await loadData();
-              // Refresh drawer data with latest reservation if still open
               if (drawer.reservation && editDialog.reservation) {
                 const updated = (await api.get(`/reservations/${(editDialog.reservation as any).id}/`)).data;
                 setDrawer({ open: true, reservation: updated });
@@ -1101,9 +1421,28 @@ export const StaffSchedulingCalendar: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createDialog.open} onClose={() => setCreateDialog({ open: false })} maxWidth="md" fullWidth>
-        <DialogTitle>New Reservation</DialogTitle>
-        <DialogContent>
+      {/* Create Reservation Dialog */}
+      <Dialog 
+        open={createDialog.open} 
+        onClose={() => setCreateDialog({ open: false })} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: '1.5rem'
+        }}>
+          New Reservation
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
           <ReservationBookingForm
             onCreated={() => { setCreateDialog({ open: false }); loadData(); }}
             initialStart={createDialog.start}
@@ -1127,28 +1466,27 @@ export const StaffSchedulingCalendar: React.FC = () => {
           horizontal: 'center',
         }}
         PaperProps={{
-          elevation: 8,
+          elevation: 20,
           sx: {
             mt: 1,
-            borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'divider'
+            borderRadius: 3,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 20px 60px rgba(102, 126, 234, 0.25)',
+            overflow: 'hidden'
           }
         }}
       >
         {renderMiniCalendar()}
       </Popover>
 
-      {/* Context Menu for reservation actions */}
+      {/* Context Menu */}
       <Menu
         aria-label="Reservation actions"
         anchorEl={menuAnchor?.element || null}
         open={Boolean(menuAnchor)}
         onClose={() => {
           setMenuAnchor(null);
-          // Return focus to the calendar after menu closes
           setTimeout(() => {
-            // Find the calendar element in the DOM
             const calendarElement = document.querySelector('.fc') as HTMLElement;
             if (calendarElement) {
               calendarElement.focus();
@@ -1161,24 +1499,71 @@ export const StaffSchedulingCalendar: React.FC = () => {
         autoFocus={false}
         disableEnforceFocus
         disableRestoreFocus
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
+            border: '1px solid #e2e8f0',
+            minWidth: 200,
+            '& .MuiMenuItem-root': {
+              px: 2,
+              py: 1.5,
+              fontWeight: 500,
+              '&:hover': {
+                bgcolor: '#f8fafc'
+              }
+            }
+          }
+        }}
       >
         <MenuItem onClick={() => {
           const r = menuAnchor?.reservation;
           if (r) openDrawer(r);
           setMenuAnchor(null);
-        }}>View Details</MenuItem>
+        }}>
+          <Visibility sx={{ mr: 1.5, fontSize: 18 }} />
+          View Details
+        </MenuItem>
         <Divider />
         {(() => {
           const status = menuAnchor?.reservation?.status;
-          if (status === 'booked') return (<MenuItem onClick={() => act('check_in')} disabled={isActing}>Check-in Guest</MenuItem>);
-          if (status === 'checked_in') return (<MenuItem onClick={() => act('in_service')} disabled={isActing}>Start Service</MenuItem>);
-          if (status === 'in_service') return (<MenuItem onClick={() => act('complete')} disabled={isActing}>Mark Complete</MenuItem>);
-          if (status === 'completed') return (<MenuItem onClick={() => act('check_out')} disabled={isActing}>Check Out Guest</MenuItem>);
+          if (status === 'booked') return (
+            <MenuItem onClick={() => act('check_in')} disabled={isActing}>
+              <CheckCircle sx={{ mr: 1.5, fontSize: 18, color: '#3b82f6' }} />
+              Check-in Guest
+            </MenuItem>
+          );
+          if (status === 'checked_in') return (
+            <MenuItem onClick={() => act('in_service')} disabled={isActing}>
+              <Schedule sx={{ mr: 1.5, fontSize: 18, color: '#8b5cf6' }} />
+              Start Service
+            </MenuItem>
+          );
+          if (status === 'in_service') return (
+            <MenuItem onClick={() => act('complete')} disabled={isActing}>
+              <CheckCircle sx={{ mr: 1.5, fontSize: 18, color: '#10b981' }} />
+              Mark Complete
+            </MenuItem>
+          );
+          if (status === 'completed') return (
+            <MenuItem onClick={() => act('check_out')} disabled={isActing}>
+              <AttachMoney sx={{ mr: 1.5, fontSize: 18, color: '#10b981' }} />
+              Check Out Guest
+            </MenuItem>
+          );
           return null;
         })()}
         {menuAnchor?.reservation && (menuAnchor.reservation.status === 'booked' || menuAnchor.reservation.status === 'checked_in') && [
           <Divider key="menu-divider-cancel" />,
-          <MenuItem key="menu-item-cancel" onClick={() => act('cancel')} sx={{ color: 'error.main' }} disabled={isActing}>Cancel Reservation</MenuItem>
+          <MenuItem 
+            key="menu-item-cancel" 
+            onClick={() => act('cancel')} 
+            sx={{ color: '#ef4444' }} 
+            disabled={isActing}
+          >
+            <Cancel sx={{ mr: 1.5, fontSize: 18 }} />
+            Cancel Reservation
+          </MenuItem>
         ]}
       </Menu>
 
@@ -1210,16 +1595,26 @@ export const StaffSchedulingCalendar: React.FC = () => {
           sx: {
             height: '90vh',
             maxHeight: '90vh',
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           }
         }}
       >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700
+        }}>
           <Typography component="span" variant="h6">Invoice & Payment</Typography>
           <IconButton
             onClick={() => {
               setInvoiceDialogOpen(false);
               setCreatedInvoiceId(null);
             }}
+            sx={{ color: 'white' }}
             size="small"
           >
             <Cancel />
@@ -1245,5 +1640,3 @@ export const StaffSchedulingCalendar: React.FC = () => {
 };
 
 export default StaffSchedulingCalendar;
-
-

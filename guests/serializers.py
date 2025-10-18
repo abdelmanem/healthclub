@@ -111,6 +111,13 @@ class GuestSerializer(serializers.ModelSerializer):
             GuestAddress.objects.create(guest=guest, **addr)
         for ec in contacts_data:
             EmergencyContact.objects.create(guest=guest, **ec)
+        
+        # After creating addresses, sync the guest's country with the primary address
+        primary_address = guest.addresses.filter(is_primary=True).first()
+        if primary_address and guest.country != primary_address.country:
+            guest.country = primary_address.country
+            guest.save(update_fields=['country'])
+        
         return guest
 
     def update(self, instance, validated_data):
@@ -125,6 +132,12 @@ class GuestSerializer(serializers.ModelSerializer):
             instance.addresses.all().delete()
             for addr in addresses_data:
                 GuestAddress.objects.create(guest=instance, **addr)
+            
+            # After creating addresses, sync the guest's country with the primary address
+            primary_address = instance.addresses.filter(is_primary=True).first()
+            if primary_address and instance.country != primary_address.country:
+                instance.country = primary_address.country
+                instance.save(update_fields=['country'])
 
         if contacts_data is not None:
             instance.emergency_contacts.all().delete()

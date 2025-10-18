@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, TextField, MenuItem, Button, Typography, Alert, Chip, Card, CardContent, IconButton, List, ListItem, ListItemText, ListItemSecondaryAction, FormControlLabel, Checkbox } from '@mui/material';
-import { Add, Delete } from '@mui/icons-material';
+import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText } from 'lucide-react';
+import { Box } from '@mui/material';
 import dayjs from 'dayjs';
 import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
@@ -8,13 +8,28 @@ import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null; onCreated?: () => void; onSaved?: () => void; onClose?: () => void; initialStart?: string; initialEmployeeId?: number; initialLocationId?: number }> = ({ reservation, onCreated, onSaved, onClose, initialStart, initialEmployeeId, initialLocationId }) => {
+interface SelectedService {
+  id: number;
+  name: string;
+  duration: number;
+  price: number;
+}
+
+export const ReservationBookingForm: React.FC<{ 
+  reservation?: Reservation | null; 
+  onCreated?: () => void; 
+  onSaved?: () => void; 
+  onClose?: () => void; 
+  initialStart?: string; 
+  initialEmployeeId?: number; 
+  initialLocationId?: number 
+}> = ({ reservation, onCreated, onSaved, onClose, initialStart, initialEmployeeId, initialLocationId }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
   const [selectedServiceId, setSelectedServiceId] = React.useState<number | ''>('' as any);
-  const [selectedServices, setSelectedServices] = React.useState<Array<{id: number, name: string, duration: number, price: number}>>([]);
+  const [selectedServices, setSelectedServices] = React.useState<SelectedService[]>([]);
   const [employeeId, setEmployeeId] = React.useState<number | ''>((initialEmployeeId as any) ?? ('' as any));
   const [locationId, setLocationId] = React.useState<number | ''>((initialLocationId as any) ?? ('' as any));
   const [start, setStart] = React.useState<string>(initialStart || dayjs().add(1, 'hour').minute(0).second(0).toISOString());
@@ -24,12 +39,10 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   const [locations, setLocations] = React.useState<any[]>([]);
   const [slots, setSlots] = React.useState<string[]>([]);
   const [conflicts, setConflicts] = React.useState<{ id: string | number; description: string }[]>([]);
-  // Removed Booking Rules / Recurring / Waitlist per requirements
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [availabilityStatus, setAvailabilityStatus] = React.useState<'unknown' | 'available' | 'unavailable' | 'error'>('unknown');
   const [availabilityReason, setAvailabilityReason] = React.useState<string | null>(null);
-  // Classic form extras (for UI parity)
   const [source, setSource] = React.useState<string>('');
   const [contactName, setContactName] = React.useState<string>('');
   const [email, setEmail] = React.useState<string>('');
@@ -78,7 +91,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     })();
   }, []);
 
-  // Load country list: try Intl API first; fallback to REST Countries
   React.useEffect(() => {
     const loadCountries = async () => {
       try {
@@ -109,7 +121,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     loadCountries();
   }, []);
 
-  // Prefill fields in edit mode
   React.useEffect(() => {
     if (reservation) {
       setGuestId(reservation.guest);
@@ -119,7 +130,17 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         setEmployeeId(reservation.employee as any);
       }
       setStart(reservation.start_time);
-      // Prefill services
+      
+      // Load full guest details to populate country and other fields
+      if (reservation.guest) {
+        guestsService.retrieve(reservation.guest).then((g: any) => {
+          setContactName(`${g.first_name} ${g.last_name}`.trim());
+          setEmail(g.email || '');
+          setCountry(g.country || '');
+        }).catch(() => {
+          // If guest retrieval fails, just use the guest name from reservation
+        });
+      }
       if (Array.isArray(reservation.reservation_services) && reservation.reservation_services.length > 0) {
         const svcs = reservation.reservation_services.map((rs: any) => ({
           id: rs.service,
@@ -132,7 +153,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
     }
   }, [reservation]);
 
-  // Apply initial props after lists load (to ensure value is in dropdowns)
   React.useEffect(() => {
     if (typeof initialEmployeeId === 'number') {
       setEmployeeId(initialEmployeeId as any);
@@ -153,6 +173,9 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         guestsService.retrieve(idNum).then((g: any) => {
           setGuestId(g.id);
           setGuestName(`${g.first_name} ${g.last_name}`.trim());
+          setContactName(`${g.first_name} ${g.last_name}`.trim());
+          setEmail(g.email || '');
+          setCountry(g.country || '');
         }).catch(() => {
           setGuestId('' as any);
           setGuestName('');
@@ -162,18 +185,18 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   }, [searchParams]);
 
   React.useEffect(() => {
-    // Calculate total price from selected services
     const total = selectedServices.reduce((sum, service) => sum + service.price, 0);
     setTotalPrice(total);
   }, [selectedServices]);
 
-  // Derived end time for display (start + total duration)
   const computedEndIso = React.useMemo(() => {
     const durationMinutes = (reservation && reservation.start_time && reservation.end_time)
       ? dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute')
       : (selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60);
     return dayjs(start).add(durationMinutes, 'minute').toISOString();
   }, [reservation, selectedServices, start]);
+
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
 
   const addService = () => {
     if (!selectedServiceId) return;
@@ -206,7 +229,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   };
 
   const checkAvailability = async () => {
-    // If essential inputs are missing, don't block submission
     if (selectedServices.length === 0 || !start) {
       setAvailabilityStatus('unknown');
       setSlots([]);
@@ -236,7 +258,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
 
   const detectConflicts = async () => {
     try {
-      // Compute end_time: preserve original duration when editing; otherwise use selected services
       const durationMinutes = (reservation && reservation.start_time && reservation.end_time)
         ? dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute')
         : (selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60);
@@ -265,54 +286,48 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
       setError('At least one service and start time are required.');
       return;
     }
-    // Temporarily skip availability/conflict checks during testing
 
     try {
-      // Ensure we have a guest: search by phone; create if missing and name/email provided
       let effectiveGuestId = guestId as number | '';
       if (!effectiveGuestId && phone) {
         try {
           const results = await guestsService.list({ search: phone });
-          const match = results.find((g: any) => (g.phone || '').includes(phone));
+          const match = results.find((g: any) => (g.phone || '').includes(phone)) as any;
           if (match) {
             effectiveGuestId = match.id;
             setGuestId(match.id);
             setGuestName(`${match.first_name} ${match.last_name}`.trim());
+            setContactName(`${match.first_name} ${match.last_name}`.trim());
+            setEmail(match.email || '');
+            setCountry(match.country || '');
           }
         } catch {}
       }
       if (!effectiveGuestId) {
-        // create a minimal guest if we have required details
         const split = (contactName || '').trim().split(/\s+/);
         const first = split[0] || 'Guest';
         const last = split.slice(1).join(' ') || 'Unknown';
-        const created = await guestsService.create({ first_name: first, last_name: last, email: email || '', phone: phone || '', membership_tier: null });
+        const created = await guestsService.create({ first_name: first, last_name: last, email: email || '', phone: phone || '', country: country || '', membership_tier: null });
         effectiveGuestId = created.id as any;
         setGuestId(created.id);
         setGuestName(`${created.first_name} ${created.last_name}`.trim());
       }
 
-      // Create or update reservation with multiple services
       const reservationData: any = {
         guest: Number(effectiveGuestId),
-        //employee: employeeId ? Number(employeeId) : null,
         location: locationId ? Number(locationId) : null,
         start_time: start,
         notes: notes || undefined,
       };
 
-      // Compute end_time
       if (reservation && reservation.id && reservation.start_time && reservation.end_time) {
-        // Preserve original duration on edit
         const durationMinutes = dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute');
         reservationData.end_time = dayjs(start).add(durationMinutes, 'minute').toISOString();
       } else {
-        // Create: derive from selected services
         const totalMinutesForCreate = selectedServices.reduce((sum, s) => sum + (s.duration || 0), 0) || 60;
         reservationData.end_time = dayjs(start).add(totalMinutesForCreate, 'minute').toISOString();
       }
 
-      // Add services in the format expected by the backend
       if (selectedServices.length > 0) {
         reservationData.reservation_services = selectedServices.map(service => ({
           service: service.id,
@@ -326,7 +341,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         if (onSaved) onSaved();
       } else {
         const created = await reservationsService.create(reservationData);
-        // Assign employee if selected
         if (employeeId) {
           try {
             await api.post('/reservation-assignments/', {
@@ -341,7 +355,6 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
         setSuccess('Reservation created');
         if (onCreated) onCreated();
       }
-      // Reset form
       setSelectedServices([]);
       setTotalPrice(0);
       setNotes('');
@@ -359,227 +372,359 @@ export const ReservationBookingForm: React.FC<{ reservation?: Reservation | null
   };
 
   return (
-    <Box>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
-        {/* Guest section replaced by phone-driven lookup + name/email */}
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Guest Info</Typography>
-          <Box display="flex" gap={1}>
-            <TextField label="Phone" fullWidth value={phone} onChange={async (e) => {
-              const v = e.target.value;
-              setPhone(v);
-              // live search by phone when length >= 4
-              if ((v || '').replace(/\D/g, '').length >= 4) {
-                try {
-                  const results = await guestsService.list({ search: v });
-                  const match = results.find((g: any) => (g.phone || '').includes(v));
-                  if (match) {
-                    setGuestId(match.id);
-                    setGuestName(`${match.first_name} ${match.last_name}`.trim());
-                    setContactName(`${match.first_name} ${match.last_name}`.trim());
-                    setEmail(match.email || '');
-                  }
-                } catch {}
-              }
-            }} />
-            <TextField select label="" value={phoneType} onChange={(e) => setPhoneType(e.target.value as any)} sx={{ minWidth: 120 }}>
-              <MenuItem value="Mobile">Mobile</MenuItem>
-              <MenuItem value="Home">Home</MenuItem>
-              <MenuItem value="Work">Work</MenuItem>
-            </TextField>
-          </Box>
-          <Box display="flex" gap={1} mt={1}>
-            <TextField label="Name" fullWidth value={contactName} onChange={(e) => setContactName(e.target.value)} />
-            <TextField label="Email" fullWidth value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Box>
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
-          <Box display="flex" gap={1}>
-            <TextField 
-              select 
-              label="Service" 
-              fullWidth 
-              value={selectedServiceId} 
-              onChange={(e) => {
-                const id = Number(e.target.value);
-                setSelectedServiceId(id as any);
-                if (!Number.isNaN(id)) {
-                  addServiceById(id);
-                  setSelectedServiceId('' as any);
-                }
-              }}
-            >
-              {services.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s: any) => (
-                <MenuItem key={s.id} value={s.id}>
-                  <Box>
-                    <Typography variant="body2" fontWeight="bold">{s.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Duration: {s.duration_minutes || 60} min | Price: ${parseFloat(s.price || 0).toFixed(2)}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
-            <Button 
-              variant="contained" 
-              onClick={addService} 
-              disabled={!selectedServiceId}
-              sx={{ minWidth: 'auto', px: 2 }}
-            >
-              <Add />
-            </Button>
-          </Box>
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField 
-            select 
-            label="Staff" 
-            fullWidth 
-            value={employees.some((e:any) => e.id === employeeId) ? employeeId : ('' as any)} 
-            onChange={(e) => setEmployeeId(e.target.value as any)}
-          >
-            <MenuItem value="">Unassigned</MenuItem>
-            {employees.map((e: any) => <MenuItem key={e.id} value={e.id}>{e.full_name ?? `${e.first_name} ${e.last_name}`}</MenuItem>)}
-          </TextField>
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 3' } }}>
-          <TextField 
-            select 
-            label="Room" 
-            fullWidth 
-            value={locations.some((l:any) => l.id === locationId) ? locationId : ('' as any)} 
-            onChange={(e) => setLocationId(e.target.value as any)}
-          >
-            <MenuItem value="">Any</MenuItem>
-            {locations.map((l: any) => <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>)}
-          </TextField>
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 4' } }}>
-          <Box display="flex" gap={1}>
-            <TextField type="datetime-local" label="Start" fullWidth value={dayjs(start).format('YYYY-MM-DDTHH:mm')} onChange={(e) => setStart(dayjs(e.target.value).toISOString())} InputLabelProps={{ shrink: true }} />
-            <TextField type="datetime-local" label="to" fullWidth value={dayjs(computedEndIso).format('YYYY-MM-DDTHH:mm')} InputLabelProps={{ shrink: true }} inputProps={{ readOnly: true }} />
-          </Box>
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 2' } }}>
-          <TextField label="Total Price" fullWidth value={`$${totalPrice.toFixed(2)}`} InputProps={{ readOnly: true }} />
-        </Box>
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <Typography variant="body2" color="text.secondary">Availability:</Typography>
-          <Box display="flex" alignItems="center" gap={1} mt={1}>
-            {availabilityStatus === 'unknown' && (
-              <Typography variant="caption" color="text.secondary">Unknown (click Check)</Typography>
-            )}
-            {availabilityStatus === 'available' && (
-              <Typography variant="caption" color="success.main">Available</Typography>
-            )}
-            {availabilityStatus === 'unavailable' && (
-              <>
-                <Typography variant="caption" color="error.main">Unavailable</Typography>
-                {availabilityReason && (
-                  <Chip size="small" color="error" label={availabilityReason.replace(/_/g, ' ')} />
-                )}
-              </>
-            )}
-            {availabilityStatus === 'error' && (
-              <Typography variant="caption" color="warning.main">Could not check (server error)</Typography>
-            )}
-            <Button size="small" onClick={checkAvailability}>Check</Button>
-          </Box>
-        </Box>
-        {/* Source */}
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <TextField select label="Source" fullWidth value={source} onChange={(e) => setSource(e.target.value)}>
-            <MenuItem value="">Select</MenuItem>
-            <MenuItem value="walk_in">Walk-in</MenuItem>
-            <MenuItem value="phone">Phone</MenuItem>
-            <MenuItem value="website">Website</MenuItem>
-            <MenuItem value="referral">Referral</MenuItem>
-          </TextField>
-        </Box>
-        {/* Name & Email */}
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <Box display="flex" gap={1}>
-            <TextField label="Name" fullWidth value={contactName} onChange={(e) => setContactName(e.target.value)} />
-            <TextField label="Email" fullWidth value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Box>
-        </Box>
-        {/* Country (optional, from Intl API) */}
-        <Box sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
-          <TextField
-            select
-            label="Country"
-            fullWidth
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            SelectProps={{ native: false }}
-          >
-            <MenuItem value="">Select</MenuItem>
-            {countries.map((c) => (
-              <MenuItem key={c.code} value={c.name}>{c.name}</MenuItem>
-            ))}
-          </TextField>
-        </Box>
-        {/* Notes */}
-        <Box sx={{ gridColumn: 'span 12' }}>
-          <TextField label="Notes" fullWidth multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Box>
-        {/* Confirmed */}
-        <Box sx={{ gridColumn: 'span 12' }}>
-          <FormControlLabel control={<Checkbox checked={markConfirmed} onChange={(e) => setMarkConfirmed(e.target.checked)} />} label="Mark as Confirmed" />
-        </Box>
-      </Box>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-6">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">{reservation ? 'Edit Reservation' : 'New Reservation'}</h1>
+                  <p className="text-blue-100 text-sm">Create a booking for your guest</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { if (onClose) { onClose(); } else { navigate(-1); } }}
+                className="w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-xl flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
 
-      {/* Selected Services */}
-      {selectedServices.length > 0 && (
-        <Card sx={{ mt: 2 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Selected Services</Typography>
-            <List>
-              {selectedServices.map((service) => (
-                <ListItem key={service.id} divider>
-                  <ListItemText
-                    primary={service.name}
-                    secondary={
-                      <Box>
-                        <Typography component="span" variant="body2" color="text.secondary">
-                          Duration: {service.duration} min | Price: ${service.price.toFixed(2)}
-                        </Typography>
-                      </Box>
-                    }
-                    secondaryTypographyProps={{ component: 'div' }}
+          {success && (
+            <div className="mx-8 mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3">
+              <Check className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <p className="text-emerald-800 text-sm font-medium">{success}</p>
+            </div>
+          )}
+          {error && (
+            <div className="mx-8 mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-red-800 text-sm font-medium">{error}</p>
+            </div>
+          )}
+
+          <div className="p-8 space-y-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <User className="w-5 h-5 text-slate-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Guest Information</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={async (e) => {
+                        const v = e.target.value;
+                        setPhone(v);
+                        if ((v || '').replace(/\D/g, '').length >= 4) {
+                          try {
+                            const results = await guestsService.list({ search: v });
+                            const match = results.find((g: any) => (g.phone || '').includes(v)) as any;
+                            if (match) {
+                              setGuestId(match.id);
+                              setGuestName(`${match.first_name} ${match.last_name}`.trim());
+                              setContactName(`${match.first_name} ${match.last_name}`.trim());
+                              setEmail(match.email || '');
+                              setCountry(match.country || '');
+                            }
+                          } catch {}
+                        }
+                      }}
+                      placeholder="+1 (555) 123-4567"
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                    <select
+                      value={phoneType}
+                      onChange={(e) => setPhoneType(e.target.value as any)}
+                      className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                      <option value="Mobile">Mobile</option>
+                      <option value="Home">Home</option>
+                      <option value="Work">Work</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
+                  <input
+                    type="text"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="John Doe"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
-                  <ListItemSecondaryAction>
-                    <IconButton edge="end" onClick={() => removeService(service.id)}>
-                      <Delete />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-            <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6">Total: ${totalPrice.toFixed(2)}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Total Duration: {selectedServices.reduce((sum, s) => sum + s.duration, 0)} min
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Country</label>
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Select country</option>
+                    {countries.map(c => (
+                      <option key={c.code} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
 
-      {/* Removed Booking Rules, Recurring, and Waitlist sections */}
-      <Box mt={2}>
-        <ConflictResolver conflicts={conflicts} onResolve={() => setConflicts([])} />
-      </Box>
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-5 h-5 text-slate-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Services</h2>
+              </div>
+              <div className="flex gap-2 mb-4">
+                <select
+                  value={selectedServiceId}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    setSelectedServiceId(id as any);
+                    if (!Number.isNaN(id)) {
+                      addServiceById(id);
+                      setSelectedServiceId('' as any);
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                >
+                  <option value="">Select a service</option>
+                  {services.filter(s => !selectedServices.find(ss => ss.id === s.id)).map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} - {s.duration_minutes || 60} min - ${parseFloat(s.price || 0).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={addService}
+                  disabled={!selectedServiceId}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center gap-2 font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </button>
+              </div>
 
-      <Box mt={2} display="flex" gap={2}>
-        <Button variant="outlined" color="inherit" onClick={() => { if (onClose) { onClose(); } else { navigate(-1); } }}>Close</Button>
-        <Button variant="text" onClick={resetForm}>Reset</Button>
-        <Button variant="contained" onClick={handleSubmit}>Save</Button>
-      </Box>
-    </Box>
+              {selectedServices.length > 0 && (
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-6 border border-slate-200">
+                  <h3 className="font-semibold text-slate-900 mb-4">Selected Services</h3>
+                  <div className="space-y-3 mb-6">
+                    {selectedServices.map(service => (
+                      <div key={service.id} className="bg-white rounded-lg p-4 flex items-center justify-between shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-900">{service.name}</p>
+                          <div className="flex items-center gap-4 mt-1">
+                            <span className="text-sm text-slate-600 flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              {service.duration} min
+                            </span>
+                            <span className="text-sm text-slate-600 flex items-center gap-1">
+                              <DollarSign className="w-4 h-4" />
+                              {service.price.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removeService(service.id)}
+                          className="w-9 h-9 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-slate-600" />
+                      <span className="text-slate-600">Total Duration:</span>
+                      <span className="font-semibold text-slate-900">{totalDuration} min</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-slate-600" />
+                      <span className="text-slate-600">Total:</span>
+                      <span className="text-2xl font-bold text-blue-600">${totalPrice.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-5 h-5 text-slate-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Booking Details</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Staff Member</label>
+                  <select
+                    value={employees.some((e:any) => e.id === employeeId) ? employeeId : ('' as any)}
+                    onChange={(e) => setEmployeeId(e.target.value as any)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Unassigned</option>
+                    {employees.map((e: any) => (
+                      <option key={e.id} value={e.id}>{e.full_name ?? `${e.first_name} ${e.last_name}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Room</label>
+                  <select
+                    value={locations.some((l:any) => l.id === locationId) ? locationId : ('' as any)}
+                    onChange={(e) => setLocationId(e.target.value as any)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Any Available</option>
+                    {locations.map((l: any) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Source</label>
+                  <select
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Select source</option>
+                    <option value="walk_in">Walk-in</option>
+                    <option value="phone">Phone</option>
+                    <option value="website">Website</option>
+                    <option value="referral">Referral</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Start Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={dayjs(start).format('YYYY-MM-DDTHH:mm')}
+                    onChange={(e) => setStart(dayjs(e.target.value).toISOString())}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">End Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={dayjs(computedEndIso).format('YYYY-MM-DDTHH:mm')}
+                    readOnly
+                    className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
+                  <div className="flex gap-2">
+                    <div className={`flex-1 px-4 py-3 rounded-xl border-2 flex items-center gap-2 ${
+                      availabilityStatus === 'available' ? 'bg-emerald-50 border-emerald-200' :
+                      availabilityStatus === 'unavailable' ? 'bg-red-50 border-red-200' :
+                      'bg-slate-50 border-slate-200'
+                    }`}>
+                      {availabilityStatus === 'available' && (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-medium text-emerald-700">Available</span>
+                        </>
+                      )}
+                      {availabilityStatus === 'unavailable' && (
+                        <>
+                          <AlertCircle className="w-4 h-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-700">Unavailable</span>
+                        </>
+                      )}
+                      {availabilityStatus === 'unknown' && (
+                        <span className="text-sm text-slate-600">Unknown</span>
+                      )}
+                      {availabilityStatus === 'error' && (
+                        <span className="text-sm text-amber-600">Error</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={checkAvailability}
+                      className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors font-medium"
+                    >
+                      Check
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-slate-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Additional Information</h2>
+              </div>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any special requests or notes..."
+                rows={4}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <input
+                type="checkbox"
+                id="confirmed"
+                checked={markConfirmed}
+                onChange={(e) => setMarkConfirmed(e.target.checked)}
+                className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+              />
+              <label htmlFor="confirmed" className="text-sm font-medium text-slate-700 cursor-pointer">
+                Mark this reservation as confirmed
+              </label>
+            </div>
+
+            {conflicts.length > 0 && (
+              <Box mt={2}>
+                <ConflictResolver conflicts={conflicts} onResolve={() => setConflicts([])} />
+              </Box>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
+          <button 
+            onClick={() => { if (onClose) { onClose(); } else { navigate(-1); } }}
+            className="px-6 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={resetForm}
+            className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors font-medium"
+          >
+            Reset
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40"
+          >
+            Save Reservation
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
-
-

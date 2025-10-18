@@ -129,7 +129,25 @@ export const CreateGuestDialog: React.FC<CreateGuestDialogProps> = ({ open, onCl
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const created = await guestsService.create(form);
+      // Filter out empty addresses and emergency contacts
+      const filteredForm = {
+        ...form,
+        addresses: form.addresses?.filter(addr => 
+          addr.street_address.trim() || 
+          addr.city.trim() || 
+          addr.state.trim() || 
+          addr.postal_code.trim() || 
+          addr.country.trim()
+        ) || [],
+        emergency_contacts: form.emergency_contacts?.filter(contact => 
+          contact.name.trim() || 
+          contact.relationship.trim() || 
+          contact.phone.trim() || 
+          contact.email.trim()
+        ) || []
+      };
+      
+      const created = await guestsService.create(filteredForm);
       onCreated(created);
       onClose();
       setForm({

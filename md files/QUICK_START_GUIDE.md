@@ -23,6 +23,11 @@ npm install @fullcalendar/timegrid
 npm install @fullcalendar/daygrid
 npm install @fullcalendar/interaction
 npm install @mui/material@5 @mui/icons-material@5
+#npm install lucide-react
+npm install lucide-react@latest
+npm install -D tailwindcss postcss autoprefixer
+npm install @tailwindcss/postcss --save-dev
+
 ```
 
 ### **2. Project Structure Setup**

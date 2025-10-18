@@ -156,6 +156,21 @@ class GuestAddress(models.Model):
 
     def __str__(self) -> str:
         return f"{self.guest.full_name} - {self.get_address_type_display()}"
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to handle primary address logic and sync country.
+        """
+        # If this address is being set as primary, unset all other primary addresses
+        if self.is_primary:
+            # Use update() to avoid triggering save() recursively
+            self.guest.addresses.filter(is_primary=True).exclude(id=self.id).update(is_primary=False)
+            # Update guest's country to match this primary address
+            if self.guest.country != self.country:
+                self.guest.country = self.country
+                self.guest.save(update_fields=['country'])
+        
+        super().save(*args, **kwargs)
 
 
 class EmergencyContact(models.Model):
