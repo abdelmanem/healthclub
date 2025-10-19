@@ -38,7 +38,7 @@ export const GuestProfile: React.FC<GuestProfileProps> = ({ guest, onEdit, onVie
 
       <Box mb={2}>
         <LoyaltyProgramManager
-          loyalty_points={(guest as any).loyalty_points}
+          loyalty_points={guest.loyalty_points}
           membership_tier={typeof guest.membership_tier === 'string' ? guest.membership_tier : guest.membership_tier?.display_name}
           benefits={(guest as any).membership_benefits}
         />

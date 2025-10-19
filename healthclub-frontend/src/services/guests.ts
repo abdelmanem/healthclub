@@ -16,6 +16,10 @@ export interface Guest {
   phone: string;
   country?: string;
   membership_tier?: string | MembershipTierObject;
+  loyalty_points?: number;
+  total_spent?: number;
+  visit_count?: number;
+  last_visit?: string;
   addresses?: GuestAddress[];
   emergency_contacts?: EmergencyContact[];
   preferences?: GuestPreference[];

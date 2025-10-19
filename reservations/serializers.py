@@ -77,6 +77,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     total_duration_minutes = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
     location_is_out_of_service = serializers.BooleanField(source='location.is_out_of_service', read_only=True)
+    guest_membership_tier = serializers.SerializerMethodField()
+    guest_loyalty_points = serializers.IntegerField(source='guest.loyalty_points', read_only=True)
 
     class Meta:
         model = Reservation
@@ -104,6 +106,8 @@ class ReservationSerializer(serializers.ModelSerializer):
             "no_show_recorded_at",
             "location_is_out_of_service",
             "is_first_for_guest",
+            "guest_membership_tier",
+            "guest_loyalty_points",
         ]
         read_only_fields = [
             "checked_in_at",
@@ -276,6 +280,20 @@ class ReservationSerializer(serializers.ModelSerializer):
         for service in obj.reservation_services.all():
             total += service.total_price
         return total
+
+    def get_guest_membership_tier(self, obj):
+        """Get guest's membership tier information"""
+        try:
+            guest = obj.guest
+            if hasattr(guest, 'membership_tier') and guest.membership_tier:
+                tier = guest.membership_tier
+                return {
+                    'name': tier.name,
+                    'display_name': tier.display_name
+                }
+        except Exception:
+            pass
+        return None
 
     def create(self, validated_data):
         services_data = validated_data.pop("reservation_services", [])

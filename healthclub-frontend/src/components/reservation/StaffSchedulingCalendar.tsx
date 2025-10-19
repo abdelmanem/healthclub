@@ -81,6 +81,9 @@ type Reservation = {
   checked_out_at?: string | null;
   cancelled_at?: string | null;
   no_show_recorded_at?: string | null;
+  // guest membership information
+  guest_membership_tier?: string | { name: string; display_name: string };
+  guest_loyalty_points?: number;
 };
 
 type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
@@ -89,6 +92,24 @@ const getEmployeeDisplayName = (e?: Employee | null) => {
   if (!e) return 'Unassigned';
   const full = `${e.first_name ?? ''} ${e.last_name ?? ''}`.trim();
   return (e.name && e.name.length > 0) ? e.name : (full.length > 0 ? full : 'Staff');
+};
+
+const getMembershipTierDisplay = (tier?: string | { name: string; display_name: string } | null) => {
+  if (!tier) return null;
+  if (typeof tier === 'string') return tier;
+  return tier.display_name || tier.name;
+};
+
+const getMembershipTierColor = (tier?: string | { name: string; display_name: string } | null) => {
+  const tierName = getMembershipTierDisplay(tier)?.toLowerCase();
+  switch (tierName) {
+    case 'platinum': return '#94a3b8';
+    case 'gold': return '#fbbf24';
+    case 'silver': return '#9ca3af';
+    case 'bronze': return '#fb923c';
+    case 'vip': return '#a855f7';
+    default: return '#6b7280';
+  }
 };
 
 const statusColor = (status?: string) => {
@@ -607,6 +628,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
           return isNaN(diff) ? undefined : diff;
         } catch { return undefined as any; }
       })(),
+      membershipTier: r.guest_membership_tier,
+      loyaltyPoints: r.guest_loyalty_points,
     },
   }));
   
@@ -951,14 +974,26 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
             const servicesLines = servicesText ? String(servicesText).split(', ') : [];
             const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
+            const membershipTier = ev.extendedProps?.membershipTier;
+            const loyaltyPoints = ev.extendedProps?.loyaltyPoints;
+            
             const badge = isFirst ? '<span style="margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.95);color:#000;font-size:10px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);">✨ NEW</span>' : '';
             const servicesHtml = servicesLines.length > 0 ? `<div style="font-size:11px;opacity:.95;margin-top:2px;">${servicesLines.map((line:any) => `<div style="padding:1px 0;">${line}</div>`).join('')}</div>` : '';
+            
+            // Membership tier badge
+            const membershipBadge = membershipTier ? `<div style="font-size:9px;opacity:.9;margin-top:2px;"><span style="padding:1px 4px;border-radius:3px;background:${getMembershipTierColor(membershipTier)};color:white;font-weight:600;">${getMembershipTierDisplay(membershipTier)}</span></div>` : '';
+            
+            // Loyalty points display
+            const loyaltyDisplay = loyaltyPoints ? `<div style="font-size:9px;opacity:.9;margin-top:1px;">⭐ ${loyaltyPoints} pts</div>` : '';
+            
             const html = `
               <div style="padding:6px 8px;line-height:1.3;">
                 <div style="font-size:10px;opacity:.9;font-weight:600;">${start}</div>
                 <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${badge}</div>
                 ${servicesHtml}
                 ${typeof totalDurationMin === 'number' ? `<div style="font-size:10px;opacity:.9;margin-top:2px;"><strong>⏱ ${totalDurationMin} min</strong></div>` : ''}
+                ${membershipBadge}
+                ${loyaltyDisplay}
                 <div style="font-size:10px;opacity:.9;font-weight:600;margin-top:2px;">${end}</div>
               </div>`;
             return { html };

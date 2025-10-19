@@ -44,6 +44,9 @@ export interface Reservation {
   // flags
   location_is_out_of_service?: boolean;
   is_first_for_guest?: boolean;
+  // guest membership information
+  guest_membership_tier?: string | { name: string; display_name: string };
+  guest_loyalty_points?: number;
 }
 
 export interface CreateReservationInput {

@@ -35,7 +35,6 @@ import { QuickReservationDialog } from '../components/guest/QuickReservationDial
 
 type Guest = GuestType & {
   avatar?: string;
-  points?: number;
   last_visit?: string;
 };
 
@@ -320,7 +319,7 @@ export const GuestManagement: React.FC = () => {
                         </span>
                         <span className="text-slate-600 flex items-center gap-1">
                           <EmojiEvents sx={{ fontSize: 16, color: '#6366f1' }} />
-                          {(selectedGuest as any).points || 0} points
+                          {selectedGuest.loyalty_points || 0} points
                         </span>
                       </div>
                     </div>
