@@ -632,10 +632,36 @@ export const StaffSchedulingCalendar: React.FC = () => {
       loyaltyPoints: r.guest_loyalty_points,
     },
   }));
+
+  // Build 10-minute cleanup buffer events following each reservation's end_time.
+  const cleanupEvents = reservations
+    .filter((r) => !!r.end_time)
+    .map((r) => {
+      const start = dayjs(r.end_time);
+      const end = start.add(10, 'minute');
+      return {
+        id: `cleanup-${r.id}`,
+        title: 'Room Cleanup',
+        start: start.toISOString(),
+        end: end.toISOString(),
+        resourceId: r.employee ? String(r.employee) : undefined,
+        // Distinct color (teal) with readable text
+        backgroundColor: '#14b8a6', // teal-500
+        borderColor: '#14b8a6',
+        textColor: '#ffffff',
+        editable: false,
+        eventResizableFromStart: false,
+        extendedProps: {
+          isCleanup: true,
+          baseReservationId: r.id,
+          cleanupMinutes: 10,
+        },
+      } as any;
+    });
   
   const allEvents = React.useMemo(() => {
-    return [...backgroundBlocks, ...events];
-  }, [backgroundBlocks, events]);
+    return [...backgroundBlocks, ...events, ...cleanupEvents];
+  }, [backgroundBlocks, events, cleanupEvents]);
 
   const handleSelect = (info: any) => {
     const employeeId = info.resource?.id ? Number(info.resource.id) : undefined;
@@ -953,8 +979,22 @@ export const StaffSchedulingCalendar: React.FC = () => {
             }
           }}
           select={handleSelect}
-          eventDrop={handleEventDrop}
-          eventResize={handleEventDrop}
+          eventDrop={(dropInfo: any) => {
+            // Prevent dragging cleanup events
+            if (dropInfo?.event?.extendedProps?.isCleanup) {
+              dropInfo.revert();
+              return;
+            }
+            handleEventDrop(dropInfo);
+          }}
+          eventResize={(resizeInfo: any) => {
+            // Prevent resizing cleanup events
+            if (resizeInfo?.event?.extendedProps?.isCleanup) {
+              resizeInfo.revert();
+              return;
+            }
+            handleEventDrop(resizeInfo);
+          }}
           eventClick={(arg:any) => {
             const r: Reservation | undefined = arg.event.extendedProps?.reservation;
             if (r) setMenuAnchor({ element: arg.el, reservation: r });
@@ -971,6 +1011,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const end = ev.end ? dayjs(ev.end).format('h:mm A') : '';
             const title = ev.title || '';
             const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
+            const isCleanup = !!(ev.extendedProps && ev.extendedProps.isCleanup);
             const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
             const servicesLines = servicesText ? String(servicesText).split(', ') : [];
             const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
@@ -989,7 +1030,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const html = `
               <div style="padding:6px 8px;line-height:1.3;">
                 <div style="font-size:10px;opacity:.9;font-weight:600;">${start}</div>
-                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${badge}</div>
+                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${isCleanup ? '<span style=\"margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.95);color:#000;font-size:10px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);\">🧹 10m</span>' : badge}</div>
                 ${servicesHtml}
                 ${typeof totalDurationMin === 'number' ? `<div style="font-size:10px;opacity:.9;margin-top:2px;"><strong>⏱ ${totalDurationMin} min</strong></div>` : ''}
                 ${membershipBadge}
