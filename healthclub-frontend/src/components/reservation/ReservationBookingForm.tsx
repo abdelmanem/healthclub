@@ -52,6 +52,8 @@ export const ReservationBookingForm: React.FC<{
   const [phoneType, setPhoneType] = React.useState<'Mobile' | 'Home' | 'Work'>('Mobile');
   const [notes, setNotes] = React.useState<string>('');
   const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
+  const [cancelledCount, setCancelledCount] = React.useState<number>(0);
+  const hasPastCancellation = cancelledCount > 0;
 
   const resetForm = React.useCallback(() => {
     setGuestId('' as any);
@@ -183,6 +185,20 @@ export const ReservationBookingForm: React.FC<{
       }
     }
   }, [searchParams]);
+
+  // When creating a NEW reservation and a guest is selected, check if they previously cancelled
+  React.useEffect(() => {
+    const loadCancelled = async () => {
+      try {
+        if (reservation || !guestId) { setCancelledCount(0); return; }
+        const items = await reservationsService.list({ guest: Number(guestId), status: 'cancelled' });
+        setCancelledCount(Array.isArray(items) ? items.length : 0);
+      } catch {
+        setCancelledCount(0);
+      }
+    };
+    loadCancelled();
+  }, [reservation, guestId]);
 
   React.useEffect(() => {
     const total = selectedServices.reduce((sum, service) => sum + service.price, 0);
@@ -413,6 +429,14 @@ export const ReservationBookingForm: React.FC<{
               <div className="flex items-center gap-2 mb-4">
                 <User className="w-5 h-5 text-slate-600" />
                 <h2 className="text-lg font-semibold text-slate-900">Guest Information</h2>
+                {!reservation && hasPastCancellation && (
+                  <span
+                    className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-xs font-semibold"
+                    title={`${cancelledCount} past cancellation${cancelledCount === 1 ? '' : 's'}`}
+                  >
+                    ❗ Previously Cancelled{cancelledCount > 0 ? ` (${cancelledCount})` : ''}
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-1">

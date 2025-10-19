@@ -464,7 +464,14 @@ export const GuestManagement: React.FC = () => {
                         <div className="text-center py-4 text-slate-500">No reservations found.</div>
                       )}
                       {!reservationsLoading && reservations.slice(0, 3).map((r: any, idx: number) => (
-                        <div key={r.id ?? idx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all">
+                        <div
+                          key={r.id ?? idx}
+                          className="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => navigate(`/reservations?guest=${selectedGuest?.id}`)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/reservations?guest=${selectedGuest?.id}`); }}
+                        >
                           <div className="flex items-center justify-between">
                             <div>
                               <h4 className="font-semibold text-slate-800">
@@ -481,7 +488,10 @@ export const GuestManagement: React.FC = () => {
                                 </p>
                               )}
                             </div>
-                            <button className="text-indigo-600 hover:text-indigo-700">
+                            <button
+                              className="text-indigo-600 hover:text-indigo-700"
+                              onClick={(ev) => { ev.stopPropagation(); navigate(`/reservations?guest=${selectedGuest?.id}`); }}
+                            >
                               <Visibility sx={{ fontSize: 18 }} />
                             </button>
                           </div>
