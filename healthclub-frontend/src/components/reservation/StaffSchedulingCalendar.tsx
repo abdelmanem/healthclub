@@ -1027,6 +1027,16 @@ export const StaffSchedulingCalendar: React.FC = () => {
             // Loyalty points display
             const loyaltyDisplay = loyaltyPoints ? `<div style="font-size:9px;opacity:.9;margin-top:1px;">⭐ ${loyaltyPoints} pts</div>` : '';
             
+            // For cleanup events, show only the stamp (no times, no title, no extras)
+            if (isCleanup) {
+              const cleanupStamp = '<span style="padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.95);color:#000;font-size:10px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);">🧹 10m</span>';
+              const html = `
+                <div style="padding:6px 8px;line-height:1.3;display:flex;align-items:center;justify-content:center;min-height:100%;">
+                  ${cleanupStamp}
+                </div>`;
+              return { html };
+            }
+
             const html = `
               <div style="padding:6px 8px;line-height:1.3;">
                 <div style="font-size:10px;opacity:.9;font-weight:600;">${start}</div>
