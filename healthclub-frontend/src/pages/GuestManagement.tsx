@@ -473,6 +473,13 @@ export const GuestManagement: React.FC = () => {
                               <p className="text-sm text-slate-600">
                                 {new Date(r?.start_time ?? r?.end_time ?? Date.now()).toLocaleString()}
                               </p>
+                              {r?.status === 'cancelled' && (
+                                <p className="text-xs mt-1">
+                                  <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
+                                    Cancelled{r?.cancellation_reason_name ? ` • ${r.cancellation_reason_name}` : ''}
+                                  </span>
+                                </p>
+                              )}
                             </div>
                             <button className="text-indigo-600 hover:text-indigo-700">
                               <Visibility sx={{ fontSize: 18 }} />

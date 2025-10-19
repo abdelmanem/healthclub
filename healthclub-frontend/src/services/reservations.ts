@@ -40,6 +40,8 @@ export interface Reservation {
   completed_at?: string | null;
   checked_out_at?: string | null;
   cancelled_at?: string | null;
+  cancellation_reason?: number | null;
+  cancellation_reason_name?: string | null;
   no_show_recorded_at?: string | null;
   // flags
   location_is_out_of_service?: boolean;

@@ -79,6 +79,7 @@ class ReservationSerializer(serializers.ModelSerializer):
     location_is_out_of_service = serializers.BooleanField(source='location.is_out_of_service', read_only=True)
     guest_membership_tier = serializers.SerializerMethodField()
     guest_loyalty_points = serializers.IntegerField(source='guest.loyalty_points', read_only=True)
+    cancellation_reason_name = serializers.CharField(source='cancellation_reason.name', read_only=True)
 
     class Meta:
         model = Reservation
@@ -103,6 +104,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             "checked_out_at",
             "cancelled_at",
             "cancellation_reason",
+            "cancellation_reason_name",
             "no_show_recorded_at",
             "location_is_out_of_service",
             "is_first_for_guest",
