@@ -1012,6 +1012,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             const title = ev.title || '';
             const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
             const isCleanup = !!(ev.extendedProps && ev.extendedProps.isCleanup);
+            const status = ev.extendedProps?.status || ev.extendedProps?.reservation?.status;
             const servicesText = (ev.extendedProps && ev.extendedProps.servicesText) || '';
             const servicesLines = servicesText ? String(servicesText).split(', ') : [];
             const totalDurationMin = (ev.extendedProps && ev.extendedProps.totalDurationMin) as number | undefined;
@@ -1037,10 +1038,25 @@ export const StaffSchedulingCalendar: React.FC = () => {
               return { html };
             }
 
+            // Status stamp by action
+            const statusText = (status || '').replace('_',' ').toUpperCase();
+            const statusBg = ((): string => {
+              switch (status) {
+                case 'booked': return 'background:rgba(255,255,255,0.95);color:#1d4ed8;'; // blue
+                case 'checked_in': return 'background:rgba(255,255,255,0.95);color:#b45309;'; // amber
+                case 'in_service': return 'background:rgba(255,255,255,0.95);color:#6d28d9;'; // purple
+                case 'checked_out': return 'background:rgba(255,255,255,0.95);color:#0f766e;'; // teal
+                case 'completed': return 'background:rgba(255,255,255,0.95);color:#047857;'; // green
+                case 'cancelled': return 'background:rgba(255,255,255,0.95);color:#b91c1c;'; // red
+                default: return 'background:rgba(255,255,255,0.95);color:#111827;';
+              }
+            })();
+            const statusStamp = status ? `<span style="margin-left:6px;padding:2px 6px;border-radius:4px;${statusBg}font-size:10px;font-weight:800;box-shadow:0 2px 4px rgba(0,0,0,0.1);">${statusText}</span>` : '';
+
             const html = `
               <div style="padding:6px 8px;line-height:1.3;">
                 <div style="font-size:10px;opacity:.9;font-weight:600;">${start}</div>
-                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${isCleanup ? '<span style=\"margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.95);color:#000;font-size:10px;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);\">🧹 10m</span>' : badge}</div>
+                <div style="font-weight:700;font-size:13px;display:flex;align-items:center;margin:2px 0;">${title}${badge}${statusStamp}</div>
                 ${servicesHtml}
                 ${typeof totalDurationMin === 'number' ? `<div style="font-size:10px;opacity:.9;margin-top:2px;"><strong>⏱ ${totalDurationMin} min</strong></div>` : ''}
                 ${membershipBadge}
