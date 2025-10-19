@@ -801,17 +801,17 @@ export const ReservationManagement: React.FC = () => {
                     {guestDetails.membership_tier && (
                       <Typography variant="body2"><strong>Membership:</strong> {typeof guestDetails.membership_tier === 'string' ? guestDetails.membership_tier : (guestDetails.membership_tier as any)?.display_name || (guestDetails.membership_tier as any)?.name}</Typography>
                     )}
-                    {(guestDetails as any).loyalty_points !== undefined && (
-                      <Typography variant="body2"><strong>Loyalty Points:</strong> {(guestDetails as any).loyalty_points}</Typography>
+                    {guestDetails.loyalty_points !== undefined && (
+                      <Typography variant="body2"><strong>Loyalty Points:</strong> {guestDetails.loyalty_points}</Typography>
                     )}
-                    {(guestDetails as any).visit_count !== undefined && (
-                      <Typography variant="body2"><strong>Total Visits:</strong> {(guestDetails as any).visit_count}</Typography>
+                    {guestDetails.visit_count !== undefined && (
+                      <Typography variant="body2"><strong>Total Visits:</strong> {guestDetails.visit_count}</Typography>
                     )}
-                    {(guestDetails as any).total_spent !== undefined && (
-                      <Typography variant="body2"><strong>Total Spent:</strong> ${Number((guestDetails as any).total_spent || 0).toFixed(2)}</Typography>
+                    {guestDetails.total_spent !== undefined && (
+                      <Typography variant="body2"><strong>Total Spent:</strong> ${Number(guestDetails.total_spent || 0).toFixed(2)}</Typography>
                     )}
-                    {(guestDetails as any).last_visit && (
-                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs((guestDetails as any).last_visit).format('MMM D, YYYY')}</Typography>
+                    {guestDetails.last_visit && (
+                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs(guestDetails.last_visit).format('MMM D, YYYY')}</Typography>
                     )}
                   </Box>
                 </Paper>

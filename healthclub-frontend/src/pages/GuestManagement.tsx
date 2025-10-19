@@ -415,7 +415,7 @@ export const GuestManagement: React.FC = () => {
                           <CalendarToday sx={{ fontSize: 24 }} />
                           <span className="text-green-200 text-sm">All Time</span>
                         </div>
-                        <h3 className="text-3xl font-bold mb-1">{(selectedGuest as any)?.visit_count || 0}</h3>
+                        <h3 className="text-3xl font-bold mb-1">{selectedGuest?.visit_count || 0}</h3>
                         <p className="text-green-200">Total Visits</p>
                       </div>
 

@@ -40,6 +40,14 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
         elif instance.status == Reservation.STATUS_CHECKED_OUT:
             instance.checked_out_at = now
             mark_guest_checked_out(instance.guest)
+            # Update guest visit count and last visit
+            try:
+                guest = instance.guest
+                guest.visit_count += 1
+                guest.last_visit = now
+                guest.save(update_fields=['visit_count', 'last_visit'])
+            except Exception:
+                pass
             # Free up the location and mark as dirty after checkout
             if getattr(instance, 'location_id', None):
                 try:
