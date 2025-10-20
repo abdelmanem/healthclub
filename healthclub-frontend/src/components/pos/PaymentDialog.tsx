@@ -277,7 +277,8 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               <FormControlLabel 
                 value="deposit" 
                 control={<Radio />} 
-                label="Deposit" 
+                label="Deposit"
+                disabled={invoice.payments.some(p => p.payment_type === 'deposit')}
               />
             </RadioGroup>
           </FormControl>
@@ -347,6 +348,32 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             rows={3}
             placeholder="Additional notes about this payment..."
           />
+
+          {/* Deposit Information */}
+          {invoice.payments.some(p => p.payment_type === 'deposit') && (
+            <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1, opacity: 0.1 }}>
+              <Typography variant="subtitle2" color="info.dark" gutterBottom>
+                Applied Deposits
+              </Typography>
+              <Stack spacing={1}>
+                {invoice.payments
+                  .filter(p => p.payment_type === 'deposit')
+                  .map((deposit, index) => (
+                    <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2">
+                        Deposit Payment #{deposit.id}:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {formatCurrency(deposit.amount)}
+                      </Typography>
+                    </Box>
+                  ))}
+                <Typography variant="body2" color="info.main" fontWeight={600}>
+                  ✓ Deposits already applied to this invoice
+                </Typography>
+              </Stack>
+            </Box>
+          )}
 
           {/* Payment Preview */}
           {amount && parseFloat(amount) > 0 && (

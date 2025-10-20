@@ -812,11 +812,19 @@ export const StaffSchedulingCalendar: React.FC = () => {
               setCreatedInvoiceId(invoiceResult.invoice_id);
               setInvoiceDialogOpen(true);
               
-              alert(
-                `Check-out successful!\n\n` +
+              let message = `Check-out successful!\n\n` +
                 `Invoice created: ${invoiceResult.invoice_number}\n` +
-                `Housekeeping task created automatically.`
-              );
+                `Total: $${invoiceResult.total_amount}\n` +
+                `Balance Due: $${invoiceResult.balance_due}\n`;
+              
+              if (invoiceResult.deposits_applied_count > 0) {
+                message += `\nDeposits Applied: ${invoiceResult.deposits_applied_count}\n` +
+                  `Deposit Amount: $${invoiceResult.amount_paid}\n`;
+              }
+              
+              message += `\nHousekeeping task created automatically.`;
+              
+              alert(message);
             } else {
               alert('Check-out successful! Housekeeping task created automatically.');
             }

@@ -60,6 +60,28 @@ export interface Payment {
   updated_at: string;
 }
 
+export interface Deposit {
+  id: number;
+  guest: number;
+  guest_name: string;
+  reservation?: number;
+  invoice?: number;
+  invoice_number?: string;
+  amount: string;
+  amount_applied: string;
+  remaining_amount: string;
+  status: 'pending' | 'paid' | 'applied' | 'refunded';
+  status_display: string;
+  payment_method: string;
+  transaction_id: string;
+  reference: string;
+  collected_at: string;
+  collected_by?: number;
+  collected_by_name?: string;
+  notes: string;
+  can_be_applied: boolean;
+}
+
 export interface Invoice {
   id: number;
   invoice_number: string;
@@ -669,10 +691,13 @@ export const reservationInvoiceService = {
     invoice_number: string;
     total_amount: string;
     balance_due: string;
-    invoice_status: string;
-    subtotal: string;
-    tax_amount: string;
-    service_charge: string;
+    amount_paid: string;
+    deposits_applied: Array<{
+      deposit_id: number;
+      amount_applied: string;
+      payment_id: number;
+    }>;
+    deposits_applied_count: number;
     message: string;
   }> {
     const response = await api.post(`/reservations/${reservationId}/create-invoice/`);
@@ -751,6 +776,61 @@ export const reservationInvoiceService = {
     payments: Payment[];
   }> {
     const response = await api.get(`/reservations/${reservationId}/payment-history/`);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// DEPOSIT SERVICE
+// ============================================================================
+
+export const depositsService = {
+  /**
+   * Get available deposits for an invoice's guest
+   * 
+   * @param invoiceId - Invoice ID
+   * @returns Available deposits for the guest
+   * 
+   * @example
+   * const deposits = await depositsService.getAvailableForInvoice(123);
+   * console.log(deposits.total_available_amount);  // Total available
+   */
+  async getAvailableForInvoice(invoiceId: number): Promise<{
+    invoice_id: number;
+    guest_name: string;
+    available_deposits_count: number;
+    total_available_amount: string;
+    deposits: Deposit[];
+  }> {
+    const response = await api.get(`/invoices/${invoiceId}/available_deposits/`);
+    return response.data;
+  },
+
+  /**
+   * Manually apply a deposit to an invoice
+   * 
+   * @param invoiceId - Invoice ID
+   * @param data - Deposit application data
+   * @returns Application result
+   * 
+   * @example
+   * const result = await depositsService.applyToInvoice(123, {
+   *   deposit_id: 42,
+   *   amount: '25.00'  // optional
+   * });
+   */
+  async applyToInvoice(invoiceId: number, data: {
+    deposit_id: number;
+    amount?: string;
+  }): Promise<{
+    success: boolean;
+    payment_id: number;
+    amount_applied: string;
+    deposit_remaining: string;
+    invoice_balance: string;
+    message: string;
+  }> {
+    const response = await api.post(`/invoices/${invoiceId}/apply_deposit/`, data);
     return response.data;
   },
 };

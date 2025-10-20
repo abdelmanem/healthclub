@@ -78,12 +78,15 @@ export const CheckOutDialog: React.FC<CheckOutDialogProps> = ({
 
       // Show success message
       if (result.invoice_created) {
-        alert(
-          `Check-out successful!\n\n` +
+        let message = `Check-out successful!\n\n` +
           `Invoice created: ${result.invoice_number}\n` +
-          `Total: $${result.invoice_total}\n` +
-          `Housekeeping task created automatically.`
-        );
+          `Total: $${result.invoice_total}\n`;
+        
+        // Note: The checkout result doesn't include deposit info yet
+        // This would need to be updated in the backend checkout endpoint
+        message += `\nHousekeeping task created automatically.`;
+        
+        alert(message);
       } else {
         alert(
           `Check-out successful!\n\n` +

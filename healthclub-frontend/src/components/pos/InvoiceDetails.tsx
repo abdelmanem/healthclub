@@ -552,10 +552,21 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                   <ListItemText
                     primary={
                       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body1" fontWeight={600}>
-                          {payment.is_refund ? 'Refund' : 'Payment'} -{' '}
-                          {payment.payment_method_name || payment.method}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1" fontWeight={600}>
+                            {payment.is_refund ? 'Refund' : 
+                             payment.payment_type === 'deposit' ? 'Deposit Payment' : 'Payment'} -{' '}
+                            {payment.payment_method_name || payment.method}
+                          </Typography>
+                          {payment.payment_type === 'deposit' && (
+                            <Chip 
+                              label="Deposit" 
+                              size="small" 
+                              color="info" 
+                              variant="outlined"
+                            />
+                          )}
+                        </Box>
                         <Typography
                           variant="body1"
                           fontWeight={700}

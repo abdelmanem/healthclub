@@ -140,7 +140,6 @@ export const DepositPaymentDialog: React.FC<DepositPaymentDialogProps> = ({
       const result = await reservationsService.payDeposit(reservation.id, {
         amount: amount,
         payment_method: selectedMethod.id,
-        payment_type: 'deposit',
         reference: referenceNumber || undefined,
         transaction_id: transactionId || undefined,
         notes: notes || undefined,

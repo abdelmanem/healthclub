@@ -187,7 +187,21 @@ export const reservationsService = {
     const response = await api.post(`/reservations/${id}/cancel/`, data || {});
     return response.data;
   },
-  async createInvoice(id: number): Promise<{ invoice_id: number; invoice_number: string }> {
+  async createInvoice(id: number): Promise<{ 
+    success: boolean;
+    invoice_id: number; 
+    invoice_number: string;
+    total_amount: string;
+    balance_due: string;
+    amount_paid: string;
+    deposits_applied: Array<{
+      deposit_id: number;
+      amount_applied: string;
+      payment_id: number;
+    }>;
+    deposits_applied_count: number;
+    message: string;
+  }> {
     const response = await api.post(`/reservations/${id}/create-invoice/`, {});
     return response.data;
   },
@@ -196,18 +210,17 @@ export const reservationsService = {
   async payDeposit(id: number, paymentData: {
     amount: string;
     payment_method: number;
-    payment_type?: 'deposit';
     reference?: string;
     transaction_id?: string;
     notes?: string;
   }): Promise<{
     success: boolean;
     message: string;
+    deposit_id: number;
+    amount: string;
+    status: string;
     reservation_id: number;
-    deposit_amount: string;
-    deposit_paid: boolean;
-    deposit_paid_at: string;
-    payment_response: any;
+    collected_at: string;
   }> {
     const response = await api.post(`/reservations/${id}/pay-deposit/`, paymentData);
     return response.data;
