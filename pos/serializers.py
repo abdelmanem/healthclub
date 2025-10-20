@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund
+from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund, Deposit
 
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
@@ -841,3 +841,37 @@ class RefundModelSerializer(serializers.ModelSerializer):
             return obj.approved_by.get_full_name() or obj.approved_by.username
         return None
 
+
+class DepositSerializer(serializers.ModelSerializer):
+    """Serializer for Deposits"""
+    guest_name = serializers.SerializerMethodField()
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    collected_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    remaining_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    can_be_applied = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Deposit
+        fields = [
+            'id', 'guest', 'guest_name',
+            'reservation', 'invoice', 'invoice_number',
+            'amount', 'amount_applied', 'remaining_amount',
+            'status', 'status_display',
+            'payment_method', 'transaction_id', 'reference',
+            'collected_at', 'collected_by', 'collected_by_name',
+            'notes', 'can_be_applied'
+        ]
+        read_only_fields = ['id', 'collected_at', 'remaining_amount']
+    
+    def get_guest_name(self, obj):
+        if obj.guest:
+            return f"{obj.guest.first_name} {obj.guest.last_name}".strip()
+        return None
+    
+    def get_collected_by_name(self, obj):
+        if obj.collected_by:
+            return obj.collected_by.get_full_name() or obj.collected_by.username
+        return None

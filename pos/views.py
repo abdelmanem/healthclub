@@ -4,10 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Q, Sum, Count, Avg
+from django.db.models import Q, Sum, Count, Avg, F
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 
-from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund
+from .models import Invoice, InvoiceItem, Payment, PaymentMethod, Refund, Deposit
 from .serializers import (
     InvoiceSerializer,
     InvoiceListSerializer,
@@ -17,6 +18,7 @@ from .serializers import (
     ProcessPaymentSerializer,
     RefundSerializer,
     RefundModelSerializer,
+    DepositSerializer,
 )
 
 
@@ -1197,6 +1199,88 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
             'by_method': by_method,
             'by_hour': by_hour
         })
+
+    @action(detail=True, methods=['get'])
+    def available_deposits(self, request, pk=None):
+        """
+        Get available deposits for this invoice's guest
+        
+        GET /api/invoices/{id}/available_deposits/
+        """
+        invoice = self.get_object()
+        from .models import Deposit
+        
+        deposits = Deposit.objects.filter(
+            guest=invoice.guest,
+            status='paid',
+            amount_applied__lt=models.F('amount')
+        ).order_by('-collected_at')
+        
+        from .serializers import DepositSerializer
+        serializer = DepositSerializer(deposits, many=True)
+        
+        return Response({
+            'invoice_id': invoice.id,
+            'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
+            'available_deposits_count': deposits.count(),
+            'total_available_amount': sum(d.remaining_amount for d in deposits),
+            'deposits': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def apply_deposit(self, request, pk=None):
+        """
+        Manually apply deposit to invoice
+        
+        POST /api/invoices/{id}/apply_deposit/
+        Body: {"deposit_id": 123, "amount": 50.00}  # amount optional
+        """
+        invoice = self.get_object()
+        from .models import Deposit
+        
+        deposit_id = request.data.get('deposit_id')
+        if not deposit_id:
+            return Response(
+                {'error': 'deposit_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            deposit = Deposit.objects.get(id=deposit_id, guest=invoice.guest)
+        except Deposit.DoesNotExist:
+            return Response(
+                {'error': 'Deposit not found or does not belong to this guest'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Optional amount parameter
+        amount = request.data.get('amount')
+        if amount:
+            try:
+                amount = Decimal(str(amount))
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'Invalid amount format'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        try:
+            payment = deposit.apply_to_invoice(invoice, amount)
+            invoice.refresh_from_db()
+            
+            return Response({
+                'success': True,
+                'payment_id': payment.id,
+                'amount_applied': str(payment.amount),
+                'deposit_remaining': str(deposit.remaining_amount),
+                'invoice_balance': str(invoice.balance_due),
+                'message': f'Deposit of ${payment.amount} applied successfully'
+            })
+        except ValidationError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):

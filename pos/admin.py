@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     PosConfig, Invoice, InvoiceItem, Payment, Refund, 
-    GiftCard, PromotionalCode, FinancialReport
+    GiftCard, PromotionalCode, FinancialReport, Deposit
 )
 
 
@@ -91,4 +91,14 @@ class FinancialReportAdmin(admin.ModelAdmin):
     search_fields = ("name", "generated_by__username")
     list_select_related = ("generated_by",)
 
-# Register your models here.
+
+@admin.register(Deposit)
+class DepositAdmin(admin.ModelAdmin):
+    list_display = ['id', 'guest', 'reservation', 'amount', 'amount_applied', 'remaining_display', 'status', 'collected_at']
+    list_filter = ['status', 'collected_at', 'payment_method']
+    search_fields = ['guest__first_name', 'guest__last_name', 'transaction_id']
+    readonly_fields = ['collected_at', 'remaining_display']
+    
+    def remaining_display(self, obj):
+        return f"${obj.remaining_amount}"
+    remaining_display.short_description = 'Remaining'

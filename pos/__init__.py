@@ -1,6 +1,6 @@
 from typing import Optional
 
-def create_invoice_for_reservation(reservation) -> "Invoice":
+def create_invoice_for_reservation(reservation):
     from decimal import Decimal
     from .models import Invoice, InvoiceItem, Payment
 
@@ -34,16 +34,28 @@ def create_invoice_for_reservation(reservation) -> "Invoice":
 
     # Handle deposit if it was already paid
     if reservation.deposit_required and reservation.deposit_paid and reservation.deposit_amount:
-        # Apply deposit as a payment (do NOT add as a line item)
-        Payment.objects.create(
-            invoice=invoice,
-            method='cash',  # use a valid method code
+        # Check if there's already a deposit payment for this reservation
+        existing_deposit_payment = Payment.objects.filter(
+            invoice__reservation=reservation,
             payment_type='deposit',
-            amount=reservation.deposit_amount,
-            status='completed',
-            notes=f'Deposit payment for reservation #{reservation.id}',
-            processed_by=None
-        )
+            status='completed'
+        ).first()
+        
+        if not existing_deposit_payment:
+            # Apply deposit as a payment (do NOT add as a line item)
+            Payment.objects.create(
+                invoice=invoice,
+                method='cash',  # use a valid method code
+                payment_type='deposit',
+                amount=reservation.deposit_amount,
+                status='completed',
+                notes=f'Deposit payment for reservation #{reservation.id}',
+                processed_by=None
+            )
+        else:
+            # Transfer the existing deposit payment to this invoice
+            existing_deposit_payment.invoice = invoice
+            existing_deposit_payment.save(update_fields=['invoice'])
 
     invoice.recalculate_totals()
     return invoice

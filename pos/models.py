@@ -1110,3 +1110,146 @@ def recalculate_invoice_on_item_delete(sender, instance, **kwargs):
 #                 instance.invoice.recalculate_totals()
 #             finally:
 #                 delattr(instance, '_recalculating')
+
+
+class Deposit(models.Model):
+    """
+    Track deposits/advance payments for reservations
+    Separate from Payment to allow flexible application later
+    """
+    DEPOSIT_STATUS = (
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('applied', 'Applied to Invoice'),
+        ('refunded', 'Refunded'),
+    )
+    
+    # Link to guest and reservation
+    guest = models.ForeignKey(
+        'guests.Guest',
+        on_delete=models.CASCADE,
+        related_name='deposits'
+    )
+    
+    reservation = models.ForeignKey(
+        'reservations.Reservation',
+        on_delete=models.CASCADE,
+        related_name='deposits',
+        null=True,
+        blank=True
+    )
+    
+    # Invoice this deposit was applied to (if any)
+    invoice = models.ForeignKey(
+        'pos.Invoice',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='applied_deposits',
+        help_text='Invoice this deposit was applied to'
+    )
+    
+    # Financial tracking
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)]
+    )
+    
+    amount_applied = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Amount already applied to invoices'
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=DEPOSIT_STATUS,
+        default='pending'
+    )
+    
+    # Payment details
+    payment_method = models.CharField(max_length=20)
+    transaction_id = models.CharField(max_length=100, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    
+    # Timestamps
+    collected_at = models.DateTimeField(auto_now_add=True)
+    collected_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='collected_deposits'
+    )
+    
+    notes = models.TextField(blank=True)
+    
+    history = HistoricalRecords()
+    
+    class Meta:
+        ordering = ['-collected_at']
+        verbose_name = 'Deposit'
+        verbose_name_plural = 'Deposits'
+    
+    def __str__(self):
+        return f"Deposit ${self.amount} for {self.guest} (Reservation #{self.reservation_id})"
+    
+    @property
+    def remaining_amount(self):
+        """Calculate remaining deposit balance"""
+        return self.amount - self.amount_applied
+    
+    def can_be_applied(self):
+        """Check if deposit can be applied"""
+        return self.status == 'paid' and self.remaining_amount > 0
+    
+    def apply_to_invoice(self, invoice, amount=None):
+        """
+        Apply deposit to an invoice
+        Creates a Payment record and updates deposit tracking
+        """
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+        
+        if not self.can_be_applied():
+            raise ValidationError("Deposit cannot be applied")
+        
+        # Default to full remaining amount
+        if amount is None:
+            amount = self.remaining_amount
+        
+        # Validate amount
+        if amount > self.remaining_amount:
+            raise ValidationError(
+                f"Cannot apply ${amount}, only ${self.remaining_amount} available"
+            )
+        
+        if amount > invoice.balance_due:
+            amount = invoice.balance_due
+        
+        with transaction.atomic():
+            # Lock deposit and invoice
+            deposit = Deposit.objects.select_for_update().get(pk=self.pk)
+            invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            
+            # Create payment record
+            payment = Payment.objects.create(
+                invoice=invoice_locked,
+                method='deposit',
+                payment_type='deposit',
+                amount=amount,
+                status='completed',
+                reference=f'Deposit #{deposit.id}',
+                notes=f'Applied from deposit #{deposit.id} collected on {deposit.collected_at.strftime("%Y-%m-%d")}'
+            )
+            
+            # Update deposit tracking
+            deposit.amount_applied += amount
+            if deposit.amount_applied >= deposit.amount:
+                deposit.status = 'applied'
+            deposit.invoice = invoice_locked
+            deposit.save(update_fields=['amount_applied', 'status', 'invoice'])
+            
+            return payment
