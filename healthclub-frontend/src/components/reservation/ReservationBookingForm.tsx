@@ -51,6 +51,8 @@ export const ReservationBookingForm: React.FC<{
   const [phone, setPhone] = React.useState<string>('');
   const [phoneType, setPhoneType] = React.useState<'Mobile' | 'Home' | 'Work'>('Mobile');
   const [notes, setNotes] = React.useState<string>('');
+  const [depositRequired, setDepositRequired] = React.useState<boolean>(false);
+  const [depositAmount, setDepositAmount] = React.useState<string>('');
   const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
   const [cancelledCount, setCancelledCount] = React.useState<number>(0);
   const hasPastCancellation = cancelledCount > 0;
@@ -77,6 +79,8 @@ export const ReservationBookingForm: React.FC<{
     setPhone('');
     setPhoneType('Mobile');
     setNotes('');
+    setDepositRequired(false);
+    setDepositAmount('');
     setMarkConfirmed(false);
   }, [initialEmployeeId, initialLocationId, initialStart]);
 
@@ -334,6 +338,8 @@ export const ReservationBookingForm: React.FC<{
         location: locationId ? Number(locationId) : null,
         start_time: start,
         notes: notes || undefined,
+        deposit_required: depositRequired,
+        deposit_amount: depositRequired && depositAmount ? depositAmount : undefined,
       };
 
       if (reservation && reservation.id && reservation.start_time && reservation.end_time) {
@@ -705,6 +711,58 @@ export const ReservationBookingForm: React.FC<{
                 rows={4}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
               />
+            </div>
+
+            {/* Deposit Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign className="w-5 h-5 text-slate-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Deposit Requirements</h2>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="depositRequired"
+                    checked={depositRequired}
+                    onChange={(e) => {
+                      setDepositRequired(e.target.checked);
+                      if (!e.target.checked) {
+                        setDepositAmount('');
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label htmlFor="depositRequired" className="text-sm font-medium text-slate-700">
+                    Require deposit for this reservation
+                  </label>
+                </div>
+                
+                {depositRequired && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Deposit Amount
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <DollarSign className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <input
+                        type="number"
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(e.target.value)}
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Enter the deposit amount required to secure this reservation
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-200">

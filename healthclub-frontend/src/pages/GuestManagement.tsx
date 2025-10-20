@@ -487,6 +487,17 @@ export const GuestManagement: React.FC = () => {
                                   </span>
                                 </p>
                               )}
+                              {r?.deposit_required && (
+                                <p className="text-xs mt-1">
+                                  <span className={`inline-flex items-center gap-2 px-2 py-0.5 rounded border ${
+                                    r?.deposit_paid 
+                                      ? 'bg-green-50 text-green-700 border-green-200' 
+                                      : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                  }`}>
+                                    {r?.deposit_paid ? '✓ Deposit Paid' : `Deposit Required: $${r?.deposit_amount || '0'}`}
+                                  </span>
+                                </p>
+                              )}
                             </div>
                             <button
                               className="text-indigo-600 hover:text-indigo-700"

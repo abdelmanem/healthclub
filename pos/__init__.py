@@ -2,7 +2,7 @@ from typing import Optional
 
 def create_invoice_for_reservation(reservation) -> "Invoice":
     from decimal import Decimal
-    from .models import Invoice, InvoiceItem
+    from .models import Invoice, InvoiceItem, Payment
 
     invoice = Invoice.objects.create(
         guest=reservation.guest,
@@ -30,6 +30,19 @@ def create_invoice_for_reservation(reservation) -> "Invoice":
             quantity=1,
             unit_price=Decimal("0.00"),
             tax_rate=0,
+        )
+
+    # Handle deposit if it was already paid
+    if reservation.deposit_required and reservation.deposit_paid and reservation.deposit_amount:
+        # Apply deposit as a payment (do NOT add as a line item)
+        Payment.objects.create(
+            invoice=invoice,
+            method='cash',  # use a valid method code
+            payment_type='deposit',
+            amount=reservation.deposit_amount,
+            status='completed',
+            notes=f'Deposit payment for reservation #{reservation.id}',
+            processed_by=None
         )
 
     invoice.recalculate_totals()

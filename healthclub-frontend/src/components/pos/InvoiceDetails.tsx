@@ -407,18 +407,35 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {invoice.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={600}>
-                        {item.product_name}
-                      </Typography>
-                      {item.notes && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {item.notes}
+                {invoice.items.map((item) => {
+                  const isDeposit = item.product_name.toLowerCase().includes('deposit');
+                  return (
+                    <TableRow 
+                      key={item.id}
+                      sx={{
+                        backgroundColor: isDeposit ? 'success.light' : 'transparent',
+                        opacity: isDeposit ? 0.1 : 1,
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600}>
+                          {item.product_name}
                         </Typography>
-                      )}
-                    </TableCell>
+                        {item.notes && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {item.notes}
+                          </Typography>
+                        )}
+                        {isDeposit && (
+                          <Chip 
+                            label="Deposit" 
+                            size="small" 
+                            color="success" 
+                            variant="outlined"
+                            sx={{ mt: 0.5 }}
+                          />
+                        )}
+                      </TableCell>
                     <TableCell align="center">{item.quantity}</TableCell>
                     <TableCell align="right">
                       {formatCurrency(item.unit_price)}
@@ -430,7 +447,8 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                       {formatCurrency(item.line_total)}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

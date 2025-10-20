@@ -629,7 +629,21 @@ class ReservationViewSet(viewsets.ModelViewSet):
                     notes=f'Generic line item for reservation #{reservation.id}'
                 )
             
-            # Recalculate totals
+            # Handle deposit if it was already paid
+            if reservation.deposit_required and reservation.deposit_paid and reservation.deposit_amount:
+                # Apply deposit as a payment on this invoice (do NOT add as a line item)
+                from pos.models import Payment
+                Payment.objects.create(
+                    invoice=invoice,
+                    method='cash',  # use a valid method code
+                    payment_type='deposit',
+                    amount=reservation.deposit_amount,
+                    status='completed',
+                    notes=f'Deposit payment for reservation #{reservation.id}',
+                    processed_by=request.user if request.user.is_authenticated else None
+                )
+            
+            # Recalculate totals to ensure balance_due reflects applied deposit
             invoice.recalculate_totals()
         
         return response.Response({

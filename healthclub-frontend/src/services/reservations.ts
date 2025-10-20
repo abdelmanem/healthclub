@@ -49,6 +49,13 @@ export interface Reservation {
   // guest membership information
   guest_membership_tier?: string | { name: string; display_name: string };
   guest_loyalty_points?: number;
+  // deposit fields
+  deposit_required?: boolean;
+  deposit_amount?: string;
+  deposit_paid?: boolean;
+  deposit_paid_at?: string | null;
+  deposit_status?: 'not_required' | 'pending' | 'paid';
+  can_pay_deposit?: boolean;
 }
 
 export interface CreateReservationInput {
@@ -182,6 +189,41 @@ export const reservationsService = {
   },
   async createInvoice(id: number): Promise<{ invoice_id: number; invoice_number: string }> {
     const response = await api.post(`/reservations/${id}/create-invoice/`, {});
+    return response.data;
+  },
+  
+  // Deposit-related methods
+  async payDeposit(id: number, paymentData: {
+    amount: string;
+    payment_method: number;
+    payment_type?: 'deposit';
+    reference?: string;
+    transaction_id?: string;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    reservation_id: number;
+    deposit_amount: string;
+    deposit_paid: boolean;
+    deposit_paid_at: string;
+    payment_response: any;
+  }> {
+    const response = await api.post(`/reservations/${id}/pay-deposit/`, paymentData);
+    return response.data;
+  },
+  
+  async getDepositStatus(id: number): Promise<{
+    reservation_id: number;
+    deposit_required: boolean;
+    deposit_amount: string | null;
+    deposit_paid: boolean;
+    deposit_paid_at: string | null;
+    deposit_status: 'not_required' | 'pending' | 'paid';
+    can_pay_deposit: boolean;
+    reservation_status: string;
+  }> {
+    const response = await api.get(`/reservations/${id}/deposit-status/`);
     return response.data;
   },
 };
