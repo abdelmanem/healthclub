@@ -767,6 +767,168 @@ class ReservationViewSet(viewsets.ModelViewSet):
         # Use the invoice's payment_history method
         return invoice_viewset.payment_history(request, pk=invoice.id)
 
+    @decorators.action(detail=True, methods=["post"], url_path="pay-deposit")
+    def pay_deposit(self, request, pk=None):
+        """
+        Process deposit payment for reservation
+        
+        Endpoint: POST /api/reservations/{id}/pay-deposit/
+        
+        Body:
+        {
+            "amount": "50.00",
+            "payment_method": 2,
+            "payment_type": "deposit",
+            "reference": "VISA-4532",
+            "transaction_id": "TXN-123456",
+            "notes": "Deposit payment processed"
+        }
+        """
+        reservation = self.get_object()
+        
+        # Validate deposit requirements
+        if not reservation.deposit_required:
+            return response.Response(
+                {
+                    'error': 'No deposit required for this reservation',
+                    'deposit_required': False
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if reservation.deposit_paid:
+            return response.Response(
+                {
+                    'error': 'Deposit already paid for this reservation',
+                    'deposit_paid': True,
+                    'deposit_paid_at': reservation.deposit_paid_at
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not reservation.can_pay_deposit():
+            return response.Response(
+                {
+                    'error': f'Cannot pay deposit for reservation with status: {reservation.status}',
+                    'reservation_status': reservation.status,
+                    'allowed_statuses': [reservation.STATUS_BOOKED, reservation.STATUS_CHECKED_IN]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate payment amount
+        amount = request.data.get('amount')
+        if not amount:
+            return response.Response(
+                {'error': 'Payment amount is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            amount = Decimal(str(amount))
+        except (ValueError, TypeError):
+            return response.Response(
+                {'error': 'Invalid payment amount format'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate amount against required deposit
+        if reservation.deposit_amount and amount != reservation.deposit_amount:
+            return response.Response(
+                {
+                    'error': f'Payment amount ${amount} must equal required deposit amount ${reservation.deposit_amount}',
+                    'required_amount': str(reservation.deposit_amount),
+                    'provided_amount': str(amount)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create or get invoice for deposit
+        from pos.models import Invoice, InvoiceItem
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Create invoice if it doesn't exist
+            invoice = Invoice.objects.filter(reservation=reservation).first()
+            if not invoice:
+                invoice = Invoice.objects.create(
+                    reservation=reservation,
+                    guest=reservation.guest,
+                    invoice_number=Invoice.generate_invoice_number(),
+                    due_date=timezone.now().date(),
+                    status='issued',
+                    notes=f'Invoice for reservation #{reservation.id}',
+                    created_by=request.user if request.user.is_authenticated else None
+                )
+                
+                # Add deposit line item
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    product_name=f'Deposit for Reservation #{reservation.id}',
+                    quantity=1,
+                    unit_price=amount,
+                    tax_rate=0,
+                )
+                
+                invoice.recalculate_totals()
+            
+            # Process deposit payment
+            from pos.views import InvoiceViewSet
+            invoice_viewset = InvoiceViewSet()
+            invoice_viewset.request = request
+            invoice_viewset.format_kwarg = None
+            
+            # Override payment type to ensure it's marked as deposit
+            payment_data = request.data.copy()
+            payment_data['payment_type'] = 'deposit'
+            
+            # Create a mock request with the payment data
+            class MockRequest:
+                def __init__(self, data, user):
+                    self.data = data
+                    self.user = user
+            
+            mock_request = MockRequest(payment_data, request.user)
+            
+            # Process payment through invoice system
+            payment_response = invoice_viewset.process_payment(mock_request, pk=invoice.id)
+            
+            # If payment successful, mark deposit as paid
+            if payment_response.status_code == 200:
+                reservation.mark_deposit_paid()
+                
+                return response.Response({
+                    'success': True,
+                    'message': 'Deposit payment processed successfully',
+                    'reservation_id': reservation.id,
+                    'deposit_amount': str(amount),
+                    'deposit_paid': reservation.deposit_paid,
+                    'deposit_paid_at': reservation.deposit_paid_at,
+                    'payment_response': payment_response.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return payment_response
+
+    @decorators.action(detail=True, methods=["get"], url_path="deposit-status")
+    def deposit_status(self, request, pk=None):
+        """
+        Get deposit status for reservation
+        
+        Endpoint: GET /api/reservations/{id}/deposit-status/
+        """
+        reservation = self.get_object()
+        
+        return response.Response({
+            'reservation_id': reservation.id,
+            'deposit_required': reservation.deposit_required,
+            'deposit_amount': str(reservation.deposit_amount) if reservation.deposit_amount else None,
+            'deposit_paid': reservation.deposit_paid,
+            'deposit_paid_at': reservation.deposit_paid_at,
+            'deposit_status': reservation.deposit_status,
+            'can_pay_deposit': reservation.can_pay_deposit(),
+            'reservation_status': reservation.status
+        })
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user

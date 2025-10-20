@@ -170,6 +170,19 @@ class Reservation(models.Model):
     no_show_recorded_at = models.DateTimeField(null=True, blank=True)
     # Whether this reservation is the guest's first ever reservation
     is_first_for_guest = models.BooleanField(default=False, db_index=True)
+    
+    # Deposit fields
+    deposit_required = models.BooleanField(default=False, help_text="Whether a deposit is required for this reservation")
+    deposit_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Required deposit amount"
+    )
+    deposit_paid = models.BooleanField(default=False, help_text="Whether deposit has been paid")
+    deposit_paid_at = models.DateTimeField(null=True, blank=True, help_text="When deposit was paid")
 
     history = HistoricalRecords()
 
@@ -184,6 +197,33 @@ class Reservation(models.Model):
 
     def __str__(self) -> str:
         return f"Reservation #{self.pk or 'new'} for {self.guest} at {self.start_time}"
+    
+    @property
+    def deposit_status(self):
+        """Get deposit status as a string"""
+        if not self.deposit_required:
+            return "not_required"
+        elif self.deposit_paid:
+            return "paid"
+        else:
+            return "pending"
+    
+    def can_pay_deposit(self):
+        """Check if deposit can be paid"""
+        return (
+            self.deposit_required and 
+            not self.deposit_paid and 
+            self.status in [self.STATUS_BOOKED, self.STATUS_CHECKED_IN]
+        )
+    
+    def mark_deposit_paid(self):
+        """Mark deposit as paid"""
+        if self.can_pay_deposit():
+            self.deposit_paid = True
+            self.deposit_paid_at = timezone.now()
+            self.save(update_fields=['deposit_paid', 'deposit_paid_at'])
+            return True
+        return False
 
     def clean(self) -> None:
         # 1. Prevent past reservations - but allow status updates for existing reservations

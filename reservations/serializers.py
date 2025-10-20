@@ -80,6 +80,8 @@ class ReservationSerializer(serializers.ModelSerializer):
     guest_membership_tier = serializers.SerializerMethodField()
     guest_loyalty_points = serializers.IntegerField(source='guest.loyalty_points', read_only=True)
     cancellation_reason_name = serializers.CharField(source='cancellation_reason.name', read_only=True)
+    deposit_status = serializers.CharField(read_only=True)
+    can_pay_deposit = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Reservation
@@ -98,6 +100,12 @@ class ReservationSerializer(serializers.ModelSerializer):
             "reservation_services",
             "total_duration_minutes",
             "total_price",
+            "deposit_required",
+            "deposit_amount",
+            "deposit_paid",
+            "deposit_paid_at",
+            "deposit_status",
+            "can_pay_deposit",
             "checked_in_at",
             "in_service_at",
             "completed_at",
