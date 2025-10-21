@@ -1223,7 +1223,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
             'invoice_id': invoice.id,
             'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
             'available_deposits_count': deposits.count(),
-            'total_available_amount': sum(d.remaining_amount for d in deposits),
+            'total_available_amount': str(sum(d.remaining_amount for d in deposits)),
             'deposits': serializer.data
         })
 

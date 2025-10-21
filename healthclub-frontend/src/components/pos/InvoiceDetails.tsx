@@ -34,10 +34,14 @@ import {
   Cancel,
   Email,
   Print,
+  AccountBalance,
 } from '@mui/icons-material';
 import { invoicesService, Invoice } from '../../services/invoices';
 import { PaymentDialog } from './PaymentDialog';
 import { RefundDialog } from './RefundDialog';
+import { DepositManagement } from './DepositManagement';
+import { DepositDialog } from './DepositDialog';
+import { DepositHistory } from './DepositHistory';
 import dayjs from 'dayjs';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useConfirmDialog } from '../common/useConfirmDialog';
@@ -65,6 +69,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
 
   const { showConfirmDialog, dialogProps } = useConfirmDialog();
   const { showSnackbar, SnackbarComponent } = useSnackbar();
@@ -659,6 +664,16 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                   Apply Discount
                 </Button>
               )}
+              {invoice.can_be_paid && (
+                <Button
+                  variant="outlined"
+                  color="info"
+                  startIcon={<AccountBalance />}
+                  onClick={() => setDepositDialogOpen(true)}
+                >
+                  Collect Deposit
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
@@ -715,6 +730,33 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
         </Card>
       )}
 
+      {/* Deposit Management */}
+      {invoice && (
+        <Box sx={{ mt: 3 }}>
+          <DepositManagement
+            invoiceId={invoice.id}
+            guestName={invoice.guest_name}
+            onDepositApplied={() => {
+              loadInvoice();
+              onPaymentProcessed?.();
+            }}
+          />
+        </Box>
+      )}
+
+      {/* Deposit History */}
+      {invoice && (
+        <Box sx={{ mt: 3 }}>
+          <DepositHistory
+            invoiceId={invoice.id}
+            guestName={invoice.guest_name}
+            onDepositUpdated={() => {
+              loadInvoice();
+            }}
+          />
+        </Box>
+      )}
+
       {/* Payment Dialog */}
       {invoice && (
         <PaymentDialog
@@ -739,6 +781,20 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
             loadInvoice();
             onRefundProcessed?.();
             setRefundDialogOpen(false);
+          }}
+        />
+      )}
+
+      {/* Deposit Dialog */}
+      {invoice && (
+        <DepositDialog
+          open={depositDialogOpen}
+          onClose={() => setDepositDialogOpen(false)}
+          invoice={invoice}
+          onDepositCollected={() => {
+            loadInvoice();
+            onPaymentProcessed?.();
+            setDepositDialogOpen(false);
           }}
         />
       )}

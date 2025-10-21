@@ -126,6 +126,10 @@ class ReservationSerializer(serializers.ModelSerializer):
             "checked_out_at",
             "cancelled_at",
             "no_show_recorded_at",
+            "deposit_paid",
+            "deposit_paid_at",
+            "deposit_status",
+            "can_pay_deposit",
         ]
 
     def _compute_end_time(self, start_time, services_data):
