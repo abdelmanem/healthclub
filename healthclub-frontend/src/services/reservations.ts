@@ -68,6 +68,9 @@ export interface CreateReservationInput {
   start_time: string;
   end_time?: string;
   notes?: string;
+  // deposit fields
+  deposit_required?: boolean;
+  deposit_amount?: string;
 }
 
 export const reservationsService = {
@@ -89,6 +92,9 @@ export const reservationsService = {
       location: payload.location ?? null,
       start_time: payload.start_time,
       notes: payload.notes ?? undefined,
+      // deposit fields
+      deposit_required: payload.deposit_required ?? false,
+      deposit_amount: payload.deposit_amount ?? undefined,
     };
 
     if (payload.end_time) {
@@ -130,6 +136,9 @@ export const reservationsService = {
     if (payload.start_time !== undefined) body.start_time = payload.start_time;
     if (payload.end_time !== undefined) body.end_time = payload.end_time;
     if (payload.notes !== undefined) body.notes = payload.notes;
+    // deposit fields
+    if (payload.deposit_required !== undefined) body.deposit_required = payload.deposit_required;
+    if (payload.deposit_amount !== undefined) body.deposit_amount = payload.deposit_amount;
 
     const servicesList: Array<{ service: number; quantity?: number }> = [];
     if (Array.isArray(payload.reservation_services)) {

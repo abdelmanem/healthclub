@@ -2,6 +2,8 @@ import React from 'react';
 import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText } from 'lucide-react';
 import { Box } from '@mui/material';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
 import { ConflictResolver } from './advanced/ConflictResolver';
@@ -24,6 +26,10 @@ export const ReservationBookingForm: React.FC<{
   initialEmployeeId?: number; 
   initialLocationId?: number 
 }> = ({ reservation, onCreated, onSaved, onClose, initialStart, initialEmployeeId, initialLocationId }) => {
+  // Initialize dayjs plugins
+  dayjs.extend(utc);
+  dayjs.extend(timezone);
+  
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
@@ -647,8 +653,8 @@ export const ReservationBookingForm: React.FC<{
                   <label className="block text-sm font-medium text-slate-700 mb-2">Start Date & Time</label>
                   <input
                     type="datetime-local"
-                    value={dayjs(start).format('YYYY-MM-DDTHH:mm')}
-                    onChange={(e) => setStart(dayjs(e.target.value).toISOString())}
+                    value={dayjs.utc(start).tz('Africa/Cairo').format('YYYY-MM-DDTHH:mm')}
+                    onChange={(e) => setStart(dayjs.tz(e.target.value, 'Africa/Cairo').utc().toISOString())}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -656,7 +662,7 @@ export const ReservationBookingForm: React.FC<{
                   <label className="block text-sm font-medium text-slate-700 mb-2">End Date & Time</label>
                   <input
                     type="datetime-local"
-                    value={dayjs(computedEndIso).format('YYYY-MM-DDTHH:mm')}
+                    value={dayjs.utc(computedEndIso).tz('Africa/Cairo').format('YYYY-MM-DDTHH:mm')}
                     readOnly
                     className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-600"
                   />

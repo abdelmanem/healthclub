@@ -357,6 +357,31 @@ class ReservationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(detail)
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
+        
+        # Auto-create deposit payment record if deposit is required
+        if reservation.deposit_required and reservation.deposit_amount:
+            try:
+                from pos.models import Deposit
+                from django.utils import timezone
+                from django.db import transaction
+                
+                with transaction.atomic():
+                    # Create deposit record with 'pending' status
+                    deposit = Deposit.objects.create(
+                        guest=reservation.guest,
+                        reservation=reservation,
+                        amount=reservation.deposit_amount,
+                        status='pending',  # Mark as pending until actually paid
+                        payment_method='cash',  # Default payment method
+                        transaction_id='',
+                        reference='',
+                        notes=f'Auto-created deposit requirement for reservation #{reservation.id}',
+                        collected_by=None  # No one has collected it yet
+                    )
+            except Exception as e:
+                # Don't fail reservation creation if deposit creation fails
+                pass
+        
         # Recompute first-for-guest flag so the earliest reservation is marked true
         try:
             self._recompute_is_first_for_guest(reservation.guest_id)
@@ -370,6 +395,11 @@ class ReservationSerializer(serializers.ModelSerializer):
         services_data = validated_data.pop("reservation_services", None)
         # track original guest before changes
         original_guest_id = getattr(instance, 'guest_id', None)
+        
+        # Check if deposit requirements changed
+        deposit_required_changed = 'deposit_required' in validated_data
+        deposit_amount_changed = 'deposit_amount' in validated_data
+        
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         try:
@@ -379,6 +409,38 @@ class ReservationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(detail)
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
+        
+        # Handle deposit changes
+        if (deposit_required_changed or deposit_amount_changed) and instance.deposit_required and instance.deposit_amount:
+            try:
+                from pos.models import Deposit
+                from django.db import transaction
+                
+                # Check if deposit record already exists
+                existing_deposit = Deposit.objects.filter(reservation=instance).first()
+                
+                if not existing_deposit:
+                    # Create new deposit record
+                    with transaction.atomic():
+                        deposit = Deposit.objects.create(
+                            guest=instance.guest,
+                            reservation=instance,
+                            amount=instance.deposit_amount,
+                            status='pending',
+                            payment_method='cash',
+                            transaction_id='',
+                            reference='',
+                            notes=f'Auto-created deposit requirement for reservation #{instance.id}',
+                            collected_by=None
+                        )
+                else:
+                    # Update existing deposit record
+                    existing_deposit.amount = instance.deposit_amount
+                    existing_deposit.save(update_fields=['amount'])
+            except Exception as e:
+                # Don't fail reservation update if deposit update fails
+                pass
+        
         # If guest or start_time changed, recompute flags for affected guest(s)
         try:
             affected_guest_ids = set()
