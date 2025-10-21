@@ -38,12 +38,9 @@ import {
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit, Cancel } from '@mui/icons-material';
 import { InvoiceDetails } from '../components/pos/InvoiceDetails';
-import FullCalendar from '@fullcalendar/react';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import isBetween from 'dayjs/plugin/isBetween';
 import { ReservationBookingForm } from '../components/reservation/ReservationBookingForm';
 import { reservationsService, Reservation } from '../services/reservations';
@@ -55,6 +52,8 @@ import { StaffSchedulingCalendar } from '../components/reservation/StaffScheduli
 import { CancellationDialog } from '../components/reservation/CancellationDialog';
 
 dayjs.extend(isBetween);
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Helper: status color
 const statusColor = (status?: string) => {
@@ -572,8 +571,8 @@ export const ReservationManagement: React.FC = () => {
                          r.status === 'cancelled' ? 'error' : 'info'}
                 />
               </TableCell>
-              <TableCell>{dayjs(r.start_time).format('MMM D, h:mm A')}</TableCell>
-              <TableCell>{r.end_time ? dayjs(r.end_time).format('h:mm A') : '-'}</TableCell>
+              <TableCell>{dayjs.utc(r.start_time).tz('Africa/Cairo').format('MMM D, h:mm A')}</TableCell>
+              <TableCell>{r.end_time ? dayjs.utc(r.end_time).tz('Africa/Cairo').format('h:mm A') : '-'}</TableCell>
               <TableCell>${Number(r.total_price || 0).toFixed(2)}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={1}>
@@ -750,7 +749,7 @@ export const ReservationManagement: React.FC = () => {
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 0.5 }}>Schedule</Typography>
                   <Typography variant="body2">
-                    {dayjs(selectedReservation.start_time).format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs(selectedReservation.end_time).format('h:mm A') : 'TBD'}
+                    {dayjs.utc(selectedReservation.start_time).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} — {selectedReservation.end_time ? dayjs.utc(selectedReservation.end_time).tz('Africa/Cairo').format('h:mm A') : 'TBD'}
                   </Typography>
                 </Box>
 
@@ -759,22 +758,22 @@ export const ReservationManagement: React.FC = () => {
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'grey.600', mb: 1 }}>Status Timeline</Typography>
                   <List dense>
                     {selectedReservation.checked_in_at && (
-                      <ListItem><ListItemText primary="Checked in" secondary={dayjs(selectedReservation.checked_in_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="Checked in" secondary={dayjs.utc(selectedReservation.checked_in_at as any).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                     {selectedReservation.in_service_at && (
-                      <ListItem><ListItemText primary="In service" secondary={dayjs(selectedReservation.in_service_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="In service" secondary={dayjs.utc(selectedReservation.in_service_at as any).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                     {selectedReservation.completed_at && (
-                      <ListItem><ListItemText primary="Completed" secondary={dayjs(selectedReservation.completed_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="Completed" secondary={dayjs.utc(selectedReservation.completed_at as any).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                     {(selectedReservation as any).checked_out_at && (
-                      <ListItem><ListItemText primary="Checked out" secondary={dayjs((selectedReservation as any).checked_out_at).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="Checked out" secondary={dayjs.utc((selectedReservation as any).checked_out_at).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                     {selectedReservation.cancelled_at && (
-                      <ListItem><ListItemText primary="Cancelled" secondary={dayjs(selectedReservation.cancelled_at as any).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="Cancelled" secondary={dayjs.utc(selectedReservation.cancelled_at as any).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                     {(selectedReservation as any).no_show_recorded_at && (
-                      <ListItem><ListItemText primary="No-show" secondary={dayjs((selectedReservation as any).no_show_recorded_at).format('MMM D, YYYY h:mm A')} /></ListItem>
+                      <ListItem><ListItemText primary="No-show" secondary={dayjs.utc((selectedReservation as any).no_show_recorded_at).tz('Africa/Cairo').format('MMM D, YYYY h:mm A')} /></ListItem>
                     )}
                   </List>
                 </Box>
@@ -811,7 +810,7 @@ export const ReservationManagement: React.FC = () => {
                       <Typography variant="body2"><strong>Total Spent:</strong> ${Number(guestDetails.total_spent || 0).toFixed(2)}</Typography>
                     )}
                     {guestDetails.last_visit && (
-                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs(guestDetails.last_visit).format('MMM D, YYYY')}</Typography>
+                      <Typography variant="body2"><strong>Last Visit:</strong> {dayjs.utc(guestDetails.last_visit).tz('Africa/Cairo').format('MMM D, YYYY')}</Typography>
                     )}
                   </Box>
                 </Paper>
@@ -943,7 +942,7 @@ export const ReservationManagement: React.FC = () => {
                           primary={
                             <Box display="flex" justifyContent="space-between" alignItems="center">
                               <Typography variant="body2">
-                                {dayjs(reservation.start_time).format('MMM D, YYYY')}
+                                {dayjs.utc(reservation.start_time).tz('Africa/Cairo').format('MMM D, YYYY')}
                               </Typography>
                               <Chip 
                                 label={reservation.status} 
@@ -963,7 +962,7 @@ export const ReservationManagement: React.FC = () => {
                           secondary={
                             <Box>
                               <Typography variant="caption" color="text.secondary">
-                                {dayjs(reservation.start_time).format('h:mm A')} - {reservation.end_time ? dayjs(reservation.end_time).format('h:mm A') : 'TBD'}
+                                {dayjs.utc(reservation.start_time).tz('Africa/Cairo').format('h:mm A')} - {reservation.end_time ? dayjs.utc(reservation.end_time).tz('Africa/Cairo').format('h:mm A') : 'TBD'}
                               </Typography>
                               <br />
                               <Typography variant="caption" color="text.secondary">

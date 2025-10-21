@@ -4,6 +4,8 @@ import FullCalendar from '@fullcalendar/react';
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import {
   Box,
   Drawer,
@@ -135,6 +137,8 @@ const statusGradient = (status?: string) => {
 };
 
 export const StaffSchedulingCalendar: React.FC = () => {
+  dayjs.extend(utc);
+  dayjs.extend(timezone);
   const navigate = useNavigate();
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
@@ -952,6 +956,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
           initialView="resourceTimeGridDay"
           initialDate={selectedDate}
+          timeZone="UTC"
           resources={resources}
           events={allEvents}
           nowIndicator
@@ -1015,8 +1020,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
           }}
           eventContent={(arg:any) => {
             const ev = arg.event;
-            const start = ev.start ? dayjs(ev.start).format('h:mm A') : '';
-            const end = ev.end ? dayjs(ev.end).format('h:mm A') : '';
+            const start = ev.start ? dayjs.utc(ev.start).tz('Africa/Cairo').format('h:mm A') : '';
+            const end = ev.end ? dayjs.utc(ev.end).tz('Africa/Cairo').format('h:mm A') : '';
             const title = ev.title || '';
             const isFirst = !!(ev.extendedProps && ev.extendedProps.isFirst);
             const isCleanup = !!(ev.extendedProps && ev.extendedProps.isCleanup);
@@ -1201,7 +1206,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                     <Box display="flex" justifyContent="space-between">
                       <Typography variant="body2" color="text.secondary">Date & Time</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {dayjs(drawer.reservation.start_time).format('MMM D, h:mm A')}
+                        {dayjs.utc(drawer.reservation.start_time).tz('Africa/Cairo').format('MMM D, h:mm A')}
                       </Typography>
                     </Box>
                     {!drawer.reservation.is_first_for_guest && selectedGuest?.total_visits && (
