@@ -42,6 +42,7 @@ import { invoicesService, Invoice } from '../../services/invoices';
 import { PaymentDialog } from './PaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { DepositManagement } from './DepositManagement';
+import { DepositsTab } from './DepositsTab';
 import { RefundsTab } from './RefundsTab';
 import { DepositDialog } from './DepositDialog';
 import { DepositHistory } from './DepositHistory';
@@ -746,29 +747,13 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
         </Card>
       )}
 
-      {/* Deposit Management */}
+      {/* Deposits Tab (Apply vs History) */}
       {invoice && (
         <Box sx={{ mt: 3 }}>
-          <DepositManagement
+          <DepositsTab
             invoiceId={invoice.id}
             guestName={invoice.guest_name}
-            onDepositApplied={() => {
-              loadInvoice();
-              onPaymentProcessed?.();
-            }}
-          />
-        </Box>
-      )}
-
-      {/* Deposit History */}
-      {invoice && (
-        <Box sx={{ mt: 3 }}>
-          <DepositHistory
-            invoiceId={invoice.id}
-            guestName={invoice.guest_name}
-            onDepositUpdated={() => {
-              loadInvoice();
-            }}
+            onUpdated={() => loadInvoice()}
           />
         </Box>
       )}

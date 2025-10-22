@@ -33,6 +33,7 @@ import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '
 import { useSnackbar } from '../common/useSnackbar';
 import { handleApiError } from '../../utils/errorHandler';
 import { validateAmount, validateRequired } from '../../utils/validation';
+import dayjs from 'dayjs';
 
 interface PaymentDialogProps {
   open: boolean;
