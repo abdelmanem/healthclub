@@ -846,7 +846,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         deposits = Deposit.objects.filter(
             guest=invoice.guest,
-            status__in=['collected', 'partially_applied']
+            status__in=['pending', 'collected', 'partially_applied']
         ).order_by('-collected_at')
         
         from .serializers import DepositSerializer

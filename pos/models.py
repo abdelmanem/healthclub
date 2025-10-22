@@ -1204,7 +1204,7 @@ class Deposit(models.Model):
     
     def can_be_applied(self):
         return (
-            self.status in ['collected', 'partially_applied'] and
+            self.status in ['pending', 'collected', 'partially_applied'] and
             self.remaining_amount > 0 and
             (not self.expiry_date or timezone.now().date() <= self.expiry_date)
         )

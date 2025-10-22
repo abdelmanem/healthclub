@@ -2,7 +2,7 @@ from typing import Optional
 
 def create_invoice_for_reservation(reservation, include_deposit_as_line_item=False):
     from decimal import Decimal
-    from .models import Invoice, InvoiceItem, Payment
+    from .models import Invoice, InvoiceItem, Payment, Deposit
     from reservations.models import Reservation
 
     # Set initial invoice status based on reservation status
@@ -44,41 +44,40 @@ def create_invoice_for_reservation(reservation, include_deposit_as_line_item=Fal
             tax_rate=0,
         )
 
-    # Add deposit as a line item if required and not yet paid
-    if reservation.deposit_required and reservation.deposit_amount and include_deposit_as_line_item:
-        InvoiceItem.objects.create(
-            invoice=invoice,
-            product_name=f"Deposit for Reservation #{reservation.id}",
-            quantity=1,
-            unit_price=reservation.deposit_amount,
-            tax_rate=0,
-            notes="Prepayment deposit"
-        )
-
-    # Handle deposit if it was already paid (legacy support)
-    if reservation.deposit_required and reservation.deposit_paid and reservation.deposit_amount and not include_deposit_as_line_item:
-        # Check if there's already a deposit payment for this reservation
-        existing_deposit_payment = Payment.objects.filter(
-            invoice__reservation=reservation,
-            payment_type='deposit',
-            status='completed'
+    # Handle deposit - apply as payment, not as line item
+    if reservation.deposit_required and reservation.deposit_amount:
+        # Look for existing deposit for this reservation
+        existing_deposit = Deposit.objects.filter(
+            reservation=reservation,
+            status__in=['pending', 'collected', 'partially_applied']
         ).first()
         
-        if not existing_deposit_payment:
-            # Apply deposit as a payment (do NOT add as a line item)
+        if existing_deposit:
+            # Apply the existing deposit to this invoice
+            try:
+                existing_deposit.apply_to_invoice(invoice)
+            except Exception as e:
+                # If deposit application fails, create a regular payment
+                Payment.objects.create(
+                    invoice=invoice,
+                    method='cash',
+                    payment_type='deposit_application',
+                    amount=existing_deposit.remaining_amount,
+                    status='completed',
+                    notes=f'Deposit payment for reservation #{reservation.id}',
+                    processed_by=None
+                )
+        else:
+            # Legacy: Create deposit payment directly (for old reservations without Deposit records)
             Payment.objects.create(
                 invoice=invoice,
-                method='cash',  # use a valid method code
-                payment_type='deposit',
+                method='cash',
+                payment_type='deposit_application',
                 amount=reservation.deposit_amount,
                 status='completed',
                 notes=f'Deposit payment for reservation #{reservation.id}',
                 processed_by=None
             )
-        else:
-            # Transfer the existing deposit payment to this invoice
-            existing_deposit_payment.invoice = invoice
-            existing_deposit_payment.save(update_fields=['invoice'])
 
     invoice.recalculate_totals()
     return invoice
