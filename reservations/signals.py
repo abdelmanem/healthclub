@@ -62,6 +62,28 @@ def handle_checkin_checkout(sender, instance: Reservation, **kwargs):
             instance.cancelled_at = now
         elif instance.status == Reservation.STATUS_NO_SHOW:
             instance.no_show_recorded_at = now
+        
+        # Sync invoice status with reservation status
+        try:
+            from pos.models import Invoice
+            invoice = instance.invoices.filter(status__in=['draft', 'issued', 'partial']).first()
+            if invoice:
+                if instance.status == Reservation.STATUS_CANCELLED:
+                    invoice.status = Invoice.STATUS_CANCELLED
+                    invoice.save(update_fields=['status'])
+                elif instance.status == Reservation.STATUS_COMPLETED:
+                    # Only mark as paid if there are no outstanding payments
+                    if invoice.balance_due <= 0:
+                        invoice.status = Invoice.STATUS_PAID
+                        invoice.save(update_fields=['status'])
+                elif instance.status in [Reservation.STATUS_CHECKED_IN, Reservation.STATUS_IN_SERVICE]:
+                    # Keep as issued during service
+                    if invoice.status == Invoice.STATUS_DRAFT:
+                        invoice.status = Invoice.STATUS_ISSUED
+                        invoice.save(update_fields=['status'])
+        except Exception:
+            # Don't fail reservation update if invoice sync fails
+            pass
 
 
 @receiver(post_save, sender=Reservation)

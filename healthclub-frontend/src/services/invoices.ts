@@ -45,7 +45,9 @@ export interface Payment {
   method: string;
   payment_method?: number;
   payment_method_name?: string;
-  payment_type: 'full' | 'partial' | 'deposit' | 'refund';
+  // Backend now uses: 'regular' | 'deposit_application' | 'manual'
+  // Keep legacy values optional for compatibility with older data
+  payment_type: 'regular' | 'deposit_application' | 'manual' | 'full' | 'partial' | 'deposit';
   amount: string;
   display_amount: string;
   transaction_id: string;
@@ -55,7 +57,8 @@ export interface Payment {
   notes: string;
   processed_by?: number;
   processed_by_name?: string;
-  is_refund: boolean;
+  // Deprecated: refunds are separate records now
+  is_refund?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -133,7 +136,8 @@ export interface ApplyDiscountRequest {
 export interface ProcessPaymentRequest {
   amount: string;
   payment_method: number;
-  payment_type: 'full' | 'partial' | 'deposit';
+  // Frontend may still send legacy values; we'll map them to backend values
+  payment_type: 'regular' | 'deposit_application' | 'manual' | 'full' | 'partial' | 'deposit';
   reference?: string;
   transaction_id?: string;
   notes?: string;
@@ -164,9 +168,13 @@ export interface ProcessPaymentResponse {
 export interface RefundResponse {
   success: boolean;
   refund_id: number;
-  amount: string;
-  new_balance_due: string;
+  // Backend returns refund_amount and balance fields
+  refund_amount: string;
+  refund_reason?: string;
+  remaining_paid?: string;
+  balance_due: string;
   invoice_status: string;
+  loyalty_points_deducted?: number;
   version: number;
   message: string;
 }
@@ -198,6 +206,28 @@ export interface InvoiceSummary {
   partial_count: number;
   cancelled_count: number;
   refunded_count: number;
+}
+
+// Refund history response (from /invoices/{id}/refund-history/)
+export interface RefundHistoryResponse {
+  invoice_number: string;
+  guest_name: string;
+  total: string;
+  amount_paid: string;
+  total_refunded: string;
+  refund_count: number;
+  refunds: Array<{
+    id: number;
+    amount: string;
+    refund_method?: string;
+    reason?: string;
+    status?: string;
+    created_at?: string;
+    approved_at?: string | null;
+    processed_at?: string | null;
+    reference?: string;
+    transaction_id?: string;
+  }>;
 }
 
 export interface PaymentSummary {
@@ -368,7 +398,19 @@ export const invoicesService = {
     invoiceId: number,
     data: ProcessPaymentRequest
   ): Promise<ProcessPaymentResponse> {
-    const response = await api.post(`/invoices/${invoiceId}/process_payment/`, data);
+    // Map legacy payment_type values to new backend values
+    let mappedType: 'regular' | 'deposit_application' | 'manual' = 'regular';
+    if (data.payment_type === 'deposit' || data.payment_type === 'deposit_application') {
+      mappedType = 'deposit_application';
+    } else if (data.payment_type === 'manual') {
+      mappedType = 'manual';
+    } else {
+      // 'full' and 'partial' are both regular payments at the model level
+      mappedType = 'regular';
+    }
+
+    const payload = { ...data, payment_type: mappedType };
+    const response = await api.post(`/invoices/${invoiceId}/process_payment/`, payload);
     return response.data;
   },
 
@@ -461,6 +503,14 @@ export const invoicesService = {
     payments: Payment[];
   }> {
     const response = await api.get(`/invoices/${invoiceId}/payment-history/`);
+    return response.data;
+  },
+
+  /**
+   * Get refund history for invoice
+   */
+  async refundHistory(invoiceId: number): Promise<RefundHistoryResponse> {
+    const response = await api.get(`/invoices/${invoiceId}/refund-history/`);
     return response.data;
   },
 

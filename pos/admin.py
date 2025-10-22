@@ -41,10 +41,9 @@ class InvoiceItemAdmin(admin.ModelAdmin):
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
     list_display = (
-        "invoice", "method", "amount", "status", "payment_date", 
-        "is_refunded", "refund_amount"
+        "invoice", "method", "amount", "status", "payment_date"
     )
-    list_filter = ("method", "status", "is_refunded", "payment_date")
+    list_filter = ("method", "status", "payment_date")
     search_fields = ("transaction_id", "reference", "invoice__invoice_number")
 
 

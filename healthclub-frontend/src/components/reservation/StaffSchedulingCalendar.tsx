@@ -956,7 +956,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
           plugins={[resourceTimeGridPlugin as any, interactionPlugin]}
           initialView="resourceTimeGridDay"
           initialDate={selectedDate}
-          timeZone="UTC"
+          // timeZone="Africa/Cairo"
           resources={resources}
           events={allEvents}
           nowIndicator

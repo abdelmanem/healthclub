@@ -27,6 +27,8 @@ import {
   ListItem,
   ListItemText,
   CircularProgress,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Payment as PaymentIcon,
@@ -40,6 +42,7 @@ import { invoicesService, Invoice } from '../../services/invoices';
 import { PaymentDialog } from './PaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { DepositManagement } from './DepositManagement';
+import { RefundsTab } from './RefundsTab';
 import { DepositDialog } from './DepositDialog';
 import { DepositHistory } from './DepositHistory';
 import dayjs from 'dayjs';
@@ -70,6 +73,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'payments' | 'refunds'>('payments');
 
   const { showConfirmDialog, dialogProps } = useConfirmDialog();
   const { showSnackbar, SnackbarComponent } = useSnackbar();
@@ -94,6 +98,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
       try {
         const data = await invoicesService.retrieve(invoiceId);
         if (mounted) setInvoice(data);
+        // Refunds are loaded in RefundsTab on demand
       } catch (error) {
         if (mounted) console.error('Failed to load invoice:', error);
       } finally {
@@ -536,8 +541,16 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
         </CardContent>
       </Card>
 
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+          <Tab value="payments" label="Payments" />
+          <Tab value="refunds" label="Refunds" />
+        </Tabs>
+      </Box>
+
       {/* Payment History */}
-      {invoice.payments && invoice.payments.length > 0 && (
+      {activeTab === 'payments' && invoice.payments && invoice.payments.length > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -559,11 +572,10 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body1" fontWeight={600}>
-                            {payment.is_refund ? 'Refund' : 
-                             payment.payment_type === 'deposit' ? 'Deposit Payment' : 'Payment'} -{' '}
+                            {payment.payment_type === 'deposit_application' ? 'Deposit Payment' : 'Payment'} -{' '}
                             {payment.payment_method_name || payment.method}
                           </Typography>
-                          {payment.payment_type === 'deposit' && (
+                          {payment.payment_type === 'deposit_application' && (
                             <Chip 
                               label="Deposit" 
                               size="small" 
@@ -575,9 +587,9 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
                         <Typography
                           variant="body1"
                           fontWeight={700}
-                          color={payment.is_refund ? 'error.main' : 'success.main'}
+                          color={'success.main'}
                         >
-                          {payment.is_refund ? '-' : '+'}{formatCurrency(Math.abs(parseFloat(payment.amount)).toString())}
+                          +{formatCurrency(Math.abs(parseFloat(payment.amount)).toString())}
                         </Typography>
                       </Box>
                     }
@@ -614,6 +626,10 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
             </List>
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === 'refunds' && (
+        <RefundsTab invoiceId={invoice.id} />
       )}
 
       {/* Actions */}

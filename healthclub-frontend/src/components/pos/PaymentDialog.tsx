@@ -26,6 +26,8 @@ import {
   Radio,
   InputAdornment,
   Chip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '../../services/invoices';
 import { useSnackbar } from '../common/useSnackbar';
@@ -54,6 +56,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'pay' | 'recent'>('pay');
   const { showSnackbar, SnackbarComponent } = useSnackbar();
 
   // Load payment methods (with cleanup to avoid memory leaks)
@@ -105,6 +108,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setTransactionId('');
       setNotes('');
       setError('');
+      setActiveTab('pay');
     }
   }, [open, invoice]);
 
@@ -202,6 +206,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         </Stack>
       </DialogTitle>
       <DialogContent>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+            <Tab value="pay" label="Payment" />
+            <Tab value="recent" label="Recent Payments" />
+          </Tabs>
+        </Box>
+
         <Stack spacing={3} sx={{ mt: 2 }}>
           {/* Invoice Summary */}
           <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
@@ -234,7 +245,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
           {error && <Alert severity="error">{error}</Alert>}
 
-          {/* Payment Amount */}
+          {activeTab === 'pay' && (
           <TextField
             label="Payment Amount"
             type="number"
@@ -252,8 +263,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             }}
             helperText={`Maximum: ${formatCurrency(invoice.balance_due)}`}
           />
+          )}
 
-          {/* Payment Type */}
+          {activeTab === 'pay' && (
           <FormControl component="fieldset">
             <Typography variant="subtitle2" gutterBottom>
               Payment Type
@@ -278,12 +290,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 value="deposit" 
                 control={<Radio />} 
                 label="Deposit"
-                disabled={invoice.payments.some(p => p.payment_type === 'deposit')}
+                disabled={invoice.payments.some(p => p.payment_type === 'deposit_application')}
               />
             </RadioGroup>
           </FormControl>
+          )}
 
-          {/* Payment Method */}
+          {activeTab === 'pay' && (
           <FormControl fullWidth required>
             <InputLabel>Payment Method</InputLabel>
             <Select
@@ -314,9 +327,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               ))}
             </Select>
           </FormControl>
+          )}
 
-          {/* Reference Number (if required) */}
-          {selectedMethod?.requires_reference && (
+          {activeTab === 'pay' && selectedMethod?.requires_reference && (
             <TextField
               label="Reference Number"
               value={referenceNumber}
@@ -328,7 +341,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             />
           )}
 
-          {/* Transaction ID (optional) */}
+          {activeTab === 'pay' && (
           <TextField
             label="Transaction ID"
             value={transactionId}
@@ -337,8 +350,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             placeholder="Processor transaction ID (optional)"
             helperText="Optional: External transaction reference"
           />
+          )}
 
-          {/* Notes */}
+          {activeTab === 'pay' && (
           <TextField
             label="Notes"
             value={notes}
@@ -348,16 +362,16 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             rows={3}
             placeholder="Additional notes about this payment..."
           />
+          )}
 
-          {/* Deposit Information */}
-          {invoice.payments.some(p => p.payment_type === 'deposit') && (
+          {activeTab === 'pay' && invoice.payments.some(p => p.payment_type === 'deposit_application') && (
             <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1, opacity: 0.1 }}>
               <Typography variant="subtitle2" color="info.dark" gutterBottom>
                 Applied Deposits
               </Typography>
               <Stack spacing={1}>
                 {invoice.payments
-                  .filter(p => p.payment_type === 'deposit')
+                  .filter(p => p.payment_type === 'deposit_application')
                   .map((deposit, index) => (
                     <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="body2">
@@ -375,8 +389,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </Box>
           )}
 
-          {/* Payment Preview */}
-          {amount && parseFloat(amount) > 0 && (
+          {activeTab === 'pay' && amount && parseFloat(amount) > 0 && (
             <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1, opacity: 0.1 }}>
               <Typography variant="subtitle2" color="success.dark" gutterBottom>
                 Payment Preview
@@ -406,6 +419,27 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </Stack>
             </Box>
           )}
+
+          {activeTab === 'recent' && (
+            <Box sx={{ p: 2 }}>
+              {invoice.payments.length === 0 ? (
+                <Typography color="text.secondary">No payments yet.</Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {invoice.payments.slice(-5).reverse().map((p) => (
+                    <Box key={p.id} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2">
+                        {dayjs(p.payment_date).format('MMM D, YYYY h:mm A')} • {p.payment_method_name || p.method}
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700} color={'success.main'}>
+                        +{formatCurrency(p.amount)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -415,7 +449,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={processing || !selectedMethod || !amount || parseFloat(amount) <= 0}
+          disabled={activeTab !== 'pay' || processing || !selectedMethod || !amount || parseFloat(amount) <= 0}
           startIcon={processing ? <CircularProgress size={20} /> : undefined}
         >
           {processing ? 'Processing...' : `Process Payment ${formatCurrency(amount || '0')}`}

@@ -382,43 +382,27 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Create refund within transaction
+        # Create refund within transaction (no negative payments)
         with transaction.atomic():
             invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
 
-            # Create Refund record (track business refund)
             from .models import Refund
             refund = Refund.objects.create(
                 invoice=invoice_locked,
-                payment=payment_to_refund if payment_to_refund else None,
+                original_payment=payment_to_refund if payment_to_refund else None,
                 amount=amount,
                 reason=reason,
+                refund_method='original_payment',
                 status='processed',
                 requested_by=request.user,
                 approved_by=request.user,
+                processed_by=request.user,
                 processed_at=timezone.now(),
             )
 
-            # Create accounting negative payment entry
-            refund_payment = Payment.objects.create(
-                invoice=invoice_locked,
-                method=payment_method,
-                payment_type='refund',
-                amount=-amount,  # Negative amount for refund
-                status='completed',
-                notes=f'Refund ID: {refund.id}\nReason: {reason}\n{notes}'.strip(),
-                processed_by=request.user
-            )
-
-            # If specific payment, update its refund tracking helper
-            if payment_to_refund:
-                payment_to_refund.process_refund(amount, reason)
-
-            # Update invoice status if fully refunded
+            # Recalculate totals after refund is processed
             invoice_locked.refresh_from_db()
-            if invoice_locked.amount_paid <= 0:
-                invoice_locked.status = 'refunded'
-                invoice_locked.save(update_fields=['status'])
+            invoice_locked.recalculate_totals()
         
         # Refresh invoice
         invoice.refresh_from_db()
@@ -426,7 +410,6 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return Response({
             'success': True,
             'refund_id': refund.id,
-            'refund_payment_id': refund_payment.id,
             'refund_amount': str(amount),
             'refund_reason': reason,
             'remaining_paid': str(invoice.amount_paid),
@@ -790,94 +773,6 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
-    def apply_discount(self, request, pk=None):
-        """
-        Apply or update discount on invoice
-        
-        Endpoint: POST /api/invoices/{id}/apply-discount/
-        
-        Request body:
-        {
-            "discount": "10.00",
-            "reason": "Loyalty member - 10% off"
-        }
-        
-        Response:
-        {
-            "success": true,
-            "previous_total": "108.00",
-            "discount_applied": "10.00",
-            "new_total": "98.00",
-            "message": "Discount of $10.00 applied"
-        }
-        """
-        invoice = self.get_object()
-        
-        discount = request.data.get('discount')
-        reason = request.data.get('reason', '')
-        requested_version = request.data.get('version', None)
-
-        # Optimistic locking
-        if requested_version is not None and invoice.version != requested_version:
-            return Response(
-                {
-                    'error': 'Invoice was modified by another user. Please refresh.',
-                    'conflict': True,
-                    'current_version': invoice.version,
-                    'requested_version': requested_version,
-                },
-                status=status.HTTP_409_CONFLICT
-            )
-        
-        if discount is None:
-            return Response(
-                {'error': 'Discount amount is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            discount = Decimal(str(discount))
-        except:
-            return Response(
-                {'error': 'Invalid discount amount'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if discount < 0:
-            return Response(
-                {'error': 'Discount cannot be negative'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if discount > invoice.subtotal:
-            return Response(
-                {'error': f'Discount cannot exceed subtotal of ${invoice.subtotal}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        previous_total = invoice.total
-        
-        # Update discount
-        invoice.discount = discount
-        if reason:
-            invoice.notes = f"{invoice.notes}\n\nDiscount applied: {reason}".strip()
-        invoice.save(update_fields=['discount', 'notes'])
-        
-        # Recalculate totals
-        invoice.recalculate_totals()
-        invoice.refresh_from_db()
-        
-        return Response({
-            'success': True,
-            'previous_total': str(previous_total),
-            'discount_applied': str(discount),
-            'new_total': str(invoice.total),
-            'new_balance_due': str(invoice.balance_due),
-            'version': invoice.version,
-            'message': f'Discount of ${discount} applied'
-        })
-    
-    @action(detail=True, methods=['post'])
     def send_to_guest(self, request, pk=None):
         """
         Send invoice to guest via email
@@ -937,6 +832,35 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'total_refunded': str(total_refunded),
             'refund_count': refunds.count(),
             'refunds': data,
+        })
+
+    @action(detail=True, methods=['get'])
+    def available_deposits(self, request, pk=None):
+        """
+        Get available deposits for this invoice's guest
+        
+        GET /api/invoices/{id}/available_deposits/
+        """
+        invoice = self.get_object()
+        from .models import Deposit
+        
+        deposits = Deposit.objects.filter(
+            guest=invoice.guest,
+            status='paid'
+        ).order_by('-collected_at')
+        
+        from .serializers import DepositSerializer
+        serializer = DepositSerializer(deposits, many=True)
+        
+        # Filter deposits that have remaining amount > 0
+        available_deposits = [d for d in deposits if d.remaining_amount > 0]
+        
+        return Response({
+            'invoice_id': invoice.id,
+            'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
+            'available_deposits_count': len(available_deposits),
+            'total_available_amount': str(sum(d.remaining_amount for d in available_deposits)),
+            'deposits': serializer.data
         })
 
 
@@ -1198,33 +1122,6 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
             'net_revenue': str(net_revenue),
             'by_method': by_method,
             'by_hour': by_hour
-        })
-
-    @action(detail=True, methods=['get'])
-    def available_deposits(self, request, pk=None):
-        """
-        Get available deposits for this invoice's guest
-        
-        GET /api/invoices/{id}/available_deposits/
-        """
-        invoice = self.get_object()
-        from .models import Deposit
-        
-        deposits = Deposit.objects.filter(
-            guest=invoice.guest,
-            status='paid',
-            amount_applied__lt=models.F('amount')
-        ).order_by('-collected_at')
-        
-        from .serializers import DepositSerializer
-        serializer = DepositSerializer(deposits, many=True)
-        
-        return Response({
-            'invoice_id': invoice.id,
-            'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
-            'available_deposits_count': deposits.count(),
-            'total_available_amount': str(sum(d.remaining_amount for d in deposits)),
-            'deposits': serializer.data
         })
 
     @action(detail=True, methods=['post'])

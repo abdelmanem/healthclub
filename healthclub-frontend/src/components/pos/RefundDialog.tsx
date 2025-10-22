@@ -293,14 +293,14 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
                 {invoice.payments.slice(-3).map((payment) => (
                   <Box key={payment.id} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="caption">
-                      {payment.is_refund ? 'Refund' : 'Payment'} - {payment.payment_method_name || payment.method}
+                      Payment - {payment.payment_method_name || payment.method}
                     </Typography>
                     <Typography 
                       variant="caption" 
                       fontWeight={600}
-                      color={payment.is_refund ? 'error.main' : 'success.main'}
+                      color={'success.main'}
                     >
-                      {payment.is_refund ? '-' : '+'}{formatCurrency(Math.abs(parseFloat(payment.amount)).toString())}
+                      +{formatCurrency(Math.abs(parseFloat(payment.amount)).toString())}
                     </Typography>
                   </Box>
                 ))}

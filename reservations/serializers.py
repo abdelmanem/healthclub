@@ -358,29 +358,21 @@ class ReservationSerializer(serializers.ModelSerializer):
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
         
-        # Auto-create deposit payment record if deposit is required
-        if reservation.deposit_required and reservation.deposit_amount:
-            try:
-                from pos.models import Deposit
-                from django.utils import timezone
-                from django.db import transaction
-                
-                with transaction.atomic():
-                    # Create deposit record with 'pending' status
-                    deposit = Deposit.objects.create(
-                        guest=reservation.guest,
-                        reservation=reservation,
-                        amount=reservation.deposit_amount,
-                        status='pending',  # Mark as pending until actually paid
-                        payment_method='cash',  # Default payment method
-                        transaction_id='',
-                        reference='',
-                        notes=f'Auto-created deposit requirement for reservation #{reservation.id}',
-                        collected_by=None  # No one has collected it yet
-                    )
-            except Exception as e:
-                # Don't fail reservation creation if deposit creation fails
-                pass
+        # Auto-create invoice for ALL reservations
+        try:
+            from pos import create_invoice_for_reservation
+            from django.db import transaction
+            
+            with transaction.atomic():
+                # Create invoice with deposit as line item if deposit is required
+                include_deposit = reservation.deposit_required and reservation.deposit_amount
+                invoice = create_invoice_for_reservation(
+                    reservation, 
+                    include_deposit_as_line_item=include_deposit
+                )
+        except Exception as e:
+            # Don't fail reservation creation if invoice creation fails
+            pass
         
         # Recompute first-for-guest flag so the earliest reservation is marked true
         try:
@@ -410,36 +402,47 @@ class ReservationSerializer(serializers.ModelSerializer):
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
         
-        # Handle deposit changes
-        if (deposit_required_changed or deposit_amount_changed) and instance.deposit_required and instance.deposit_amount:
-            try:
-                from pos.models import Deposit
-                from django.db import transaction
+        # Ensure invoice exists for this reservation
+        try:
+            from pos import create_invoice_for_reservation
+            from django.db import transaction
+            
+            # Check if invoice already exists for this reservation
+            existing_invoice = instance.invoices.filter(status__in=['draft', 'issued', 'partial']).first()
+            
+            if not existing_invoice:
+                # Create new invoice
+                with transaction.atomic():
+                    include_deposit = instance.deposit_required and instance.deposit_amount
+                    invoice = create_invoice_for_reservation(
+                        instance, 
+                        include_deposit_as_line_item=include_deposit
+                    )
+            elif (deposit_required_changed or deposit_amount_changed) and instance.deposit_required and instance.deposit_amount:
+                # Update existing invoice - add/update deposit line item
+                from pos.models import InvoiceItem
+                existing_deposit_item = existing_invoice.items.filter(
+                    product_name__icontains='Deposit'
+                ).first()
                 
-                # Check if deposit record already exists
-                existing_deposit = Deposit.objects.filter(reservation=instance).first()
-                
-                if not existing_deposit:
-                    # Create new deposit record
-                    with transaction.atomic():
-                        deposit = Deposit.objects.create(
-                            guest=instance.guest,
-                            reservation=instance,
-                            amount=instance.deposit_amount,
-                            status='pending',
-                            payment_method='cash',
-                            transaction_id='',
-                            reference='',
-                            notes=f'Auto-created deposit requirement for reservation #{instance.id}',
-                            collected_by=None
-                        )
+                if not existing_deposit_item:
+                    InvoiceItem.objects.create(
+                        invoice=existing_invoice,
+                        product_name=f"Deposit for Reservation #{instance.id}",
+                        quantity=1,
+                        unit_price=instance.deposit_amount,
+                        tax_rate=0,
+                        notes="Prepayment deposit"
+                    )
+                    existing_invoice.recalculate_totals()
                 else:
-                    # Update existing deposit record
-                    existing_deposit.amount = instance.deposit_amount
-                    existing_deposit.save(update_fields=['amount'])
-            except Exception as e:
-                # Don't fail reservation update if deposit update fails
-                pass
+                    # Update existing deposit line item
+                    existing_deposit_item.unit_price = instance.deposit_amount
+                    existing_deposit_item.save(update_fields=['unit_price'])
+                    existing_invoice.recalculate_totals()
+        except Exception as e:
+            # Don't fail reservation update if invoice update fails
+            pass
         
         # If guest or start_time changed, recompute flags for affected guest(s)
         try:

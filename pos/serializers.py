@@ -160,17 +160,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         help_text="Formatted amount for display"
     )
     
-    is_refund = serializers.SerializerMethodField(
-        help_text="True if this is a refund"
-    )
-    
-    # Enrichments: refund info and linked refunds
-    refund_info = serializers.SerializerMethodField(
-        help_text="Details about refunds on this payment"
-    )
-    refunds = serializers.SerializerMethodField(
-        help_text="List of Refund records linked to this payment"
-    )
+    # Refunds are handled by Refund model; no refund fields on Payment
 
     class Meta:
         model = Payment
@@ -192,13 +182,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             'notes',
             'processed_by',
             'processed_by_name',
-            'is_refund',
-            'is_refunded',
-            'refund_amount',
-            'refund_date',
-            'refund_reason',
-            'refund_info',
-            'refunds',
+            
             'created_at',
             'updated_at',
         ]
@@ -212,13 +196,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             'payment_method_name',
             'processed_by_name',
             'display_amount',
-            'is_refund',
-            'is_refunded',
-            'refund_amount',
-            'refund_date',
-            'refund_reason',
-            'refund_info',
-            'refunds',
+            
         ]
     
     def get_guest_name(self, obj):
@@ -238,37 +216,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         """Get formatted amount with currency symbol"""
         return obj.get_display_amount()
     
-    def get_is_refund(self, obj):
-        """Check if this is a refund"""
-        return obj.is_refund()
-
-    def get_refund_info(self, obj):
-        """Return aggregate refund info if any refunds applied to this payment"""
-        if not obj.is_refunded and obj.refund_amount == 0:
-            return None
-        return {
-            'is_refunded': obj.is_refunded,
-            'refund_amount': str(obj.refund_amount),
-            'remaining_amount': str(obj.amount - obj.refund_amount),
-            'refund_date': obj.refund_date,
-            'refund_reason': obj.refund_reason,
-            'can_be_refunded': obj.can_be_refunded(),
-        }
-
-    def get_refunds(self, obj):
-        """Return linked Refund records (minimal fields)"""
-        qs = obj.refunds.all().order_by('-created_at')
-        return [
-            {
-                'id': r.id,
-                'amount': str(r.amount),
-                'reason': r.reason,
-                'status': r.status,
-                'created_at': r.created_at,
-                'processed_at': r.processed_at,
-            }
-            for r in qs
-        ]
+    # removed refund helpers
     
     def validate_amount(self, value):
         """Validate payment amount"""
@@ -277,30 +225,15 @@ class PaymentSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """
-        Cross-field validation
-        
-        Rules:
-        1. Refunds must have negative amounts
-        2. Regular payments must have positive amounts
-        3. If payment method requires reference, it must be provided
-        """
+        """Cross-field validation for positive payments only"""
         payment_type = data.get('payment_type')
         amount = data.get('amount')
         payment_method = data.get('payment_method')
         reference = data.get('reference', '')
         
-        # Validate refund amounts
-        if payment_type == 'refund' and amount > 0:
-            raise serializers.ValidationError({
-                'amount': 'Refund amount must be negative'
-            })
-        
-        # Validate regular payment amounts
-        if payment_type != 'refund' and amount < 0:
-            raise serializers.ValidationError({
-                'amount': 'Payment amount must be positive'
-            })
+        # Payments must be positive
+        if amount <= 0:
+            raise serializers.ValidationError({'amount': 'Payment amount must be positive'})
         
         # Check if reference number is required
         if payment_method and payment_method.requires_reference and not reference:
@@ -667,8 +600,8 @@ class ProcessPaymentSerializer(serializers.Serializer):
     )
     
     payment_type = serializers.ChoiceField(
-        choices=['full', 'partial', 'deposit'],
-        default='full',
+        choices=['regular', 'deposit_application', 'manual'],
+        default='regular',
         help_text="Type of payment"
     )
     
@@ -801,7 +734,7 @@ class RefundModelSerializer(serializers.ModelSerializer):
             'invoice',
             'invoice_number',
             'guest_name',
-            'payment',
+            'original_payment',
             'original_payment_amount',
             'amount',
             'reason',
@@ -827,8 +760,8 @@ class RefundModelSerializer(serializers.ModelSerializer):
         return None
 
     def get_original_payment_amount(self, obj):
-        if obj.payment and obj.payment.amount > 0:
-            return str(obj.payment.amount)
+        if obj.original_payment and obj.original_payment.amount > 0:
+            return str(obj.original_payment.amount)
         return None
 
     def get_requested_by_name(self, obj):

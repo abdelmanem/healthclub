@@ -91,7 +91,7 @@ class PaymentMethod(models.Model):
         help_text="Internal notes about this payment method"
     )
     
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     
     history = HistoricalRecords()
@@ -357,9 +357,11 @@ class Invoice(models.Model):
             # Calculate total
             locked.total = subtotal + service_charge + locked.tax - (locked.discount or Decimal('0.00'))
 
-            # Amount paid from completed payments only
-            payments_data = locked.payments.filter(status='completed').aggregate(Sum('amount'))
-            locked.amount_paid = payments_data['amount__sum'] or Decimal('0.00')
+            # Amount paid = payments (completed) - refunds (processed)
+            locked.amount_paid = (locked.payments.filter(status='completed')
+                                   .aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00'))
+            locked.amount_paid -= (locked.refunds.filter(status='processed')
+                                   .aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00'))
 
             # Balance
             locked.balance_due = locked.total - locked.amount_paid
@@ -408,33 +410,29 @@ class Invoice(models.Model):
         return self.amount_paid > 0 and self.status != self.STATUS_CANCELLED
     
     def get_payment_summary(self):
-        """Get payment breakdown for display"""
+        """Get payment breakdown for display (refunds counted from Refund model only)"""
         completed_payments = self.payments.filter(status='completed')
-        
-        # Calculate refund amount from both refunds table and negative refund payments
-        refund_amount = Decimal('0.00')
-        
-        # Add refunds from refunds table
-        refunds_sum = self.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum']
-        if refunds_sum:
-            refund_amount += refunds_sum
-        
-        # Add negative payments with payment_type='refund'
-        refund_payments_sum = self.payments.filter(
-            status='completed',
-            payment_type='refund',
-            amount__lt=0
-        ).aggregate(Sum('amount'))['amount__sum']
-        if refund_payments_sum:
-            refund_amount += abs(refund_payments_sum)  # Convert negative to positive for display
-        
+        refunds_sum = self.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
         return {
             'total_payments': completed_payments.count(),
             'payment_methods': list(
                 completed_payments.values_list('method', flat=True).distinct()
             ),
-            'refund_amount': refund_amount,
+            'refund_amount': refunds_sum,
         }
+
+    # POS.md helpers
+    def get_total_paid(self):
+        return self.payments.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+
+    def get_total_refunded(self, exclude_id=None):
+        qs = self.refunds.filter(status='processed')
+        if exclude_id:
+            qs = qs.exclude(id=exclude_id)
+        return qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+
+    def get_net_paid(self):
+        return self.get_total_paid() - self.get_total_refunded()
 
 
 class InvoiceItem(models.Model):
@@ -541,13 +539,8 @@ class InvoiceItem(models.Model):
 
 class Payment(models.Model):
     """
-    Record of money received (or refunded)
-    
-    Payment Types:
-    - full: Complete payment of balance
-    - partial: Partial payment (more payments expected)
-    - deposit: Upfront payment (usually at booking)
-    - refund: Money returned to guest (negative amount)
+    Records money RECEIVED from guests.
+    ONLY positive amounts. Refunds are tracked in `Refund`.
     """
     
     METHOD_CASH = 'cash'
@@ -556,6 +549,7 @@ class Payment(models.Model):
     METHOD_STRIPE = 'stripe'
     METHOD_PAYPAL = 'paypal'
     METHOD_GIFT_CARD = 'gift_card'
+    METHOD_DEPOSIT = 'deposit'
     METHOD_STORE_CREDIT = 'store_credit'
     
     METHOD_CHOICES = (
@@ -565,6 +559,7 @@ class Payment(models.Model):
         (METHOD_STRIPE, 'Stripe'),
         (METHOD_PAYPAL, 'PayPal'),
         (METHOD_GIFT_CARD, 'Gift Card'),
+        (METHOD_DEPOSIT, 'Deposit'),
         (METHOD_STORE_CREDIT, 'Store Credit'),
     )
     
@@ -572,18 +567,15 @@ class Payment(models.Model):
         ("pending", "Pending"),
         ("completed", "Completed"),
         ("failed", "Failed"),
-        ("refunded", "Refunded"),
         ("cancelled", "Cancelled"),
     )
     
-    PAYMENT_TYPE_CHOICES = [
-        ('full', 'Full Payment'),
-        ('partial', 'Partial Payment'),
-        ('deposit', 'Deposit'),
-        ('refund', 'Refund'),
-    ]
+    PAYMENT_TYPE_CHOICES = (
+        ('regular', 'Regular Payment'),
+        ('deposit_application', 'Deposit Application'),
+        ('manual', 'Manual Adjustment'),
+    )
     
-    # Relationships
     invoice = models.ForeignKey(
         'pos.Invoice',
         on_delete=models.CASCADE,
@@ -599,7 +591,6 @@ class Payment(models.Model):
         help_text="Link to payment method record"
     )
     
-    # Payment details
     method = models.CharField(
         max_length=20,
         choices=METHOD_CHOICES,
@@ -609,18 +600,17 @@ class Payment(models.Model):
     payment_type = models.CharField(
         max_length=20,
         choices=PAYMENT_TYPE_CHOICES,
-        default='full',
+        default='regular',
         help_text="Type of payment"
     )
     
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
-        help_text="Payment amount"
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Payment amount (must be positive)"
     )
     
-    # Transaction tracking
     transaction_id = models.CharField(
         max_length=100,
         blank=True,
@@ -646,7 +636,6 @@ class Payment(models.Model):
         help_text="Payment status"
     )
     
-    # Enhanced fields
     processing_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -665,7 +654,6 @@ class Payment(models.Model):
         help_text="Payment notes"
     )
 
-    # Phase 1: Idempotency key to prevent duplicate processing
     idempotency_key = models.CharField(
         max_length=100,
         unique=True,
@@ -673,30 +661,6 @@ class Payment(models.Model):
         blank=True,
         db_index=True,
         help_text='Unique key to prevent duplicate payment processing'
-    )
-    
-    # Refund tracking
-    is_refunded = models.BooleanField(
-        default=False,
-        help_text="Whether this payment has been refunded"
-    )
-    
-    refund_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        help_text="Amount refunded from this payment"
-    )
-    
-    refund_date = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When refund was processed"
-    )
-    
-    refund_reason = models.TextField(
-        blank=True,
-        help_text="Reason for refund"
     )
     
     processed_by = models.ForeignKey(
@@ -707,7 +671,6 @@ class Payment(models.Model):
         help_text="Staff member who processed this payment"
     )
     
-    # Tracking
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     
@@ -729,24 +692,17 @@ class Payment(models.Model):
         return f"Payment {self.amount} {self.method} for {self.invoice}"
     
     def clean(self):
-        """Validation before saving"""
-        if self.payment_type == 'refund' and self.amount > 0:
-            raise ValidationError("Refund amount must be negative")
-        
-        if self.payment_type != 'refund' and self.amount < 0:
+        if self.amount <= 0:
             raise ValidationError("Payment amount must be positive")
         
-        # Check if amount exceeds balance (only for new payments)
-        if not self.pk and self.status == 'completed' and self.payment_type != 'refund':
+        if not self.pk and self.status == 'completed':
             if self.amount > self.invoice.balance_due:
                 raise ValidationError(
                     f"Payment amount ${self.amount} exceeds balance due ${self.invoice.balance_due}"
                 )
     
     def save(self, *args, **kwargs):
-        """Save payment with idempotency and row-level locking on invoice/guest"""
         from django.db import transaction
-        # Validate before saving
         self.clean()
 
         if self.idempotency_key and not self.pk:
@@ -754,18 +710,12 @@ class Payment(models.Model):
                 raise ValidationError(f'Payment with idempotency key {self.idempotency_key} already exists')
 
         with transaction.atomic():
-            # Lock invoice row
             invoice_locked = Invoice.objects.select_for_update().get(pk=self.invoice_id)
-
             super().save(*args, **kwargs)
-
-            # Recalculate totals under the same lock
             invoice_locked.recalculate_totals()
 
-            # Update guest loyalty points for completed payments
             if self.status == 'completed':
                 guest = invoice_locked.guest
-                # Lock guest (if applicable)
                 try:
                     from guests.models import Guest
                     guest_locked = Guest.objects.select_for_update().get(pk=guest.pk)
@@ -773,12 +723,8 @@ class Payment(models.Model):
                     guest_locked = guest
 
                 if hasattr(guest_locked, 'loyalty_points') and hasattr(guest_locked, 'total_spent'):
-                    if self.payment_type == 'refund':
-                        points_change = -int(abs(self.amount))
-                        spending_change = -abs(self.amount)
-                    else:
-                        points_change = int(self.amount)
-                        spending_change = self.amount
+                    points_change = int(self.amount)
+                    spending_change = self.amount
 
                     guest_locked.loyalty_points = max(0, (guest_locked.loyalty_points or 0) + points_change)
                     guest_locked.total_spent = max(
@@ -787,95 +733,96 @@ class Payment(models.Model):
                     )
                     guest_locked.save(update_fields=['loyalty_points', 'total_spent'])
     
-    def process_refund(self, amount, reason=""):
-        """Process a refund for this payment with locking and validation"""
-        from django.db import transaction
-        from django.core.exceptions import ValidationError
-
-        if amount <= 0:
-            raise ValidationError("Refund amount must be positive")
-
-        with transaction.atomic():
-            # Lock this payment row to prevent concurrent refunds
-            payment = Payment.objects.select_for_update().get(pk=self.pk)
-
-            available_amount = payment.amount - payment.refund_amount
-            if amount > available_amount:
-                raise ValidationError(
-                    f"Refund amount ${amount} cannot exceed remaining payment amount ${available_amount}"
-                )
-
-            payment.refund_amount += amount
-            payment.is_refunded = payment.refund_amount >= payment.amount
-            payment.refund_reason = reason
-            payment.refund_date = timezone.now()
-            payment.save(update_fields=[
-                'refund_amount', 'is_refunded', 'refund_reason', 'refund_date'
-            ])
+    def get_display_amount(self):
+        return f"${self.amount:.2f}"
     
     def can_be_refunded(self):
-        """Check if this payment can be refunded"""
+        """
+        Check if this payment can be refunded
+        A payment can be refunded if:
+        - It's completed
+        - It's positive (not already a refund)
+        - Not fully refunded yet
+        """
+        # Calculate total refunded against this payment
+        refunded_amount = self.refunds.filter(
+            status='processed'
+        ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        
         return (
             self.status == 'completed' and
-            self.payment_type != 'refund' and
             self.amount > 0 and
-            not self.is_refunded
+            refunded_amount < self.amount
         )
     
-    def get_display_amount(self):
-        """Get formatted amount for display"""
-        return f"${abs(self.amount):.2f}"
-    
-    def is_refund(self):
-        """Check if this is a refund"""
-        return self.payment_type == 'refund' or self.amount < 0
+    def get_remaining_refundable_amount(self):
+        """Get how much of this payment can still be refunded"""
+        refunded_amount = self.refunds.filter(
+            status='processed'
+        ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        
+        return self.amount - refunded_amount
 
 
 class Refund(models.Model):
-    """Model to track refunds separately"""
+    """
+    Records money RETURNED to guests
+    Completely separate from Payment
+    """
+    
     REFUND_STATUS_CHOICES = (
-        ("pending", "Pending"),
+        ("pending", "Pending Approval"),
         ("approved", "Approved"),
-        ("processed", "Processed"),
+        ("processed", "Processed/Completed"),
         ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
     )
-
+    
+    REFUND_METHOD_CHOICES = (
+        ('original_payment', 'Original Payment Method'),
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('store_credit', 'Store Credit'),
+    )
+    
+    # Core relationships
     invoice = models.ForeignKey(
         'pos.Invoice',
         on_delete=models.CASCADE,
         related_name='refunds'
     )
     
-    payment = models.ForeignKey(
+    # Optional: Link to specific payment being refunded
+    original_payment = models.ForeignKey(
         'pos.Payment',
-        on_delete=models.CASCADE,
-        related_name='refunds',
+        on_delete=models.SET_NULL,
         null=True,
-        blank=True
+        blank=True,
+        related_name='refunds',
+        help_text='The payment being refunded (if partial refund)'
     )
     
+    # Refund details
     amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
+        max_digits=12, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Refund amount (MUST be positive)"
     )
-    
     reason = models.TextField()
+    refund_method = models.CharField(max_length=20, choices=REFUND_METHOD_CHOICES)
+    status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default="pending")
     
-    status = models.CharField(
-        max_length=20,
-        choices=REFUND_STATUS_CHOICES,
-        default="pending"
-    )
+    # Transaction tracking
+    transaction_id = models.CharField(max_length=100, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
     
+    # Approval workflow
     requested_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
         null=True,
-        blank=True,
         related_name='refund_requests'
     )
-    
     approved_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
@@ -883,17 +830,80 @@ class Refund(models.Model):
         blank=True,
         related_name='refund_approvals'
     )
+    processed_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='refund_processing'
+    )
     
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
     processed_at = models.DateTimeField(null=True, blank=True)
     
+    notes = models.TextField(blank=True)
     history = HistoricalRecords()
     
     class Meta:
         ordering = ['-created_at']
-
-    def __str__(self) -> str:
-        return f"Refund {self.amount} for {self.invoice}"
+        indexes = [
+            models.Index(fields=['invoice', '-created_at']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"Refund ${self.amount} for {self.invoice.invoice_number}"
+    
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError("Refund amount must be positive")
+        
+        if self.invoice:
+            total_refunded = self.invoice.get_total_refunded(exclude_id=self.pk)
+            if (total_refunded + self.amount) > self.invoice.amount_paid:
+                raise ValidationError(
+                    f"Total refunds (${total_refunded + self.amount}) cannot exceed amount paid (${self.invoice.amount_paid})"
+                )
+    
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+        self.clean()
+        
+        with transaction.atomic():
+            invoice_locked = Invoice.objects.select_for_update().get(pk=self.invoice_id)
+            super().save(*args, **kwargs)
+            
+            if self.status == 'processed':
+                invoice_locked.recalculate_totals()
+                self._update_guest_loyalty()
+    
+    def approve(self, user):
+        if self.status != 'pending':
+            raise ValidationError("Only pending refunds can be approved")
+        self.status = 'approved'
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.save()
+    
+    def process(self, user, transaction_id='', reference=''):
+        if self.status not in ['pending', 'approved']:
+            raise ValidationError("Only pending/approved refunds can be processed")
+        self.status = 'processed'
+        self.processed_by = user
+        self.processed_at = timezone.now()
+        self.transaction_id = transaction_id
+        self.reference = reference
+        self.save()
+    
+    def _update_guest_loyalty(self):
+        guest = self.invoice.guest
+        if hasattr(guest, 'loyalty_points'):
+            points_to_deduct = int(self.amount)
+            guest.loyalty_points = max(0, guest.loyalty_points - points_to_deduct)
+            guest.total_spent = max(Decimal('0.00'), guest.total_spent - self.amount)
+            guest.save(update_fields=['loyalty_points', 'total_spent'])
 
 
 class GiftCard(models.Model):
@@ -1114,23 +1124,25 @@ def recalculate_invoice_on_item_delete(sender, instance, **kwargs):
 
 class Deposit(models.Model):
     """
-    Track deposits/advance payments for reservations
-    Separate from Payment to allow flexible application later
+    Pre-payment collected before service
+    Tracked separately until applied to invoice
     """
+    
     DEPOSIT_STATUS = (
-        ('pending', 'Pending'),
-        ('paid', 'Paid'),
-        ('applied', 'Applied to Invoice'),
+        ('pending', 'Pending Collection'),
+        ('collected', 'Collected (Not Applied)'),
+        ('partially_applied', 'Partially Applied'),
+        ('fully_applied', 'Fully Applied'),
         ('refunded', 'Refunded'),
+        ('expired', 'Expired'),
     )
     
-    # Link to guest and reservation
+    # Core relationships
     guest = models.ForeignKey(
         'guests.Guest',
         on_delete=models.CASCADE,
         related_name='deposits'
     )
-    
     reservation = models.ForeignKey(
         'reservations.Reservation',
         on_delete=models.CASCADE,
@@ -1139,43 +1151,24 @@ class Deposit(models.Model):
         blank=True
     )
     
-    # Invoice this deposit was applied to (if any)
-    invoice = models.ForeignKey(
-        'pos.Invoice',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='applied_deposits',
-        help_text='Invoice this deposit was applied to'
-    )
-    
-    # Financial tracking
+    # Deposit tracking
     amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
     )
-    
     amount_applied = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('0.00'),
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
         help_text='Amount already applied to invoices'
     )
+    status = models.CharField(max_length=20, choices=DEPOSIT_STATUS, default='pending')
     
-    status = models.CharField(
-        max_length=20,
-        choices=DEPOSIT_STATUS,
-        default='pending'
-    )
-    
-    # Payment details
+    # Payment details (how deposit was collected)
     payment_method = models.CharField(max_length=20)
     transaction_id = models.CharField(max_length=100, blank=True)
     reference = models.CharField(max_length=100, blank=True)
     
     # Timestamps
-    collected_at = models.DateTimeField(auto_now_add=True)
+    collected_at = models.DateTimeField(null=True, blank=True)
     collected_by = models.ForeignKey(
         'accounts.User',
         on_delete=models.SET_NULL,
@@ -1184,43 +1177,51 @@ class Deposit(models.Model):
         related_name='collected_deposits'
     )
     
+    expiry_date = models.DateField(
+        null=True, blank=True,
+        help_text='Date after which deposit expires if not used'
+    )
+    
     notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     history = HistoricalRecords()
     
     class Meta:
         ordering = ['-collected_at']
-        verbose_name = 'Deposit'
-        verbose_name_plural = 'Deposits'
+        indexes = [
+            models.Index(fields=['guest', '-collected_at']),
+            models.Index(fields=['status']),
+        ]
     
     def __str__(self):
-        return f"Deposit ${self.amount} for {self.guest} (Reservation #{self.reservation_id})"
+        return f"Deposit ${self.amount} for {self.guest}"
     
     @property
     def remaining_amount(self):
-        """Calculate remaining deposit balance"""
         return self.amount - self.amount_applied
     
     def can_be_applied(self):
-        """Check if deposit can be applied"""
-        return self.status == 'paid' and self.remaining_amount > 0
+        return (
+            self.status in ['collected', 'partially_applied'] and
+            self.remaining_amount > 0 and
+            (not self.expiry_date or timezone.now().date() <= self.expiry_date)
+        )
     
     def apply_to_invoice(self, invoice, amount=None):
-        """
-        Apply deposit to an invoice
-        Creates a Payment record and updates deposit tracking
-        """
         from django.db import transaction
         from django.core.exceptions import ValidationError
         
         if not self.can_be_applied():
             raise ValidationError("Deposit cannot be applied")
         
-        # Default to full remaining amount
         if amount is None:
             amount = self.remaining_amount
         
-        # Validate amount
+        if amount <= 0:
+            raise ValidationError("Application amount must be positive")
+        
         if amount > self.remaining_amount:
             raise ValidationError(
                 f"Cannot apply ${amount}, only ${self.remaining_amount} available"
@@ -1230,26 +1231,32 @@ class Deposit(models.Model):
             amount = invoice.balance_due
         
         with transaction.atomic():
-            # Lock deposit and invoice
-            deposit = Deposit.objects.select_for_update().get(pk=self.pk)
+            deposit_locked = Deposit.objects.select_for_update().get(pk=self.pk)
             invoice_locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
             
-            # Create payment record
+            # Attempt to find/create a PaymentMethod for deposits
+            payment_method_obj = None
+            try:
+                payment_method_obj = PaymentMethod.objects.get(code='deposit')
+            except Exception:
+                payment_method_obj = None
+            
             payment = Payment.objects.create(
                 invoice=invoice_locked,
                 method='deposit',
-                payment_type='deposit',
+                payment_method=payment_method_obj,
+                payment_type='deposit_application',
                 amount=amount,
                 status='completed',
-                reference=f'Deposit #{deposit.id}',
-                notes=f'Applied from deposit #{deposit.id} collected on {deposit.collected_at.strftime("%Y-%m-%d")}'
+                reference=f'Deposit #{deposit_locked.id}',
+                notes=f'Applied from deposit collected on {deposit_locked.collected_at.strftime("%Y-%m-%d") if deposit_locked.collected_at else ""}'
             )
             
-            # Update deposit tracking
-            deposit.amount_applied += amount
-            if deposit.amount_applied >= deposit.amount:
-                deposit.status = 'applied'
-            deposit.invoice = invoice_locked
-            deposit.save(update_fields=['amount_applied', 'status', 'invoice'])
+            deposit_locked.amount_applied += amount
+            if deposit_locked.amount_applied >= deposit_locked.amount:
+                deposit_locked.status = 'fully_applied'
+            else:
+                deposit_locked.status = 'partially_applied'
+            deposit_locked.save(update_fields=['amount_applied', 'status'])
             
             return payment

@@ -110,10 +110,9 @@ export const groupPaymentsByDate = (payments: Payment[]): Record<string, Payment
 /**
  * Calculate refund total
  */
-export const calculateRefundTotal = (payments: Payment[]): number => {
-  return payments
-    .filter((p) => p.payment_type === 'refund' && p.status === 'completed')
-    .reduce((total, p) => total + Math.abs(parseFloat(p.amount)), 0);
+export const calculateRefundTotal = (_payments: Payment[]): number => {
+  // Refunds are no longer represented as negative payments; use Invoice.refunds API instead.
+  return 0;
 };
 
 /**
