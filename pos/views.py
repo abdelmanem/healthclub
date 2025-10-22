@@ -846,20 +846,22 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         deposits = Deposit.objects.filter(
             guest=invoice.guest,
-            status='paid'
+            status__in=['collected', 'partially_applied']
         ).order_by('-collected_at')
         
         from .serializers import DepositSerializer
-        serializer = DepositSerializer(deposits, many=True)
-        
         # Filter deposits that have remaining amount > 0
         available_deposits = [d for d in deposits if d.remaining_amount > 0]
+        serializer = DepositSerializer(available_deposits, many=True)
+        
+        from decimal import Decimal
+        total_available = sum((d.remaining_amount for d in available_deposits), Decimal('0.00'))
         
         return Response({
             'invoice_id': invoice.id,
             'guest_name': f"{invoice.guest.first_name} {invoice.guest.last_name}",
             'available_deposits_count': len(available_deposits),
-            'total_available_amount': str(sum(d.remaining_amount for d in available_deposits)),
+            'total_available_amount': str(total_available),
             'deposits': serializer.data
         })
 
