@@ -492,9 +492,11 @@ export const ReservationBookingForm: React.FC<{
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
+                  <label htmlFor="phone-number" className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
                   <div className="flex gap-2">
                     <input
+                      id="phone-number"
+                      name="phone-number"
                       type="tel"
                       value={phone}
                       onChange={async (e) => {
@@ -534,6 +536,8 @@ export const ReservationBookingForm: React.FC<{
                       className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <select
+                      id="phone-type"
+                      name="phone-type"
                       value={phoneType}
                       onChange={(e) => setPhoneType(e.target.value as any)}
                       className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -545,8 +549,10 @@ export const ReservationBookingForm: React.FC<{
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
+                  <label htmlFor="contact-name" className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
                   <input
+                    id="contact-name"
+                    name="contact-name"
                     type="text"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
@@ -555,8 +561,10 @@ export const ReservationBookingForm: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+                  <label htmlFor="email-address" className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
                   <input
+                    id="email-address"
+                    name="email-address"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -565,8 +573,10 @@ export const ReservationBookingForm: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Country</label>
+                  <label htmlFor="country" className="block text-sm font-medium text-slate-700 mb-2">Country</label>
                   <select
+                    id="country"
+                    name="country"
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -587,6 +597,8 @@ export const ReservationBookingForm: React.FC<{
               </div>
               <div className="flex gap-2 mb-4">
                 <select
+                  id="service-select"
+                  name="service-select"
                   value={selectedServiceId}
                   onChange={(e) => {
                     const id = Number(e.target.value);
@@ -666,8 +678,10 @@ export const ReservationBookingForm: React.FC<{
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Staff Member</label>
+                  <label htmlFor="staff-member" className="block text-sm font-medium text-slate-700 mb-2">Staff Member</label>
                   <select
+                    id="staff-member"
+                    name="staff-member"
                     value={employeeId || ''}
                     onChange={(e) => setEmployeeId(e.target.value as any)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -679,8 +693,10 @@ export const ReservationBookingForm: React.FC<{
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Room</label>
+                  <label htmlFor="room" className="block text-sm font-medium text-slate-700 mb-2">Room</label>
                   <select
+                    id="room"
+                    name="room"
                     value={locationId || ''}
                     onChange={(e) => setLocationId(e.target.value as any)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -692,8 +708,10 @@ export const ReservationBookingForm: React.FC<{
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Source</label>
+                  <label htmlFor="source" className="block text-sm font-medium text-slate-700 mb-2">Source</label>
                   <select
+                    id="source"
+                    name="source"
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -706,8 +724,10 @@ export const ReservationBookingForm: React.FC<{
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Start Date & Time</label>
+                  <label htmlFor="start-datetime" className="block text-sm font-medium text-slate-700 mb-2">Start Date & Time</label>
                   <input
+                    id="start-datetime"
+                    name="start-datetime"
                     type="datetime-local"
                     value={dayjs.utc(start).tz('Africa/Cairo').format('YYYY-MM-DDTHH:mm')}
                     onChange={(e) => setStart(dayjs.tz(e.target.value, 'Africa/Cairo').utc().toISOString())}
@@ -715,8 +735,10 @@ export const ReservationBookingForm: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">End Date & Time</label>
+                  <label htmlFor="end-datetime" className="block text-sm font-medium text-slate-700 mb-2">End Date & Time</label>
                   <input
+                    id="end-datetime"
+                    name="end-datetime"
                     type="datetime-local"
                     value={dayjs.utc(computedEndIso).tz('Africa/Cairo').format('YYYY-MM-DDTHH:mm')}
                     readOnly
@@ -767,6 +789,8 @@ export const ReservationBookingForm: React.FC<{
                 <h2 className="text-lg font-semibold text-slate-900">Additional Information</h2>
               </div>
               <textarea
+                id="notes"
+                name="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add any special requests or notes..."
@@ -803,7 +827,7 @@ export const ReservationBookingForm: React.FC<{
                 {depositRequired && (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label htmlFor="deposit-amount" className="block text-sm font-medium text-slate-700 mb-2">
                         Deposit Amount
                       </label>
                       <div className="relative">
@@ -811,6 +835,8 @@ export const ReservationBookingForm: React.FC<{
                           <DollarSign className="h-5 w-5 text-slate-400" />
                         </div>
                         <input
+                          id="deposit-amount"
+                          name="deposit-amount"
                           type="number"
                           value={depositAmount}
                           onChange={(e) => setDepositAmount(e.target.value)}

@@ -1071,6 +1071,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            textFillColor: 'transparent',
           },
           // Style for inactive employee columns
     '& .fc-resource': {
@@ -1371,7 +1373,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
                       bgcolor: 'rgba(255,255,255,0.25)', 
                       color: 'white',
                       fontWeight: 700,
-                      backdropFilter: 'blur(10px)'
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)'
                     }} 
                   />
                   {drawer.reservation?.is_first_for_guest && (
@@ -1383,7 +1386,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
                         bgcolor: 'rgba(255,255,255,0.25)', 
                         color: 'white',
                         fontWeight: 700,
-                        backdropFilter: 'blur(10px)'
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)'
                       }} 
                     />
                   )}
@@ -1403,7 +1407,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
             </Box>
             
             <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mt={2}>
-              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
+              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Box display="flex" alignItems="center" gap={1}>
                   <Event sx={{ fontSize: 18, color: 'white' }} />
                   <Box>
@@ -1416,7 +1420,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   </Box>
                 </Box>
               </Paper>
-              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
+              <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Box display="flex" alignItems="center" gap={1}>
                   <Schedule sx={{ fontSize: 18, color: 'white' }} />
                   <Box>
