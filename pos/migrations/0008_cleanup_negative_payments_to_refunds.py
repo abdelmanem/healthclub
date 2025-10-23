@@ -16,18 +16,13 @@ def cleanup_negative_payments(apps, schema_editor):
         # Create proper Refund record
         refund = Refund.objects.create(
             invoice=p.invoice,
-            original_payment=None,
+            payment=None,  # original_payment was called 'payment' in the original model
             amount=amount,
             reason=p.notes or 'Migrated from legacy negative payment',
-            refund_method='original_payment',
             status='processed',
             requested_by=p.processed_by,
             approved_by=p.processed_by,
-            processed_by=p.processed_by,
             processed_at=p.payment_date,
-            transaction_id=p.transaction_id,
-            reference=p.reference,
-            notes=f'Migrated from Payment #{p.id}',
         )
 
         # Recalculate invoice totals after migration for this invoice
