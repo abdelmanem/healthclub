@@ -347,6 +347,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         notes = serializer.validated_data.get('notes', '')
         payment_to_refund = serializer.validated_data.get('payment_id')
         requested_version = request.data.get('version', None)
+        
+        # Map payment method to refund method
+        refund_method_mapping = {
+            'cash': 'cash',
+            'credit_card': 'original_payment',
+            'debit_card': 'original_payment',
+            'bank_transfer': 'bank_transfer',
+            'store_credit': 'store_credit',
+        }
+        refund_method = refund_method_mapping.get(payment_method, 'original_payment')
 
         # Optimistic locking
         if requested_version is not None and invoice.version != requested_version:
@@ -392,7 +402,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 original_payment=payment_to_refund if payment_to_refund else None,
                 amount=amount,
                 reason=reason,
-                refund_method='original_payment',
+                refund_method=refund_method,
                 status='processed',
                 requested_by=request.user,
                 approved_by=request.user,

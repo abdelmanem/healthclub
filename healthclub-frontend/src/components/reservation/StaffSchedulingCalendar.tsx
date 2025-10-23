@@ -62,6 +62,7 @@ import { reservationsService } from '../../services/reservations';
 import { EditGuestDialog } from '../guest/EditGuestDialog';
 import { InvoiceDetails } from '../pos/InvoiceDetails';
 import { ReservationDepositForm } from './ReservationDepositForm';
+import { RefundDialog } from './RefundDialog';
 
 type Reservation = {
   id: number;
@@ -188,9 +189,33 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [invoiceDialogOpen, setInvoiceDialogOpen] = React.useState(false);
   const [createdInvoiceId, setCreatedInvoiceId] = React.useState<number | null>(null);
   const [depositDialogOpen, setDepositDialogOpen] = React.useState<boolean>(false);
+  const [refundDialogOpen, setRefundDialogOpen] = React.useState<boolean>(false);
+  const [reservationToRefund, setReservationToRefund] = React.useState<Reservation | null>(null);
 
   const handleCalendarClose = () => {
     setCalendarAnchor(null);
+  };
+
+  const handleRefundProcessed = async () => {
+    setRefundDialogOpen(false);
+    setReservationToRefund(null);
+    
+    // After refund is processed, proceed with cancellation
+    if (reservationToRefund) {
+      setReservationToCancel(reservationToRefund.id);
+      setIsCancellationDialogOpen(true);
+    }
+    
+    await loadData(); // Refresh calendar data
+    if (drawer.reservation) {
+      // Re-fetch the specific reservation to update the drawer
+      try {
+        const updated = (await api.get(`/reservations/${drawer.reservation.id}/`)).data;
+        setDrawer({ open: true, reservation: updated });
+      } catch {
+        // ignore refresh errors
+      }
+    }
   };
 
   const handleDateSelect = (date: Date) => {
@@ -800,6 +825,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
     const r = menuAnchor?.reservation || drawer.reservation;
     if (!r) return;
     if (action === 'cancel') {
+      // Check if reservation has a prepaid deposit that needs refunding
+      if (r.deposit_required && r.deposit_paid && r.deposit_amount) {
+        setReservationToRefund(r);
+        setRefundDialogOpen(true);
+        setMenuAnchor(null);
+        return;
+      }
+      
+      // No deposit to refund, proceed with normal cancellation
       setReservationToCancel(r.id);
       setIsCancellationDialogOpen(true);
       setMenuAnchor(null);
@@ -1953,6 +1987,21 @@ export const StaffSchedulingCalendar: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Refund Dialog */}
+      {reservationToRefund && (
+        <RefundDialog
+          open={refundDialogOpen}
+          onClose={() => {
+            setRefundDialogOpen(false);
+            setReservationToRefund(null);
+          }}
+          reservationId={reservationToRefund.id}
+          depositAmount={reservationToRefund.deposit_amount || '0.00'}
+          guestName={reservationToRefund.guest_name || 'Guest'}
+          onRefundProcessed={handleRefundProcessed}
+        />
+      )}
     </Box>
   );
 };
