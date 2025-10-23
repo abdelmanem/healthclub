@@ -488,9 +488,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
       const calendarApi = calendarRef.current?.getApi();
       if (!calendarApi) return;
 
+      // Get the current view date
+      const view = calendarApi.view;
+      const currentDate = view ? new Date(view.activeStart) : selectedDate;
+
       // Update resource styling for current date
       employees.forEach(employee => {
-        const isAvailable = isWithinEmployeeShift(employee.id, selectedDate);
+        const isAvailable = isWithinEmployeeShift(employee.id, currentDate);
         const resourceEl = document.querySelector(`[data-resource-id="${employee.id}"]`);
         if (resourceEl) {
           if (isAvailable) {
@@ -624,6 +628,24 @@ export const StaffSchedulingCalendar: React.FC = () => {
     return current >= start && current <= end;
   }, [weeklySchedules]);
 
+  const resources = employees.map((e) => {
+    const isAvailableToday = isWithinEmployeeShift(e.id, selectedDate);
+    const displayName = getEmployeeDisplayName(e);
+    const titleWithStatus = isAvailableToday 
+      ? displayName 
+      : `${displayName} (Day Off)`;
+    
+    return { 
+      id: String(e.id), 
+      title: titleWithStatus,
+      eventColor: isAvailableToday ? undefined : '#e5e7eb', // Gray for unavailable
+      extendedProps: {
+        isAvailable: isAvailableToday,
+        isDayOff: !isAvailableToday
+      }
+    };
+  });
+
   React.useEffect(() => {
     const styleCalendarButton = () => {
       const button = document.querySelector('.fc-calendarIcon-button');
@@ -668,24 +690,6 @@ export const StaffSchedulingCalendar: React.FC = () => {
     const cleanup = styleCalendarButton();
     return cleanup;
   }, []);
-
-  const resources = employees.map((e) => {
-    const isAvailableToday = isWithinEmployeeShift(e.id, selectedDate);
-    const displayName = getEmployeeDisplayName(e);
-    const titleWithStatus = isAvailableToday 
-      ? displayName 
-      : `${displayName} (Day Off)`;
-    
-    return { 
-      id: String(e.id), 
-      title: titleWithStatus,
-      eventColor: isAvailableToday ? undefined : '#e5e7eb', // Gray for unavailable
-      extendedProps: {
-        isAvailable: isAvailableToday,
-        isDayOff: !isAvailableToday
-      }
-    };
-  });
 
   const events = reservations.map((r) => ({
     id: String(r.id),
@@ -770,16 +774,42 @@ export const StaffSchedulingCalendar: React.FC = () => {
     const r: Reservation | undefined = dropInfo?.event?.extendedProps?.reservation;
     if (!r) return;
     
+    // Prevent dragging checked_out reservations
+    if (r.status === 'checked_out') {
+      window.alert("Cannot move reservation: This reservation has been checked out and completed.");
+      dropInfo.revert();
+      return;
+    }
+    
+    // Prevent dragging cancelled reservations
+    if (r.status === 'cancelled') {
+      window.alert("Cannot move reservation: This reservation has been cancelled.");
+      dropInfo.revert();
+      return;
+    }
+    
     try {
       const newStartDate: Date | null = dropInfo?.event?.start ? new Date(dropInfo.event.start) : null;
       const newEndDate: Date | null = dropInfo?.event?.end ? new Date(dropInfo.event.end) : null;
       const resource = dropInfo.newResource || dropInfo.event.getResources?.()?.[0];
       const targetEmployeeId = resource ? Number(resource.id) : (r.employee ?? null);
-      if (targetEmployeeId && newStartDate) {
+      
+      // Only validate if we're changing to a different employee
+      if (targetEmployeeId && targetEmployeeId !== r.employee && newStartDate) {
         const startOk = isWithinEmployeeShift(targetEmployeeId, newStartDate);
         const endOk = newEndDate ? isWithinEmployeeShift(targetEmployeeId, newEndDate) : true;
+        
         if (!startOk || !endOk) {
-          window.alert("Cannot move reservation: outside employee's working hours or on a day off.");
+          const employee = employees.find(e => e.id === targetEmployeeId);
+          const employeeName = employee ? getEmployeeDisplayName(employee) : 'Unknown Employee';
+          
+          // Check if it's specifically a day off
+          const isDayOff = !isWithinEmployeeShift(targetEmployeeId, newStartDate);
+          const message = isDayOff 
+            ? `Cannot move reservation: ${employeeName} is scheduled for a day off on this date.`
+            : `Cannot move reservation: outside ${employeeName}'s working hours.`;
+          
+          window.alert(message);
           dropInfo.revert();
           return;
         }
@@ -1043,39 +1073,77 @@ export const StaffSchedulingCalendar: React.FC = () => {
             WebkitTextFillColor: 'transparent',
           },
           // Style for inactive employee columns
-          '& .fc-resource': {
-            '&[data-resource-id]': {
-              '&.employee-day-off': {
-                opacity: 0.5,
-                background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-                position: 'relative',
-                '&::before': {
-                  content: '"🚫"',
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  fontSize: '16px',
-                  zIndex: 10,
-                },
-                '& .fc-resource-cell': {
-                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                  color: '#9ca3af',
-                  borderColor: '#d1d5db',
-                  fontWeight: 500,
-                },
-                '& .fc-timegrid-slot': {
-                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                  borderColor: '#e5e7eb',
-                },
-                '& .fc-timegrid-slot-label': {
-                  color: '#9ca3af',
-                },
-                '& .fc-timegrid-slot-minor': {
-                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                }
-              }
+    '& .fc-resource': {
+      '&[data-resource-id]': {
+        '&.employee-day-off': {
+          opacity: 0.4,
+          background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+          position: 'relative',
+          cursor: 'not-allowed !important',
+          '&::before': {
+            content: '"🚫"',
+            position: 'absolute',
+            top: '8px',
+            right: '8px',
+            fontSize: '18px',
+            zIndex: 10,
+            background: 'rgba(239, 68, 68, 0.9)',
+            borderRadius: '50%',
+            width: '24px',
+            height: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 'bold',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          },
+          '& .fc-resource-cell': {
+            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%) !important',
+            color: '#9ca3af !important',
+            borderColor: '#d1d5db !important',
+            fontWeight: 500,
+            cursor: 'not-allowed !important',
+            position: 'relative',
+            '&::after': {
+              content: '"DAY OFF"',
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              color: '#ef4444',
+              background: 'rgba(255,255,255,0.9)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              border: '1px solid #ef4444',
+              zIndex: 5,
             }
           },
+          '& .fc-timegrid-slot': {
+            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%) !important',
+            borderColor: '#e5e7eb !important',
+            cursor: 'not-allowed !important',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important',
+            }
+          },
+          '& .fc-timegrid-slot-label': {
+            color: '#9ca3af !important',
+          },
+          '& .fc-timegrid-slot-minor': {
+            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%) !important',
+            cursor: 'not-allowed !important',
+          },
+          '& .fc-event': {
+            cursor: 'not-allowed !important',
+            pointerEvents: 'none',
+            opacity: '0.3 !important',
+          }
+        }
+      }
+    },
         }}
       >
         <FullCalendar
@@ -1091,6 +1159,14 @@ export const StaffSchedulingCalendar: React.FC = () => {
           selectMirror
           editable
           eventResourceEditable
+          eventAllow={(dropInfo: any, draggedEvent: any) => {
+            // Prevent dragging checked_out and cancelled reservations
+            const reservation = draggedEvent.extendedProps?.reservation;
+            if (reservation && (reservation.status === 'checked_out' || reservation.status === 'cancelled')) {
+              return false;
+            }
+            return true;
+          }}
           snapDuration="00:01:00"
           slotDuration="00:30:00"
           slotLabelInterval="00:30"
@@ -1143,15 +1219,33 @@ export const StaffSchedulingCalendar: React.FC = () => {
             try {
               info.el.style.border = 'none';
               info.el.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+              
+              // Add visual indication for non-draggable reservations
+              const reservation = info.event.extendedProps?.reservation;
+              if (reservation && (reservation.status === 'checked_out' || reservation.status === 'cancelled')) {
+                info.el.style.cursor = 'not-allowed';
+                info.el.style.opacity = '0.7';
+                const tooltipText = reservation.status === 'checked_out' 
+                  ? 'This reservation has been checked out and cannot be moved'
+                  : 'This reservation has been cancelled and cannot be moved';
+                info.el.title = tooltipText;
+              }
             } catch {}
           }}
           resourceLaneDidMount={(info: any) => {
             // Apply styling to inactive employee columns
             const resourceId = info.resource.id;
             const employee = employees.find(e => String(e.id) === resourceId);
-            if (employee && !isWithinEmployeeShift(employee.id, selectedDate)) {
-              info.el.classList.add('employee-day-off');
-              info.el.setAttribute('data-resource-id', resourceId);
+            if (employee) {
+              // Get the actual date from the calendar view
+              const calendarApi = calendarRef.current?.getApi();
+              const view = calendarApi?.view;
+              const currentDate = view ? new Date(view.activeStart) : selectedDate;
+              
+              if (!isWithinEmployeeShift(employee.id, currentDate)) {
+                info.el.classList.add('employee-day-off');
+                info.el.setAttribute('data-resource-id', resourceId);
+              }
             }
           }}
           eventContent={(arg:any) => {
@@ -1215,7 +1309,29 @@ export const StaffSchedulingCalendar: React.FC = () => {
             return { html };
           }}
           height="auto"
-          datesSet={handleDatesSet}
+          datesSet={(dateInfo: any) => {
+            handleDatesSet(dateInfo);
+            // Update employee styling after date change
+            setTimeout(() => {
+              const calendarApi = calendarRef.current?.getApi();
+              if (!calendarApi) return;
+
+              const view = calendarApi.view;
+              const currentDate = view ? new Date(view.activeStart) : selectedDate;
+
+              employees.forEach(employee => {
+                const isAvailable = isWithinEmployeeShift(employee.id, currentDate);
+                const resourceEl = document.querySelector(`[data-resource-id="${employee.id}"]`);
+                if (resourceEl) {
+                  if (isAvailable) {
+                    resourceEl.classList.remove('employee-day-off');
+                  } else {
+                    resourceEl.classList.add('employee-day-off');
+                  }
+                }
+              });
+            }, 200);
+          }}
         />
       </Paper>
 
