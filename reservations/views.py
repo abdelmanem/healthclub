@@ -1030,6 +1030,54 @@ class ReservationViewSet(viewsets.ModelViewSet):
         start_dt = timezone.datetime.fromisoformat(start_time.replace("Z", "+00:00"))
         end_dt = start_dt + timedelta(minutes=duration_minutes)
 
+        # Check employee schedule availability first
+        if employee_id:
+            try:
+                from employees.models import EmployeeWeeklySchedule
+                from datetime import datetime
+                
+                # Get the day of week for the start time
+                start_date = start_dt.date()
+                day_of_week = start_dt.weekday()  # 0=Monday, 6=Sunday
+                
+                # Check if employee has a day off on this day
+                schedule = EmployeeWeeklySchedule.objects.filter(
+                    employee_id=employee_id,
+                    day_of_week=day_of_week,
+                    effective_from__lte=start_date
+                ).order_by('-effective_from').first()
+                
+                if schedule and schedule.is_day_off:
+                    return response.Response({
+                        "available": False, 
+                        "reason": "employee_day_off",
+                        "message": "Employee is scheduled for a day off on this date"
+                    })
+                
+                # Check if employee is working during the requested time
+                if schedule and not schedule.is_day_off:
+                    # Parse schedule times
+                    start_time_str = schedule.start_time or '00:00'
+                    end_time_str = schedule.end_time or '23:59'
+                    
+                    # Convert to datetime for comparison
+                    schedule_start = datetime.combine(start_date, datetime.strptime(start_time_str, '%H:%M').time())
+                    schedule_end = datetime.combine(start_date, datetime.strptime(end_time_str, '%H:%M').time())
+                    
+                    # Check if reservation time is within employee's working hours
+                    if start_dt < schedule_start or end_dt > schedule_end:
+                        return response.Response({
+                            "available": False, 
+                            "reason": "outside_working_hours",
+                            "message": f"Reservation time is outside employee's working hours ({start_time_str} - {end_time_str})"
+                        })
+                
+            except Exception as e:
+                # If schedule check fails, log but don't block reservation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to check employee schedule: {e}")
+
         # check conflicts
         conflicts = Reservation.objects.filter(
             start_time__lt=end_dt,

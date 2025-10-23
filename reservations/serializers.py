@@ -4,6 +4,7 @@ from .models import Location, Reservation, ReservationService, LocationType, Loc
 from datetime import timedelta
 from config.models import SystemConfiguration
 from django.core.exceptions import ValidationError as DjangoValidationError
+from employees.models import Employee
 
 
 class LocationTypeSerializer(serializers.ModelSerializer):
@@ -72,7 +73,7 @@ class ReservationSerializer(serializers.ModelSerializer):
     reservation_services = ReservationServiceSerializer(many=True, required=False)
     guest_name = serializers.CharField(source='guest.full_name', read_only=True)
     location_name = serializers.CharField(source='location.name', read_only=True)
-    employee = serializers.SerializerMethodField()
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all(), required=False, allow_null=True)
     employee_name = serializers.SerializerMethodField()
     total_duration_minutes = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
@@ -198,6 +199,54 @@ class ReservationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "location": "Selected room is out of service and cannot be reserved."
             })
+
+        # Check employee schedule availability
+        employee = attrs.get('employee')
+        if employee and start_time:
+            try:
+                from employees.models import EmployeeWeeklySchedule
+                from datetime import datetime
+                
+                # Get the day of week for the start time
+                start_date = start_time.date()
+                day_of_week = start_time.weekday()  # 0=Monday, 6=Sunday
+                
+                # Check if employee has a day off on this day
+                schedule = EmployeeWeeklySchedule.objects.filter(
+                    employee=employee,
+                    day_of_week=day_of_week,
+                    effective_from__lte=start_date
+                ).order_by('-effective_from').first()
+                
+                if schedule and schedule.is_day_off:
+                    raise serializers.ValidationError({
+                        "employee": "Employee is scheduled for a day off on this date."
+                    })
+                
+                # Check if employee is working during the requested time
+                if schedule and not schedule.is_day_off:
+                    # Parse schedule times
+                    start_time_str = schedule.start_time or '00:00'
+                    end_time_str = schedule.end_time or '23:59'
+                    
+                    # Convert to datetime for comparison
+                    schedule_start = datetime.combine(start_date, datetime.strptime(start_time_str, '%H:%M').time())
+                    schedule_end = datetime.combine(start_date, datetime.strptime(end_time_str, '%H:%M').time())
+                    
+                    # Check if reservation time is within employee's working hours
+                    if start_time < schedule_start or end_time > schedule_end:
+                        raise serializers.ValidationError({
+                            "employee": f"Reservation time is outside employee's working hours ({start_time_str} - {end_time_str})"
+                        })
+                
+            except serializers.ValidationError:
+                # Re-raise validation errors to block reservation
+                raise
+            except Exception as e:
+                # If schedule check fails, log but don't block reservation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to check employee schedule: {e}")
 
         # Gender constraint removed - allowing all guests to use any location
 

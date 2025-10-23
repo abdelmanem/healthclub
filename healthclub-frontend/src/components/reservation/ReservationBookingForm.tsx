@@ -276,7 +276,33 @@ export const ReservationBookingForm: React.FC<{
       });
       const isAvailable = !!res.available;
       setAvailabilityStatus(isAvailable ? 'available' : 'unavailable');
-      setAvailabilityReason(isAvailable ? null : (res.reason || null));
+      
+      // Handle specific availability reasons
+      let reason = null;
+      if (!isAvailable && res.reason) {
+        const resWithMessage = res as { available: boolean; reason?: string; message?: string; overlaps?: number; capacity?: number };
+        switch (res.reason) {
+          case 'employee_day_off':
+            reason = 'Employee is scheduled for a day off on this date';
+            break;
+          case 'outside_working_hours':
+            reason = resWithMessage.message || 'Reservation time is outside employee\'s working hours';
+            break;
+          case 'capacity_reached':
+            reason = 'Room capacity has been reached for this time slot';
+            break;
+          case 'incompatible_room':
+            reason = 'Selected service is not compatible with the chosen room';
+            break;
+          case 'out_of_service':
+            reason = 'Selected room is out of service';
+            break;
+          default:
+            reason = resWithMessage.message || res.reason;
+        }
+      }
+      
+      setAvailabilityReason(reason);
       setSlots([]);
       return isAvailable;
     } catch (e) {

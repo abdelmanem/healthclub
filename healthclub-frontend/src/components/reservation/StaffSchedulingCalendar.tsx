@@ -482,6 +482,31 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
   React.useEffect(() => { loadData(); }, [loadData]);
 
+  // Update employee availability styling when date changes
+  React.useEffect(() => {
+    const updateEmployeeStyling = () => {
+      const calendarApi = calendarRef.current?.getApi();
+      if (!calendarApi) return;
+
+      // Update resource styling for current date
+      employees.forEach(employee => {
+        const isAvailable = isWithinEmployeeShift(employee.id, selectedDate);
+        const resourceEl = document.querySelector(`[data-resource-id="${employee.id}"]`);
+        if (resourceEl) {
+          if (isAvailable) {
+            resourceEl.classList.remove('employee-day-off');
+          } else {
+            resourceEl.classList.add('employee-day-off');
+          }
+        }
+      });
+    };
+
+    // Small delay to ensure calendar is rendered
+    const timeoutId = setTimeout(updateEmployeeStyling, 100);
+    return () => clearTimeout(timeoutId);
+  }, [selectedDate, employees, weeklySchedules]);
+
   React.useEffect(() => {
     const loadWeekly = async () => {
       try {
@@ -644,7 +669,23 @@ export const StaffSchedulingCalendar: React.FC = () => {
     return cleanup;
   }, []);
 
-  const resources = employees.map((e) => ({ id: String(e.id), title: getEmployeeDisplayName(e) }));
+  const resources = employees.map((e) => {
+    const isAvailableToday = isWithinEmployeeShift(e.id, selectedDate);
+    const displayName = getEmployeeDisplayName(e);
+    const titleWithStatus = isAvailableToday 
+      ? displayName 
+      : `${displayName} (Day Off)`;
+    
+    return { 
+      id: String(e.id), 
+      title: titleWithStatus,
+      eventColor: isAvailableToday ? undefined : '#e5e7eb', // Gray for unavailable
+      extendedProps: {
+        isAvailable: isAvailableToday,
+        isDayOff: !isAvailableToday
+      }
+    };
+  });
 
   const events = reservations.map((r) => ({
     id: String(r.id),
@@ -711,7 +752,10 @@ export const StaffSchedulingCalendar: React.FC = () => {
     const employeeId = info.resource?.id ? Number(info.resource.id) : undefined;
     const startDate: Date | undefined = info?.start ? new Date(info.start) : undefined;
     if (employeeId && startDate && !isWithinEmployeeShift(employeeId, startDate)) {
-      window.alert('Cannot create a reservation on a day off or outside this employee\'s working hours.');
+      // Get employee name for better error message
+      const employee = employees.find(e => e.id === employeeId);
+      const employeeName = employee ? getEmployeeDisplayName(employee) : 'Employee';
+      window.alert(`Cannot create a reservation for ${employeeName} - they are scheduled for a day off or outside their working hours.`);
       return;
     }
     setCreateDialog({
@@ -998,6 +1042,40 @@ export const StaffSchedulingCalendar: React.FC = () => {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           },
+          // Style for inactive employee columns
+          '& .fc-resource': {
+            '&[data-resource-id]': {
+              '&.employee-day-off': {
+                opacity: 0.5,
+                background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+                position: 'relative',
+                '&::before': {
+                  content: '"🚫"',
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  fontSize: '16px',
+                  zIndex: 10,
+                },
+                '& .fc-resource-cell': {
+                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+                  color: '#9ca3af',
+                  borderColor: '#d1d5db',
+                  fontWeight: 500,
+                },
+                '& .fc-timegrid-slot': {
+                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+                  borderColor: '#e5e7eb',
+                },
+                '& .fc-timegrid-slot-label': {
+                  color: '#9ca3af',
+                },
+                '& .fc-timegrid-slot-minor': {
+                  background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+                }
+              }
+            }
+          },
         }}
       >
         <FullCalendar
@@ -1066,6 +1144,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
               info.el.style.border = 'none';
               info.el.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
             } catch {}
+          }}
+          resourceLaneDidMount={(info: any) => {
+            // Apply styling to inactive employee columns
+            const resourceId = info.resource.id;
+            const employee = employees.find(e => String(e.id) === resourceId);
+            if (employee && !isWithinEmployeeShift(employee.id, selectedDate)) {
+              info.el.classList.add('employee-day-off');
+              info.el.setAttribute('data-resource-id', resourceId);
+            }
           }}
           eventContent={(arg:any) => {
             const ev = arg.event;
