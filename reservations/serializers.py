@@ -358,20 +358,26 @@ class ReservationSerializer(serializers.ModelSerializer):
         except Exception as e:
             raise serializers.ValidationError({'detail': str(e)})
         
-        # Auto-create invoice for ALL reservations
+        # Create reservation services first
+        for srv in services_data:
+            ReservationService.objects.create(reservation=reservation, **srv)
+        
+        # Auto-create invoice for ALL reservations (after services are created)
         try:
             from pos import create_invoice_for_reservation
             from django.db import transaction
             
             with transaction.atomic():
-                # Create invoice with deposit as line item if deposit is required
-                include_deposit = reservation.deposit_required and reservation.deposit_amount
+                # Always create invoice - deposits will be applied as payments, not line items
                 invoice = create_invoice_for_reservation(
                     reservation, 
-                    include_deposit_as_line_item=include_deposit
+                    include_deposit_as_line_item=False  # Always apply deposits as payments
                 )
         except Exception as e:
-            # Don't fail reservation creation if invoice creation fails
+            # Log the error but don't fail reservation creation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create invoice for reservation {reservation.id}: {e}")
             pass
         
         # Recompute first-for-guest flag so the earliest reservation is marked true
@@ -379,8 +385,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             self._recompute_is_first_for_guest(reservation.guest_id)
         except Exception:
             pass
-        for srv in services_data:
-            ReservationService.objects.create(reservation=reservation, **srv)
+        
         return reservation
 
     def update(self, instance, validated_data):
@@ -411,35 +416,29 @@ class ReservationSerializer(serializers.ModelSerializer):
             existing_invoice = instance.invoices.filter(status__in=['draft', 'issued', 'partial']).first()
             
             if not existing_invoice:
-                # Create new invoice
+                # Create new invoice - deposits should be applied as payments, not line items
                 with transaction.atomic():
-                    include_deposit = instance.deposit_required and instance.deposit_amount
                     invoice = create_invoice_for_reservation(
                         instance, 
-                        include_deposit_as_line_item=include_deposit
+                        include_deposit_as_line_item=False  # Always apply deposits as payments
                     )
             elif (deposit_required_changed or deposit_amount_changed) and instance.deposit_required and instance.deposit_amount:
-                # Update existing invoice - add/update deposit line item
-                from pos.models import InvoiceItem
-                existing_deposit_item = existing_invoice.items.filter(
-                    product_name__icontains='Deposit'
+                # Update existing invoice - apply existing deposit as payment instead of adding as line item
+                from pos.models import Deposit
+                
+                # Find existing deposit for this reservation
+                existing_deposit = Deposit.objects.filter(
+                    reservation=instance,
+                    status__in=['pending', 'collected', 'partially_applied']
                 ).first()
                 
-                if not existing_deposit_item:
-                    InvoiceItem.objects.create(
-                        invoice=existing_invoice,
-                        product_name=f"Deposit for Reservation #{instance.id}",
-                        quantity=1,
-                        unit_price=instance.deposit_amount,
-                        tax_rate=0,
-                        notes="Prepayment deposit"
-                    )
-                    existing_invoice.recalculate_totals()
-                else:
-                    # Update existing deposit line item
-                    existing_deposit_item.unit_price = instance.deposit_amount
-                    existing_deposit_item.save(update_fields=['unit_price'])
-                    existing_invoice.recalculate_totals()
+                if existing_deposit and existing_deposit.can_be_applied():
+                    # Apply the deposit as a payment
+                    try:
+                        existing_deposit.apply_to_invoice(existing_invoice)
+                    except Exception as e:
+                        # If deposit application fails, don't fail the reservation update
+                        pass
         except Exception as e:
             # Don't fail reservation update if invoice update fails
             pass

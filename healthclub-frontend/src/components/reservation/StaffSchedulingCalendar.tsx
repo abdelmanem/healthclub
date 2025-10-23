@@ -61,6 +61,7 @@ import { guestsService } from '../../services/guests';
 import { reservationsService } from '../../services/reservations';
 import { EditGuestDialog } from '../guest/EditGuestDialog';
 import { InvoiceDetails } from '../pos/InvoiceDetails';
+import { ReservationDepositForm } from './ReservationDepositForm';
 
 type Reservation = {
   id: number;
@@ -186,6 +187,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
   const [reservationToCancel, setReservationToCancel] = React.useState<number | null>(null);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = React.useState(false);
   const [createdInvoiceId, setCreatedInvoiceId] = React.useState<number | null>(null);
+  const [depositDialogOpen, setDepositDialogOpen] = React.useState<boolean>(false);
 
   const handleCalendarClose = () => {
     setCalendarAnchor(null);
@@ -1498,14 +1500,8 @@ export const StaffSchedulingCalendar: React.FC = () => {
                         <Button 
                           variant="contained" 
                           onClick={() => {
-                            // Open deposit collection dialog
                             if (drawer.reservation) {
-                              setCreateDialog({ 
-                                open: true, 
-                                start: drawer.reservation.start_time,
-                                employeeId: drawer.reservation.employee || undefined,
-                                locationId: drawer.reservation.location || undefined
-                              });
+                              setDepositDialogOpen(true);
                             }
                           }}
                           fullWidth
@@ -1908,6 +1904,51 @@ export const StaffSchedulingCalendar: React.FC = () => {
               onPaymentProcessed={() => {
                 loadData();
               }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Deposit Collection Dialog */}
+      <Dialog
+        open={depositDialogOpen}
+        onClose={() => setDepositDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: '1.5rem'
+        }}>
+          Collect Deposit Payment
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {drawer.reservation && (
+            <ReservationDepositForm
+              reservationId={drawer.reservation.id}
+              depositAmount={drawer.reservation.deposit_amount || '0.00'}
+              guestName={drawer.reservation.guest_name}
+              onDepositCollected={async () => {
+                setDepositDialogOpen(false);
+                await loadData();
+                if (drawer.reservation) {
+                  try {
+                    const updated = (await api.get(`/reservations/${drawer.reservation.id}/`)).data;
+                    setDrawer({ open: true, reservation: updated });
+                  } catch {
+                    // ignore refresh errors
+                  }
+                }
+              }}
+              onClose={() => setDepositDialogOpen(false)}
             />
           )}
         </DialogContent>
