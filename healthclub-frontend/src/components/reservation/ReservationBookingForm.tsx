@@ -323,7 +323,9 @@ export const ReservationBookingForm: React.FC<{
       if (!effectiveGuestId && phone) {
         try {
           const results = await guestsService.list({ search: phone });
-          const match = results.find((g: any) => (g.phone || '').includes(phone)) as any;
+          // Find exact phone number match first, then fallback to partial match
+          const exactMatch = results.find((g: any) => (g.phone || '').replace(/\D/g, '') === phone.replace(/\D/g, ''));
+          const match = exactMatch || results.find((g: any) => (g.phone || '').includes(phone));
           if (match) {
             effectiveGuestId = match.id;
             setGuestId(match.id);
@@ -475,15 +477,31 @@ export const ReservationBookingForm: React.FC<{
                         if ((v || '').replace(/\D/g, '').length >= 4) {
                           try {
                             const results = await guestsService.list({ search: v });
-                            const match = results.find((g: any) => (g.phone || '').includes(v)) as any;
+                            // Find exact phone number match first, then fallback to partial match
+                            const exactMatch = results.find((g: any) => (g.phone || '').replace(/\D/g, '') === v.replace(/\D/g, ''));
+                            const match = exactMatch || results.find((g: any) => (g.phone || '').includes(v));
                             if (match) {
                               setGuestId(match.id);
                               setGuestName(`${match.first_name} ${match.last_name}`.trim());
                               setContactName(`${match.first_name} ${match.last_name}`.trim());
                               setEmail(match.email || '');
                               setCountry(match.country || '');
+                            } else {
+                              // Clear guest data if no match found
+                              setGuestId('' as any);
+                              setGuestName('');
+                              setContactName('');
+                              setEmail('');
+                              setCountry('');
                             }
                           } catch {}
+                        } else {
+                          // Clear guest data if phone is too short
+                          setGuestId('' as any);
+                          setGuestName('');
+                          setContactName('');
+                          setEmail('');
+                          setCountry('');
                         }
                       }}
                       placeholder="+1 (555) 123-4567"
@@ -624,7 +642,7 @@ export const ReservationBookingForm: React.FC<{
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Staff Member</label>
                   <select
-                    value={employees.some((e:any) => e.id === employeeId) ? employeeId : ('' as any)}
+                    value={employeeId || ''}
                     onChange={(e) => setEmployeeId(e.target.value as any)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
@@ -637,7 +655,7 @@ export const ReservationBookingForm: React.FC<{
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Room</label>
                   <select
-                    value={locations.some((l:any) => l.id === locationId) ? locationId : ('' as any)}
+                    value={locationId || ''}
                     onChange={(e) => setLocationId(e.target.value as any)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
