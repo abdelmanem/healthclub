@@ -879,12 +879,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 guest=reservation.guest,
                 reservation=reservation,
                 amount=amount,
-                status='paid',
+                status='collected',
                 payment_method=payment_method.code,
                 transaction_id=request.data.get('transaction_id', ''),
                 reference=request.data.get('reference', ''),
                 notes=request.data.get('notes', ''),
-                collected_by=request.user if request.user.is_authenticated else None
+                collected_by=request.user if request.user.is_authenticated else None,
+                collected_at=timezone.now()
             )
             
             # Update reservation

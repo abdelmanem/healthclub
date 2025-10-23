@@ -48,7 +48,13 @@ import {
   AccessTime,
   AttachMoney,
   Star,
-  Visibility
+  Visibility,
+  Payment,
+  AccountBalance,
+  Receipt,
+  CreditCard,
+  TrendingUp,
+  TrendingDown
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { guestsService } from '../../services/guests';
@@ -62,7 +68,7 @@ type Reservation = {
   guest_name: string;
   start_time: string;
   end_time: string;
-  status: 'booked'|'checked_in'|'in_service'|'completed'|'cancelled';
+  status: 'booked'|'checked_in'|'in_service'|'completed'|'cancelled'|'checked_out';
   employee: number | null;
   employee_name?: string;
   location?: number | null;
@@ -86,6 +92,13 @@ type Reservation = {
   // guest membership information
   guest_membership_tier?: string | { name: string; display_name: string };
   guest_loyalty_points?: number;
+  // deposit fields
+  deposit_required?: boolean;
+  deposit_amount?: string;
+  deposit_paid?: boolean;
+  deposit_paid_at?: string | null;
+  deposit_status?: 'not_required' | 'pending' | 'paid';
+  can_pay_deposit?: boolean;
 };
 
 type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
@@ -1274,6 +1287,122 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   )}
                 </Paper>
 
+                {/* Payment & Deposit Information */}
+                <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Payment sx={{ fontSize: 20, color: '#667eea' }} />
+                    Payment & Deposit Status
+                  </Typography>
+                  
+                  <Box display="grid" gap={2} mt={2}>
+                    {/* Deposit Status */}
+                    {drawer.reservation.deposit_required && (
+                      <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                        <Box display="flex" alignItems="center" gap={1} mb={1}>
+                          <AccountBalance sx={{ fontSize: 18, color: '#667eea' }} />
+                          <Typography variant="subtitle2" fontWeight={600}>
+                            Deposit Required
+                          </Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Typography variant="body2" color="text.secondary">
+                            Amount: ${drawer.reservation.deposit_amount || '0.00'}
+                          </Typography>
+                          <Chip 
+                            label={drawer.reservation.deposit_paid ? 'PAID' : 'PENDING'}
+                            size="small"
+                            color={drawer.reservation.deposit_paid ? 'success' : 'warning'}
+                            sx={{ fontWeight: 600 }}
+                          />
+                        </Box>
+                        {drawer.reservation.deposit_paid_at && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            Paid: {dayjs.utc(drawer.reservation.deposit_paid_at).tz('Africa/Cairo').format('MMM D, h:mm A')}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* No Deposit Required */}
+                    {!drawer.reservation.deposit_required && (
+                      <Box sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #bae6fd' }}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <CheckCircle sx={{ fontSize: 18, color: '#0ea5e9' }} />
+                          <Typography variant="body2" fontWeight={600} color="#0c4a6e">
+                            No Deposit Required
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* Payment Status Summary */}
+                    <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={1}>
+                        <Receipt sx={{ fontSize: 18, color: '#667eea' }} />
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Payment Summary
+                        </Typography>
+                      </Box>
+                      <Box display="grid" gap={1}>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2" color="text.secondary">Service Total</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            ${(drawer.reservation.total_price || 0).toFixed(2)}
+                          </Typography>
+                        </Box>
+                        {drawer.reservation.deposit_required && drawer.reservation.deposit_paid && (
+                          <Box display="flex" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">Deposit Paid</Typography>
+                            <Typography variant="body2" fontWeight={600} color="success.main">
+                              -${drawer.reservation.deposit_amount || '0.00'}
+                            </Typography>
+                          </Box>
+                        )}
+                        <Box display="flex" justifyContent="space-between" pt={1} borderTop="1px solid #e2e8f0">
+                          <Typography variant="body2" fontWeight={600}>Balance Due</Typography>
+                          <Typography variant="body2" fontWeight={700} color="#667eea">
+                            ${((drawer.reservation.total_price || 0) - (drawer.reservation.deposit_paid ? parseFloat(drawer.reservation.deposit_amount || '0') : 0)).toFixed(2)}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+
+                    {/* Payment Status Indicators */}
+                    <Box display="flex" gap={1} flexWrap="wrap">
+                      {drawer.reservation.deposit_required && drawer.reservation.deposit_paid && (
+                        <Chip 
+                          icon={<TrendingUp />}
+                          label="Deposit Collected" 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      )}
+                      {drawer.reservation.status === 'completed' && (
+                        <Chip 
+                          icon={<CreditCard />}
+                          label="Ready for Payment" 
+                          size="small" 
+                          color="info" 
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      )}
+                      {drawer.reservation.status === 'checked_out' && (
+                        <Chip 
+                          icon={<CheckCircle />}
+                          label="Payment Complete" 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                </Paper>
+
                 {/* Guest Info */}
                 {selectedGuest && (
                   <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
@@ -1364,26 +1493,59 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   </Button>
                   
                   {drawer.reservation.status === 'booked' && (
-                    <Button 
-                      variant="contained" 
-                      onClick={() => act('check_in')} 
-                      disabled={isActing}
-                      fullWidth
-                      sx={{
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                        fontWeight: 600,
-                        textTransform: 'none',
-                        py: 1.5,
-                        borderRadius: 2,
-                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
-                        '&:hover': {
-                          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                          boxShadow: '0 6px 16px rgba(59, 130, 246, 0.5)',
-                        }
-                      }}
-                    >
-                      Check-in Guest
-                    </Button>
+                    <>
+                      {drawer.reservation.deposit_required && !drawer.reservation.deposit_paid && (
+                        <Button 
+                          variant="contained" 
+                          onClick={() => {
+                            // Open deposit collection dialog
+                            if (drawer.reservation) {
+                              setCreateDialog({ 
+                                open: true, 
+                                start: drawer.reservation.start_time,
+                                employeeId: drawer.reservation.employee || undefined,
+                                locationId: drawer.reservation.location || undefined
+                              });
+                            }
+                          }}
+                          fullWidth
+                          sx={{
+                            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            py: 1.5,
+                            borderRadius: 2,
+                            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                              boxShadow: '0 6px 16px rgba(245, 158, 11, 0.5)',
+                            }
+                          }}
+                        >
+                          Collect Deposit (${drawer.reservation.deposit_amount || '0.00'})
+                        </Button>
+                      )}
+                      <Button 
+                        variant="contained" 
+                        onClick={() => act('check_in')} 
+                        disabled={isActing}
+                        fullWidth
+                        sx={{
+                          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          py: 1.5,
+                          borderRadius: 2,
+                          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
+                          '&:hover': {
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            boxShadow: '0 6px 16px rgba(59, 130, 246, 0.5)',
+                          }
+                        }}
+                      >
+                        Check-in Guest
+                      </Button>
+                    </>
                   )}
                   
                   {drawer.reservation.status === 'checked_in' && (

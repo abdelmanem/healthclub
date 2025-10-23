@@ -12,11 +12,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name="deposit",
-            name="expiry_date",
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
             model_name="historicaldeposit",
             name="expiry_date",
             field=models.DateTimeField(blank=True, null=True),

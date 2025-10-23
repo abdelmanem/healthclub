@@ -1,6 +1,6 @@
 import React from 'react';
-import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText } from 'lucide-react';
-import { Box } from '@mui/material';
+import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText, CreditCard } from 'lucide-react';
+import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -8,6 +8,7 @@ import { api } from '../../services/api';
 import { reservationsService, Reservation } from '../../services/reservations';
 import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
+import { ReservationDepositForm } from './ReservationDepositForm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface SelectedService {
@@ -61,6 +62,8 @@ export const ReservationBookingForm: React.FC<{
   const [depositAmount, setDepositAmount] = React.useState<string>('');
   const [markConfirmed, setMarkConfirmed] = React.useState<boolean>(false);
   const [cancelledCount, setCancelledCount] = React.useState<number>(0);
+  const [depositDialogOpen, setDepositDialogOpen] = React.useState<boolean>(false);
+  const [createdReservationId, setCreatedReservationId] = React.useState<number | null>(null);
   const hasPastCancellation = cancelledCount > 0;
 
   const resetForm = React.useCallback(() => {
@@ -88,6 +91,8 @@ export const ReservationBookingForm: React.FC<{
     setDepositRequired(false);
     setDepositAmount('');
     setMarkConfirmed(false);
+    setDepositDialogOpen(false);
+    setCreatedReservationId(null);
   }, [initialEmployeeId, initialLocationId, initialStart]);
 
   React.useEffect(() => {
@@ -381,7 +386,14 @@ export const ReservationBookingForm: React.FC<{
           }
         }
         setSuccess('Reservation created');
-        if (onCreated) onCreated();
+        setCreatedReservationId(created.id);
+        
+        // If deposit is required, open deposit collection dialog
+        if (depositRequired && depositAmount) {
+          setDepositDialogOpen(true);
+        } else {
+          if (onCreated) onCreated();
+        }
       }
       setSelectedServices([]);
       setTotalPrice(0);
@@ -745,27 +757,52 @@ export const ReservationBookingForm: React.FC<{
                 </div>
                 
                 {depositRequired && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Deposit Amount
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <DollarSign className="h-5 w-5 text-slate-400" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Deposit Amount
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <DollarSign className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <input
+                          type="number"
+                          value={depositAmount}
+                          onChange={(e) => setDepositAmount(e.target.value)}
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
                       </div>
-                      <input
-                        type="number"
-                        value={depositAmount}
-                        onChange={(e) => setDepositAmount(e.target.value)}
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Enter the deposit amount required to secure this reservation
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Enter the deposit amount required to secure this reservation
-                    </p>
+                    
+                    {/* Deposit Collection Info */}
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                      <div className="flex items-start gap-3">
+                        <CreditCard className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-blue-900 mb-1">
+                            Deposit Collection
+                          </h4>
+                          <p className="text-xs text-blue-700 mb-2">
+                            After creating the reservation, you'll be prompted to collect the deposit payment immediately.
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-blue-600">
+                            <Check className="w-3 h-3" />
+                            <span>Payment methods will be available</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-blue-600 mt-1">
+                            <Check className="w-3 h-3" />
+                            <span>Deposit will be tracked separately</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -813,6 +850,46 @@ export const ReservationBookingForm: React.FC<{
           </button>
         </div>
       </div>
+
+      {/* Deposit Collection Dialog */}
+      <Dialog
+        open={depositDialogOpen}
+        onClose={() => setDepositDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: '1.5rem'
+        }}>
+          Collect Deposit Payment
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {createdReservationId && (
+            <ReservationDepositForm
+              reservationId={createdReservationId}
+              depositAmount={depositAmount}
+              guestName={guestName}
+              onDepositCollected={() => {
+                setDepositDialogOpen(false);
+                if (onCreated) onCreated();
+              }}
+              onClose={() => {
+                setDepositDialogOpen(false);
+                if (onCreated) onCreated();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
