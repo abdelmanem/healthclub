@@ -16,6 +16,7 @@ interface SelectedService {
   name: string;
   duration: number;
   price: number;
+  quantity: number;
 }
 
 export const ReservationBookingForm: React.FC<{ 
@@ -36,6 +37,7 @@ export const ReservationBookingForm: React.FC<{
   const [guestId, setGuestId] = React.useState<number | ''>('' as any);
   const [guestName, setGuestName] = React.useState<string>('');
   const [selectedServiceId, setSelectedServiceId] = React.useState<number | ''>('' as any);
+  const [serviceQuantity, setServiceQuantity] = React.useState<number>(1);
   const [selectedServices, setSelectedServices] = React.useState<SelectedService[]>([]);
   const [employeeId, setEmployeeId] = React.useState<number | ''>((initialEmployeeId as any) ?? ('' as any));
   const [locationId, setLocationId] = React.useState<number | ''>((initialLocationId as any) ?? ('' as any));
@@ -70,6 +72,7 @@ export const ReservationBookingForm: React.FC<{
     setGuestId('' as any);
     setGuestName('');
     setSelectedServiceId('' as any);
+    setServiceQuantity(1);
     setSelectedServices([]);
     setEmployeeId((initialEmployeeId as any) ?? ('' as any));
     setLocationId((initialLocationId as any) ?? ('' as any));
@@ -164,6 +167,7 @@ export const ReservationBookingForm: React.FC<{
           name: rs.service_details?.name || `Service #${rs.service}`,
           duration: rs.service_details?.duration_minutes || rs.service_duration_minutes || 60,
           price: parseFloat(rs.service_details?.price ?? rs.unit_price ?? 0),
+          quantity: rs.quantity || 1,
         }));
         setSelectedServices(svcs);
       }
@@ -216,7 +220,7 @@ export const ReservationBookingForm: React.FC<{
   }, [reservation, guestId]);
 
   React.useEffect(() => {
-    const total = selectedServices.reduce((sum, service) => sum + service.price, 0);
+    const total = selectedServices.reduce((sum, service) => sum + (service.price * service.quantity), 0);
     setTotalPrice(total);
   }, [selectedServices]);
 
@@ -237,9 +241,11 @@ export const ReservationBookingForm: React.FC<{
         id: service.id,
         name: service.name,
         duration: service.duration_minutes || 60,
-        price: parseFloat(service.price) || 0
+        price: parseFloat(service.price) || 0,
+        quantity: serviceQuantity
       }]);
       setSelectedServiceId('' as any);
+      setServiceQuantity(1);
     }
   };
 
@@ -250,13 +256,24 @@ export const ReservationBookingForm: React.FC<{
         id: service.id,
         name: service.name,
         duration: service.duration_minutes || 60,
-        price: parseFloat(service.price) || 0
+        price: parseFloat(service.price) || 0,
+        quantity: 1
       }]);
     }
   };
 
   const removeService = (serviceId: number) => {
     setSelectedServices(prev => prev.filter(s => s.id !== serviceId));
+  };
+
+  const updateServiceQuantity = (serviceId: number, quantity: number) => {
+    if (quantity <= 0) {
+      removeService(serviceId);
+      return;
+    }
+    setSelectedServices(prev => prev.map(s => 
+      s.id === serviceId ? { ...s, quantity } : s
+    ));
   };
 
   const checkAvailability = async () => {
@@ -392,7 +409,7 @@ export const ReservationBookingForm: React.FC<{
       if (selectedServices.length > 0) {
         reservationData.reservation_services = selectedServices.map(service => ({
           service: service.id,
-          quantity: 1
+          quantity: service.quantity
         }));
       }
 
@@ -603,10 +620,6 @@ export const ReservationBookingForm: React.FC<{
                   onChange={(e) => {
                     const id = Number(e.target.value);
                     setSelectedServiceId(id as any);
-                    if (!Number.isNaN(id)) {
-                      addServiceById(id);
-                      setSelectedServiceId('' as any);
-                    }
                   }}
                   className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 >
@@ -617,6 +630,21 @@ export const ReservationBookingForm: React.FC<{
                     </option>
                   ))}
                 </select>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="service-quantity" className="text-sm font-medium text-slate-700 whitespace-nowrap">
+                    Qty:
+                  </label>
+                  <input
+                    id="service-quantity"
+                    name="service-quantity"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={serviceQuantity}
+                    onChange={(e) => setServiceQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-center"
+                  />
+                </div>
                 <button
                   onClick={addService}
                   disabled={!selectedServiceId}
@@ -642,16 +670,41 @@ export const ReservationBookingForm: React.FC<{
                             </span>
                             <span className="text-sm text-slate-600 flex items-center gap-1">
                               <DollarSign className="w-4 h-4" />
-                              {service.price.toFixed(2)}
+                              ${service.price.toFixed(2)} each
+                            </span>
+                            <span className="text-sm text-slate-600 flex items-center gap-1">
+                              Qty: {service.quantity}
+                            </span>
+                            <span className="text-sm font-medium text-blue-600">
+                              Total: ${(service.price * service.quantity).toFixed(2)}
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => removeService(service.id)}
-                          className="w-9 h-9 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors flex items-center justify-center"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => updateServiceQuantity(service.id, service.quantity - 1)}
+                              className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center justify-center text-sm font-bold"
+                            >
+                              -
+                            </button>
+                            <span className="w-8 text-center text-sm font-medium text-slate-700">
+                              {service.quantity}
+                            </span>
+                            <button
+                              onClick={() => updateServiceQuantity(service.id, service.quantity + 1)}
+                              className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center justify-center text-sm font-bold"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => removeService(service.id)}
+                            className="w-9 h-9 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
