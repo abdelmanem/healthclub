@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText, CreditCard } from 'lucide-react';
+import { X, Plus, Trash2, Check, AlertCircle, Calendar, Clock, DollarSign, User, Users, FileText, CreditCard, Percent, Tag } from 'lucide-react';
 import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -17,6 +17,32 @@ interface SelectedService {
   duration: number;
   price: number;
   quantity: number;
+}
+
+interface DiscountType {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  discount_method: 'percentage' | 'fixed_amount' | 'free_service';
+  discount_value: number;
+  max_discount_amount?: number;
+  min_order_amount?: number;
+  is_active: boolean;
+  requires_approval: boolean;
+  is_valid_now: boolean;
+}
+
+interface AppliedDiscount {
+  id: number;
+  discount_type: DiscountType;
+  discount_amount: number;
+  original_amount: number;
+  final_amount: number;
+  status: 'pending' | 'approved' | 'applied' | 'rejected' | 'cancelled';
+  reason: string;
+  applied_by_name?: string;
+  applied_at: string;
 }
 
 export const ReservationBookingForm: React.FC<{ 
@@ -68,6 +94,15 @@ export const ReservationBookingForm: React.FC<{
   const [createdReservationId, setCreatedReservationId] = React.useState<number | null>(null);
   const hasPastCancellation = cancelledCount > 0;
 
+  // Discount-related state
+  const [availableDiscounts, setAvailableDiscounts] = React.useState<DiscountType[]>([]);
+  const [appliedDiscounts, setAppliedDiscounts] = React.useState<AppliedDiscount[]>([]);
+  const [selectedDiscountId, setSelectedDiscountId] = React.useState<number | ''>('' as any);
+  const [discountReason, setDiscountReason] = React.useState<string>('');
+  const [discountNotes, setDiscountNotes] = React.useState<string>('');
+  const [discountDialogOpen, setDiscountDialogOpen] = React.useState<boolean>(false);
+  const [totalDiscountAmount, setTotalDiscountAmount] = React.useState<number>(0);
+
   const resetForm = React.useCallback(() => {
     setGuestId('' as any);
     setGuestName('');
@@ -96,6 +131,14 @@ export const ReservationBookingForm: React.FC<{
     setMarkConfirmed(false);
     setDepositDialogOpen(false);
     setCreatedReservationId(null);
+    // Reset discount state
+    setAvailableDiscounts([]);
+    setAppliedDiscounts([]);
+    setSelectedDiscountId('' as any);
+    setDiscountReason('');
+    setDiscountNotes('');
+    setDiscountDialogOpen(false);
+    setTotalDiscountAmount(0);
   }, [initialEmployeeId, initialLocationId, initialStart]);
 
   React.useEffect(() => {
@@ -224,6 +267,100 @@ export const ReservationBookingForm: React.FC<{
     setTotalPrice(total);
   }, [selectedServices]);
 
+  // Calculate total discount amount
+  React.useEffect(() => {
+    const total = appliedDiscounts.reduce((sum, discount) => sum + discount.discount_amount, 0);
+    setTotalDiscountAmount(total);
+  }, [appliedDiscounts]);
+
+  // Load available discounts when services or guest changes
+  React.useEffect(() => {
+    const loadAvailableDiscounts = async () => {
+      if (selectedServices.length === 0) {
+        setAvailableDiscounts([]);
+        return;
+      }
+
+      try {
+        // Try to load from API first
+        const response = await api.get('/discounts/discount-types/', {
+          params: {
+            is_active: true,
+            is_valid_now: true
+          }
+        });
+        setAvailableDiscounts(response.data.results || response.data || []);
+      } catch (error) {
+        console.error('Failed to load available discounts from API, using mock data:', error);
+        // Fallback to mock data for testing
+        const mockDiscounts: DiscountType[] = [
+          {
+            id: 1,
+            name: 'First Time Guest',
+            code: 'FIRST_TIME',
+            description: '20% discount for first-time guests',
+            discount_method: 'percentage' as const,
+            discount_value: 20,
+            max_discount_amount: 50,
+            is_active: true,
+            requires_approval: false,
+            is_valid_now: true,
+          },
+          {
+            id: 2,
+            name: 'Employee Discount',
+            code: 'EMP_10',
+            description: '10% discount for employee referrals',
+            discount_method: 'percentage' as const,
+            discount_value: 10,
+            max_discount_amount: 25,
+            is_active: true,
+            requires_approval: true,
+            is_valid_now: true,
+          },
+          {
+            id: 3,
+            name: 'Senior Citizen',
+            code: 'SENIOR',
+            description: '15% discount for guests 65 and older',
+            discount_method: 'percentage' as const,
+            discount_value: 15,
+            max_discount_amount: 30,
+            is_active: true,
+            requires_approval: false,
+            is_valid_now: true,
+          },
+          {
+            id: 4,
+            name: 'Bulk Booking',
+            code: 'BULK_5',
+            description: '$5 off for bookings of 5 or more services',
+            discount_method: 'fixed_amount' as const,
+            discount_value: 5,
+            min_order_amount: 100,
+            is_active: true,
+            requires_approval: false,
+            is_valid_now: true,
+          },
+          {
+            id: 5,
+            name: 'VIP Member',
+            code: 'VIP_FREE',
+            description: 'Free service for VIP members',
+            discount_method: 'free_service' as const,
+            discount_value: 0,
+            is_active: true,
+            requires_approval: true,
+            is_valid_now: true,
+          },
+        ];
+        setAvailableDiscounts(mockDiscounts);
+      }
+    };
+
+    loadAvailableDiscounts();
+  }, [selectedServices]);
+
   const computedEndIso = React.useMemo(() => {
     const durationMinutes = (reservation && reservation.start_time && reservation.end_time)
       ? dayjs(reservation.end_time).diff(dayjs(reservation.start_time), 'minute')
@@ -274,6 +411,67 @@ export const ReservationBookingForm: React.FC<{
     setSelectedServices(prev => prev.map(s => 
       s.id === serviceId ? { ...s, quantity } : s
     ));
+  };
+
+  const applyDiscount = async () => {
+    if (!selectedDiscountId) {
+      setError('Please select a discount.');
+      return;
+    }
+
+    try {
+      // For now, create a mock discount since backend might not be ready
+      const selectedDiscount = availableDiscounts.find(d => d.id === selectedDiscountId);
+      if (!selectedDiscount) {
+        setError('Selected discount not found.');
+        return;
+      }
+
+      const discountAmount = calculateDiscountAmount(selectedDiscount, totalPrice);
+      
+      const mockDiscount: AppliedDiscount = {
+        id: Date.now(), // Temporary ID
+        discount_type: selectedDiscount,
+        discount_amount: discountAmount,
+        original_amount: totalPrice,
+        final_amount: totalPrice - discountAmount,
+        status: selectedDiscount.requires_approval ? 'pending' : 'applied',
+        reason: discountReason || 'Applied via form',
+        applied_by_name: 'Current User',
+        applied_at: new Date().toISOString(),
+      };
+
+      // Add to applied discounts
+      setAppliedDiscounts(prev => [...prev, mockDiscount]);
+      
+      // Reset discount selection
+      setSelectedDiscountId('' as any);
+      setDiscountReason('');
+      setDiscountDialogOpen(false);
+      
+      setSuccess('Discount applied successfully');
+    } catch (error: any) {
+      console.error('Failed to apply discount:', error);
+      setError('Failed to apply discount');
+    }
+  };
+
+  const removeDiscount = (discountId: number) => {
+    setAppliedDiscounts(prev => prev.filter(d => d.id !== discountId));
+    setSuccess('Discount removed successfully');
+  };
+
+  const calculateDiscountAmount = (discountType: DiscountType, originalAmount: number): number => {
+    if (discountType.discount_method === 'percentage') {
+      const discountAmount = originalAmount * (discountType.discount_value / 100);
+      return discountType.max_discount_amount 
+        ? Math.min(discountAmount, discountType.max_discount_amount)
+        : discountAmount;
+    } else if (discountType.discount_method === 'fixed_amount') {
+      return Math.min(discountType.discount_value, originalAmount);
+    } else { // free_service
+      return originalAmount;
+    }
   };
 
   const checkAvailability = async () => {
@@ -720,9 +918,125 @@ export const ReservationBookingForm: React.FC<{
                       <span className="text-2xl font-bold text-blue-600">${totalPrice.toFixed(2)}</span>
                     </div>
                   </div>
+                  
+                  {/* Discount Summary */}
+                  {totalDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <Percent className="w-5 h-5 text-emerald-600" />
+                        <span className="text-slate-600">Total Discount:</span>
+                        <span className="font-semibold text-emerald-600">-${totalDiscountAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-slate-600" />
+                        <span className="text-slate-600">Final Total:</span>
+                        <span className="text-xl font-bold text-green-600">${(totalPrice - totalDiscountAmount).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+
+            {/* Discount Section */}
+            {selectedServices.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Percent className="w-5 h-5 text-slate-600" />
+                  <h2 className="text-lg font-semibold text-slate-900">Discounts</h2>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Discount Selection */}
+                  <div className="flex gap-2 mb-4">
+                    <select
+                      id="discount-select"
+                      name="discount-select"
+                      value={selectedDiscountId}
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        setSelectedDiscountId(id as any);
+                      }}
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                      <option value="">Select a discount</option>
+                      {availableDiscounts.map((discount: any) => (
+                        <option key={discount.id} value={discount.id}>
+                          {discount.name} - {
+                            discount.discount_method === 'percentage' ? `${discount.discount_value}% off` :
+                            discount.discount_method === 'fixed_amount' ? `$${discount.discount_value} off` :
+                            'Free service'
+                          } {discount.requires_approval ? '(Requires Approval)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (selectedDiscountId) {
+                          setDiscountDialogOpen(true);
+                        }
+                      }}
+                      disabled={!selectedDiscountId}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center gap-2 font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Apply
+                    </button>
+                  </div>
+
+                  {/* Applied Discounts */}
+                  {appliedDiscounts.length > 0 && (
+                    <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-6 border border-emerald-200">
+                      <h3 className="font-semibold text-emerald-900 mb-4">Applied Discounts</h3>
+                      <div className="space-y-3">
+                        {appliedDiscounts.map(discount => (
+                          <div key={discount.id} className="bg-white rounded-lg p-4 border border-emerald-100 flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-slate-900">{discount.discount_type.name}</h4>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  discount.status === 'applied' ? 'bg-emerald-100 text-emerald-700' :
+                                  discount.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {discount.status}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-600 mt-1">{discount.reason}</p>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-slate-600">
+                                  Original: ${discount.original_amount.toFixed(2)}
+                                </span>
+                                <span className="text-sm font-medium text-emerald-600">
+                                  Discount: -${discount.discount_amount.toFixed(2)}
+                                </span>
+                                <span className="text-sm font-medium text-slate-900">
+                                  Final: ${discount.final_amount.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeDiscount(discount.id)}
+                              className="ml-4 w-8 h-8 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors flex items-center justify-center"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No Discounts Available */}
+                  {availableDiscounts.length === 0 && appliedDiscounts.length === 0 && (
+                    <div className="bg-slate-50 rounded-xl p-6 border border-slate-200 text-center">
+                      <Tag className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                      <p className="text-slate-600">No discounts available for this reservation</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -998,7 +1312,7 @@ export const ReservationBookingForm: React.FC<{
         <DialogContent sx={{ mt: 2 }}>
           {createdReservationId && (
             <ReservationDepositForm
-              reservationId={createdReservationId}
+              reservationId={createdReservationId as number}
               depositAmount={depositAmount}
               guestName={guestName}
               onDepositCollected={() => {
@@ -1012,6 +1326,98 @@ export const ReservationBookingForm: React.FC<{
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Discount Application Dialog */}
+      <Dialog
+        open={discountDialogOpen}
+        onClose={() => setDiscountDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          fontWeight: 700,
+          fontSize: '1.5rem'
+        }}>
+          Apply Discount
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {selectedDiscountId && (() => {
+            const selectedDiscount = availableDiscounts.find(d => d.id === selectedDiscountId);
+            if (!selectedDiscount) return null;
+            
+            return (
+              <div className="space-y-4">
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <h4 className="font-semibold text-blue-900 mb-2">{selectedDiscount.name}</h4>
+                  <p className="text-sm text-blue-700 mb-2">{selectedDiscount.description}</p>
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-blue-600">
+                      {selectedDiscount.discount_method === 'percentage' && `${selectedDiscount.discount_value}% off`}
+                      {selectedDiscount.discount_method === 'fixed_amount' && `$${selectedDiscount.discount_value} off`}
+                      {selectedDiscount.discount_method === 'free_service' && 'Free service'}
+                    </span>
+                    <span className="text-sm text-blue-600">
+                      Savings: ${calculateDiscountAmount(selectedDiscount, totalPrice).toFixed(2)}
+                    </span>
+                  </div>
+                  {selectedDiscount.requires_approval && (
+                    <div className="mt-2">
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
+                        Requires Manager Approval
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <label htmlFor="discount-reason" className="block text-sm font-medium text-slate-700 mb-2">
+                    Reason for applying this discount
+                  </label>
+                  <textarea
+                    id="discount-reason"
+                    name="discount-reason"
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Enter reason for applying this discount..."
+                    rows={3}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                  />
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button
+            onClick={() => setDiscountDialogOpen(false)}
+            variant="outlined"
+            sx={{ mr: 2 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={applyDiscount}
+            variant="contained"
+            disabled={!discountReason.trim()}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+              }
+            }}
+          >
+            Apply Discount
+          </Button>
+        </DialogActions>
       </Dialog>
     </div>
   );

@@ -55,6 +55,7 @@ from config.views import (
     BusinessRuleViewSet, NotificationTemplateViewSet, CancellationReasonViewSet,
     NotificationViewSet
 )
+from discounts.views import DiscountTypeViewSet, ReservationDiscountViewSet, DiscountRuleViewSet, DiscountApplicationViewSet
 from accounts.views import get_current_user
 
 router = DefaultRouter()
@@ -105,6 +106,10 @@ router.register(r'config/business-rules', BusinessRuleViewSet, basename='busines
 router.register(r'config/notification-templates', NotificationTemplateViewSet, basename='notification-template')
 router.register(r'config/cancellation-reasons', CancellationReasonViewSet, basename='cancellation-reason')
 router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'discounts/discount-types', DiscountTypeViewSet, basename='discount-type')
+router.register(r'discounts/reservation-discounts', ReservationDiscountViewSet, basename='reservation-discount')
+router.register(r'discounts/discount-rules', DiscountRuleViewSet, basename='discount-rule')
+router.register(r'discounts/discount-application', DiscountApplicationViewSet, basename='discount-application')
 
 
 

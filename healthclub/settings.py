@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'marketing',
     'analytics',
     'security',
+    'discounts',
 ]
 
 MIDDLEWARE = [
