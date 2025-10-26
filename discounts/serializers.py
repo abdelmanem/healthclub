@@ -52,6 +52,7 @@ class ReservationDiscountSerializer(serializers.ModelSerializer):
     
     discount_type_name = serializers.CharField(source='discount_type.name', read_only=True)
     discount_type_code = serializers.CharField(source='discount_type.code', read_only=True)
+    discount_type_details = DiscountTypeSerializer(source='discount_type', read_only=True)
     applied_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     reservation_guest_name = serializers.SerializerMethodField()
@@ -60,7 +61,7 @@ class ReservationDiscountSerializer(serializers.ModelSerializer):
         model = ReservationDiscount
         fields = [
             'id', 'reservation', 'discount_type', 'discount_type_name',
-            'discount_type_code', 'applied_by', 'applied_by_name',
+            'discount_type_code', 'discount_type_details', 'applied_by', 'applied_by_name',
             'approved_by', 'approved_by_name', 'original_amount',
             'discount_amount', 'final_amount', 'status', 'reason',
             'notes', 'rejection_reason', 'applied_at', 'approved_at',

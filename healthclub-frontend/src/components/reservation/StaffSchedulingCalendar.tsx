@@ -101,6 +101,47 @@ type Reservation = {
   deposit_paid_at?: string | null;
   deposit_status?: 'not_required' | 'pending' | 'paid';
   can_pay_deposit?: boolean;
+  // discount fields
+  applied_discounts?: Array<{
+    id: number;
+    discount_type: {
+      id: number;
+      name: string;
+      code: string;
+      description: string;
+      discount_method: 'percentage' | 'fixed_amount' | 'free_service';
+      discount_value: number;
+      max_discount_amount?: number;
+      min_order_amount?: number;
+      is_active: boolean;
+      requires_approval: boolean;
+      is_valid_now: boolean;
+    };
+    discount_type_name?: string;
+    discount_type_code?: string;
+    discount_type_details?: {
+      id: number;
+      name: string;
+      code: string;
+      description: string;
+      discount_method: 'percentage' | 'fixed_amount' | 'free_service';
+      discount_value: number;
+      max_discount_amount?: number;
+      min_order_amount?: number;
+      is_active: boolean;
+      requires_approval: boolean;
+      is_valid_now: boolean;
+    };
+    discount_amount: number;
+    original_amount: number;
+    final_amount: number;
+    status: 'pending' | 'approved' | 'applied' | 'rejected' | 'cancelled';
+    reason: string;
+    applied_by_name?: string;
+    applied_at: string;
+  }>;
+  total_discount_amount?: number;
+  final_total_price?: number;
 };
 
 type Employee = { id: number; name?: string; first_name?: string; last_name?: string };
@@ -889,6 +930,41 @@ export const StaffSchedulingCalendar: React.FC = () => {
         }
       })();
     }
+    
+    // Load discount information for the reservation
+    (async () => {
+      try {
+        const discountResponse = await api.get(`/discounts/reservation-discounts/?reservation=${r.id}`);
+        const allDiscounts = discountResponse.data.results || discountResponse.data || [];
+        
+        // **FIX: Filter to only include discounts for THIS reservation**
+        const discounts = allDiscounts.filter((d: any) => d.reservation === r.id);
+        
+        // Only count applied or approved discounts
+        const totalDiscountAmount = discounts
+          .filter((d: any) => d.status === 'applied' || d.status === 'approved')
+          .reduce((sum: number, discount: any) => {
+            return sum + (Number(discount.discount_amount) || 0);
+          }, 0);
+        
+        // Calculate final total price
+        const finalTotalPrice = (r.total_price || 0) - totalDiscountAmount;
+        
+        // Update the reservation with discount information
+        setDrawer(prev => ({
+          ...prev,
+          reservation: prev.reservation ? {
+            ...prev.reservation,
+            applied_discounts: discounts,
+            total_discount_amount: totalDiscountAmount,
+            final_total_price: finalTotalPrice
+          } : null
+        }));
+      } catch (error) {
+        console.error('Failed to load discount information:', error);
+        // Continue without discount information
+      }
+    })();
   };
   const closeDrawer = () => setDrawer({ open: false, reservation: null });
 
@@ -1530,6 +1606,75 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   )}
                 </Paper>
 
+                {/* Applied Discounts */}
+                {drawer.reservation.applied_discounts && drawer.reservation.applied_discounts.length > 0 && (
+                  <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TrendingDown sx={{ fontSize: 20, color: '#667eea' }} />
+                      Applied Discounts
+                    </Typography>
+                    <Box mt={2}>
+                      {(drawer.reservation.applied_discounts || [])
+                        .filter((discount: any) => discount.status === 'applied' || discount.status === 'approved')
+                        .map((discount, idx) => (
+                        <Box 
+                          key={idx} 
+                          sx={{ 
+                            p: 2, 
+                            mb: 2, 
+                            bgcolor: '#f0fdf4', 
+                            borderRadius: 2,
+                            border: '1px solid #bbf7d0'
+                          }}
+                        >
+                          <Box display="flex" justifyContent="space-between" mb={1}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {discount.discount_type.name}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={700} sx={{ color: '#059669' }}>
+                              -${(Number(discount.discount_amount) || 0).toFixed(2)}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" gap={2} flexWrap="wrap" mb={1}>
+                            <Chip 
+                              label={discount.discount_type.discount_method === 'percentage' ? `${discount.discount_type.discount_value}% off` :
+                                     discount.discount_type.discount_method === 'fixed_amount' ? `$${discount.discount_type.discount_value} off` :
+                                     'Free service'} 
+                              size="small" 
+                              sx={{ bgcolor: 'white', fontSize: '0.7rem', color: '#059669' }} 
+                            />
+                            <Chip 
+                              label={discount.status.toUpperCase()} 
+                              size="small" 
+                              sx={{ 
+                                bgcolor: discount.status === 'applied' || discount.status === 'approved' ? '#dcfce7' : 
+                                        discount.status === 'pending' ? '#fef3c7' : '#f3f4f6',
+                                color: discount.status === 'applied' || discount.status === 'approved' ? '#166534' : 
+                                       discount.status === 'pending' ? '#92400e' : '#374151',
+                                fontSize: '0.7rem' 
+                              }} 
+                            />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {discount.reason}
+                          </Typography>
+                          {discount.applied_by_name && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                              Applied by: {discount.applied_by_name}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                      <Box display="flex" justifyContent="space-between" mt={2} pt={2} borderTop="2px solid #e2e8f0">
+                        <Typography variant="body2" fontWeight={600}>Total Discount</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#059669' }}>
+                          -${(drawer.reservation.total_discount_amount || 0).toFixed(2)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                )}
+
                 {/* Payment & Deposit Information */}
                 <Paper sx={{ p: 3, borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
                   <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1539,12 +1684,12 @@ export const StaffSchedulingCalendar: React.FC = () => {
                   
                   <Box display="grid" gap={2} mt={2}>
                     {/* Deposit Status */}
-                    {drawer.reservation.deposit_required && (
+                    {(drawer.reservation.deposit_required || drawer.reservation.deposit_amount) && (
                       <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
                         <Box display="flex" alignItems="center" gap={1} mb={1}>
                           <AccountBalance sx={{ fontSize: 18, color: '#667eea' }} />
                           <Typography variant="subtitle2" fontWeight={600}>
-                            Deposit Required
+                            Deposit Information
                           </Typography>
                         </Box>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -1567,7 +1712,7 @@ export const StaffSchedulingCalendar: React.FC = () => {
                     )}
 
                     {/* No Deposit Required */}
-                    {!drawer.reservation.deposit_required && (
+                    {!drawer.reservation.deposit_required && !drawer.reservation.deposit_amount && (
                       <Box sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #bae6fd' }}>
                         <Box display="flex" alignItems="center" gap={1}>
                           <CheckCircle sx={{ fontSize: 18, color: '#0ea5e9' }} />
@@ -1593,7 +1738,15 @@ export const StaffSchedulingCalendar: React.FC = () => {
                             ${(drawer.reservation.total_price || 0).toFixed(2)}
                           </Typography>
                         </Box>
-                        {drawer.reservation.deposit_required && drawer.reservation.deposit_paid && (
+                        {drawer.reservation.total_discount_amount && drawer.reservation.total_discount_amount > 0 && (
+                          <Box display="flex" justifyContent="space-between">
+                            <Typography variant="body2" color="text.secondary">Discount Applied</Typography>
+                            <Typography variant="body2" fontWeight={600} color="success.main">
+                              -${(Number(drawer.reservation.total_discount_amount) || 0).toFixed(2)}
+                            </Typography>
+                          </Box>
+                        )}
+                        {(drawer.reservation.deposit_required || drawer.reservation.deposit_amount) && drawer.reservation.deposit_paid && (
                           <Box display="flex" justifyContent="space-between">
                             <Typography variant="body2" color="text.secondary">Deposit Paid</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.main">
@@ -1604,7 +1757,13 @@ export const StaffSchedulingCalendar: React.FC = () => {
                         <Box display="flex" justifyContent="space-between" pt={1} borderTop="1px solid #e2e8f0">
                           <Typography variant="body2" fontWeight={600}>Balance Due</Typography>
                           <Typography variant="body2" fontWeight={700} color="#667eea">
-                            ${((drawer.reservation.total_price || 0) - (drawer.reservation.deposit_paid ? parseFloat(drawer.reservation.deposit_amount || '0') : 0)).toFixed(2)}
+                            ${(() => {
+                              const serviceTotal = drawer.reservation.total_price || 0;
+                              const discountAmount = drawer.reservation.total_discount_amount || 0;
+                              const depositPaid = drawer.reservation.deposit_paid ? parseFloat(drawer.reservation.deposit_amount || '0') : 0;
+                              const balanceDue = serviceTotal - discountAmount - depositPaid;
+                              return Math.max(0, balanceDue).toFixed(2);
+                            })()}
                           </Typography>
                         </Box>
                       </Box>
@@ -1612,7 +1771,17 @@ export const StaffSchedulingCalendar: React.FC = () => {
 
                     {/* Payment Status Indicators */}
                     <Box display="flex" gap={1} flexWrap="wrap">
-                      {drawer.reservation.deposit_required && drawer.reservation.deposit_paid && (
+                      {drawer.reservation.total_discount_amount && drawer.reservation.total_discount_amount > 0 && (
+                        <Chip 
+                          icon={<TrendingDown />}
+                          label={`${drawer.reservation.applied_discounts?.length || 0} Discount${(drawer.reservation.applied_discounts?.length || 0) === 1 ? '' : 's'} Applied`}
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      )}
+                      {(drawer.reservation.deposit_required || drawer.reservation.deposit_amount) && drawer.reservation.deposit_paid && (
                         <Chip 
                           icon={<TrendingUp />}
                           label="Deposit Collected" 

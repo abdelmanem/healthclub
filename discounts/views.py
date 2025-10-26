@@ -97,6 +97,7 @@ class ReservationDiscountViewSet(viewsets.ModelViewSet):
     filterset_fields = {
         'status': ['exact'],
         'discount_type': ['exact'],
+        'reservation': ['exact'],
         'applied_by': ['exact'],
         'approved_by': ['exact'],
         'applied_at': ['gte', 'lte'],

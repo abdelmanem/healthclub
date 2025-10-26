@@ -36,9 +36,9 @@ interface DiscountType {
 interface AppliedDiscount {
   id: number;
   discount_type: DiscountType;
-  discount_amount: number;
-  original_amount: number;
-  final_amount: number;
+  discount_amount: number | string;  // Can be string from API
+  original_amount: number | string;  // Can be string from API
+  final_amount: number | string;     // Can be string from API
   status: 'pending' | 'approved' | 'applied' | 'rejected' | 'cancelled';
   reason: string;
   applied_by_name?: string;
@@ -214,6 +214,32 @@ export const ReservationBookingForm: React.FC<{
         }));
         setSelectedServices(svcs);
       }
+
+      // Load existing discounts for this reservation
+      if (reservation.id) {
+        (async () => {
+          try {
+            const discountResponse = await api.get(`/discounts/reservation-discounts/?reservation=${reservation.id}`);
+            const allDiscounts = discountResponse.data.results || discountResponse.data || [];
+            
+            // Filter to only this reservation's discounts and normalize data types
+            const discounts = allDiscounts
+              .filter((d: any) => d.reservation === reservation.id)
+              .map((d: any) => ({
+                ...d,
+                discount_amount: Number(d.discount_amount),
+                original_amount: Number(d.original_amount),
+                final_amount: Number(d.final_amount),
+                discount_type: d.discount_type_details || d.discount_type
+              }));
+            
+            setAppliedDiscounts(discounts);
+          } catch (error) {
+            console.error('Failed to load existing discounts:', error);
+            // Continue without loading discounts
+          }
+        })();
+      }
     }
   }, [reservation]);
 
@@ -267,9 +293,19 @@ export const ReservationBookingForm: React.FC<{
     setTotalPrice(total);
   }, [selectedServices]);
 
+  // Optional: Show warning when services change after discounts applied
+  React.useEffect(() => {
+    if (appliedDiscounts.length > 0 && totalPrice > 0) {
+      const originalTotal = appliedDiscounts[0]?.original_amount || 0;
+      if (Math.abs(totalPrice - Number(originalTotal)) > 0.01) {
+        console.warn('Services changed after discount was applied. Discount amounts remain fixed.');
+      }
+    }
+  }, [totalPrice]); // Only depend on totalPrice, not appliedDiscounts
+
   // Calculate total discount amount
   React.useEffect(() => {
-    const total = appliedDiscounts.reduce((sum, discount) => sum + discount.discount_amount, 0);
+    const total = appliedDiscounts.reduce((sum, discount) => sum + (Number(discount.discount_amount) || 0), 0);
     setTotalDiscountAmount(total);
   }, [appliedDiscounts]);
 
@@ -420,48 +456,100 @@ export const ReservationBookingForm: React.FC<{
     }
 
     try {
-      // For now, create a mock discount since backend might not be ready
       const selectedDiscount = availableDiscounts.find(d => d.id === selectedDiscountId);
       if (!selectedDiscount) {
         setError('Selected discount not found.');
         return;
       }
 
+      // Check if discount is already applied
+      if (appliedDiscounts.some(d => d.discount_type.id === selectedDiscount.id)) {
+        setError('This discount has already been applied.');
+        return;
+      }
+
+      // Validate minimum order amount
+      if (selectedDiscount.min_order_amount && totalPrice < selectedDiscount.min_order_amount) {
+        setError(`Minimum order amount of $${selectedDiscount.min_order_amount} required.`);
+        return;
+      }
+
       const discountAmount = calculateDiscountAmount(selectedDiscount, totalPrice);
       
-      const mockDiscount: AppliedDiscount = {
-        id: Date.now(), // Temporary ID
-        discount_type: selectedDiscount,
-        discount_amount: discountAmount,
-        original_amount: totalPrice,
-        final_amount: totalPrice - discountAmount,
-        status: selectedDiscount.requires_approval ? 'pending' : 'applied',
-        reason: discountReason || 'Applied via form',
-        applied_by_name: 'Current User',
-        applied_at: new Date().toISOString(),
-      };
+      // If we're editing an existing reservation, save the discount to the backend
+      if (reservation && reservation.id) {
+        const discountData = {
+          reservation: reservation.id,
+          discount_type: selectedDiscount.id,
+          discount_amount: discountAmount,
+          original_amount: totalPrice,
+          final_amount: totalPrice - discountAmount,
+          status: selectedDiscount.requires_approval ? 'pending' : 'applied',
+          reason: discountReason || 'Applied via form',
+        };
 
-      // Add to applied discounts
-      setAppliedDiscounts(prev => [...prev, mockDiscount]);
+        const response = await api.post('/discounts/reservation-discounts/', discountData);
+        const savedDiscount = response.data;
+        
+        // Add to applied discounts with the saved data
+        setAppliedDiscounts(prev => [...prev, savedDiscount]);
+        
+        setSuccess('Discount applied and saved successfully');
+      } else {
+        // For new reservations, create a temporary discount that will be saved when the reservation is created
+        const tempDiscount: AppliedDiscount = {
+          id: Date.now(), // Temporary ID
+          discount_type: selectedDiscount,
+          discount_amount: discountAmount,
+          original_amount: totalPrice,
+          final_amount: totalPrice - discountAmount,
+          status: selectedDiscount.requires_approval ? 'pending' : 'applied',
+          reason: discountReason || 'Applied via form',
+          applied_by_name: 'Current User',
+          applied_at: new Date().toISOString(),
+        };
+
+        // Add to applied discounts
+        setAppliedDiscounts(prev => [...prev, tempDiscount]);
+        
+        setSuccess('Discount applied successfully (will be saved with reservation)');
+      }
       
       // Reset discount selection
       setSelectedDiscountId('' as any);
       setDiscountReason('');
       setDiscountDialogOpen(false);
       
-      setSuccess('Discount applied successfully');
     } catch (error: any) {
       console.error('Failed to apply discount:', error);
-      setError('Failed to apply discount');
+      setError('Failed to apply discount: ' + (error.response?.data?.detail || error.message));
     }
   };
 
-  const removeDiscount = (discountId: number) => {
-    setAppliedDiscounts(prev => prev.filter(d => d.id !== discountId));
-    setSuccess('Discount removed successfully');
+  const removeDiscount = async (discountId: number) => {
+    try {
+      // If it's a real discount (not temporary), delete from backend
+      if (discountId > 1000000) { // Temporary IDs are large numbers from Date.now()
+        setAppliedDiscounts(prev => prev.filter(d => d.id !== discountId));
+        setSuccess('Discount removed successfully');
+      } else {
+        // Real discount - delete from backend
+        await api.delete(`/discounts/reservation-discounts/${discountId}/`);
+        setAppliedDiscounts(prev => prev.filter(d => d.id !== discountId));
+        setSuccess('Discount removed successfully');
+      }
+    } catch (error: any) {
+      console.error('Failed to remove discount:', error);
+      setError('Failed to remove discount: ' + (error.response?.data?.detail || error.message));
+    }
   };
 
   const calculateDiscountAmount = (discountType: DiscountType, originalAmount: number): number => {
+    // Check minimum order amount
+    if (discountType.min_order_amount && originalAmount < discountType.min_order_amount) {
+      throw new Error(`Minimum order amount of $${discountType.min_order_amount} required`);
+    }
+
     if (discountType.discount_method === 'percentage') {
       const discountAmount = originalAmount * (discountType.discount_value / 100);
       return discountType.max_discount_amount 
@@ -470,7 +558,12 @@ export const ReservationBookingForm: React.FC<{
     } else if (discountType.discount_method === 'fixed_amount') {
       return Math.min(discountType.discount_value, originalAmount);
     } else { // free_service
-      return originalAmount;
+      // Should make only ONE service free, not the entire order
+      // Find the cheapest service to make free
+      const servicePrice = selectedServices.length > 0 
+        ? Math.min(...selectedServices.map(s => s.price * s.quantity))
+        : 0;
+      return Math.min(servicePrice, originalAmount);
     }
   };
 
@@ -630,6 +723,32 @@ export const ReservationBookingForm: React.FC<{
         }
         setSuccess('Reservation created');
         setCreatedReservationId(created.id);
+        
+        // Save any applied discounts to the backend
+        if (appliedDiscounts.length > 0) {
+          try {
+            for (const discount of appliedDiscounts) {
+              // Only save temporary discounts (those with large IDs from Date.now())
+              if (discount.id > 1000000) {
+                const discountData = {
+                  reservation: created.id,
+                  discount_type: discount.discount_type.id,
+                  discount_amount: discount.discount_amount,
+                  original_amount: discount.original_amount,
+                  final_amount: discount.final_amount,
+                  status: discount.status,
+                  reason: discount.reason,
+                };
+                
+                await api.post('/discounts/reservation-discounts/', discountData);
+              }
+            }
+            console.log('Saved', appliedDiscounts.length, 'discounts to reservation', created.id);
+          } catch (discountError) {
+            console.error('Failed to save discounts:', discountError);
+            // Continue even if discount saving fails
+          }
+        }
         
         // If deposit is required, open deposit collection dialog
         if (depositRequired && depositAmount) {
@@ -1005,15 +1124,22 @@ export const ReservationBookingForm: React.FC<{
                               <p className="text-sm text-slate-600 mt-1">{discount.reason}</p>
                               <div className="flex items-center gap-4 mt-2">
                                 <span className="text-sm text-slate-600">
-                                  Original: ${discount.original_amount.toFixed(2)}
+                                  Original: ${Number(discount.original_amount).toFixed(2)}
                                 </span>
                                 <span className="text-sm font-medium text-emerald-600">
-                                  Discount: -${discount.discount_amount.toFixed(2)}
+                                  Discount: -${Number(discount.discount_amount).toFixed(2)}
                                 </span>
                                 <span className="text-sm font-medium text-slate-900">
-                                  Final: ${discount.final_amount.toFixed(2)}
+                                  Final: ${Number(discount.final_amount).toFixed(2)}
                                 </span>
                               </div>
+                              {discount.discount_type.discount_method === 'free_service' && (
+                                <div className="mt-2">
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                    Makes cheapest service free
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             <button
                               onClick={() => removeDiscount(discount.id)}
@@ -1362,12 +1488,17 @@ export const ReservationBookingForm: React.FC<{
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-blue-600">
                       {selectedDiscount.discount_method === 'percentage' && `${selectedDiscount.discount_value}% off`}
-                      {selectedDiscount.discount_method === 'fixed_amount' && `$${selectedDiscount.discount_value} off`}
+                      {selectedDiscount.discount_method === 'fixed_amount' && `$${Number(selectedDiscount.discount_value).toFixed(2)} off`}
                       {selectedDiscount.discount_method === 'free_service' && 'Free service'}
                     </span>
                     <span className="text-sm text-blue-600">
                       Savings: ${calculateDiscountAmount(selectedDiscount, totalPrice).toFixed(2)}
                     </span>
+                    {selectedDiscount?.min_order_amount && (
+                      <span className="text-sm text-blue-600">
+                        Min Order: ${selectedDiscount.min_order_amount}
+                      </span>
+                    )}
                   </div>
                   {selectedDiscount.requires_approval && (
                     <div className="mt-2">
