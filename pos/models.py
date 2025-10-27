@@ -367,7 +367,12 @@ class Invoice(models.Model):
             locked.balance_due = locked.total - locked.amount_paid
 
             # Status update
-            if locked.balance_due <= Decimal('0.00') and locked.total > Decimal('0.00'):
+            total_refunded = locked.refunds.filter(status='processed').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            # Check if this is a refunded invoice first
+            if total_refunded > Decimal('0.00'):
+                locked.status = self.STATUS_REFUNDED
+            elif locked.balance_due <= Decimal('0.00') and locked.total > Decimal('0.00'):
                 locked.status = self.STATUS_PAID
                 if not locked.paid_date:
                     locked.paid_date = timezone.now()
