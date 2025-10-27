@@ -23,6 +23,7 @@ import { theme } from './theme';
 import GuestProfilePage from './pages/GuestProfilePage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { ReservationWorkflowDemo } from './pages/ReservationWorkflowDemo';
+import { DiscountManagement } from './components/discounts/DiscountManagement';
 
 // Lazy load ConfigurationPage to avoid circular dependency
 const ConfigurationPage = React.lazy(() => import('./pages/ConfigurationPage').then(module => ({ default: module.ConfigurationPage })));
@@ -135,6 +136,14 @@ function App() {
                 <ProtectedRoute requiredPermission="view" requiredModel="invoices">
                   <Layout>
                     <InvoicesPage />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/discounts" element={
+                <ProtectedRoute requiredPermission="view" requiredModel="discounts">
+                  <Layout>
+                    <DiscountManagement />
                   </Layout>
                 </ProtectedRoute>
               } />

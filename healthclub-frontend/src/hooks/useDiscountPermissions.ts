@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
 
 export interface DiscountPermissions {
   canViewDiscounts: boolean;
@@ -23,7 +23,7 @@ export interface DiscountPermissions {
 }
 
 export const useDiscountPermissions = (): DiscountPermissions => {
-  const { user } = useAuth();
+  const { user, hasPermission } = usePermissions();
   const [permissions, setPermissions] = useState<DiscountPermissions>({
     canViewDiscounts: false,
     canCreateDiscountTypes: false,
@@ -53,93 +53,21 @@ export const useDiscountPermissions = (): DiscountPermissions => {
     }
 
     // Define permissions based on user role
-    const userRole = user.role || 'employee';
+    const userRole = user.user.role?.name || 'employee';
     
-    switch (userRole) {
-      case 'admin':
-        setPermissions({
-          canViewDiscounts: true,
-          canCreateDiscountTypes: true,
-          canEditDiscountTypes: true,
-          canDeleteDiscountTypes: true,
-          canApplyDiscounts: true,
-          canApproveDiscounts: true,
-          canViewAnalytics: true,
-          canExportReports: true,
-          canManageRules: true,
-        });
-        break;
-        
-      case 'manager':
-        setPermissions({
-          canViewDiscounts: true,
-          canCreateDiscountTypes: true,
-          canEditDiscountTypes: true,
-          canDeleteDiscountTypes: false,
-          canApplyDiscounts: true,
-          canApproveDiscounts: true,
-          canViewAnalytics: true,
-          canExportReports: true,
-          canManageRules: false,
-        });
-        break;
-        
-      case 'supervisor':
-        setPermissions({
-          canViewDiscounts: true,
-          canCreateDiscountTypes: false,
-          canEditDiscountTypes: false,
-          canDeleteDiscountTypes: false,
-          canApplyDiscounts: true,
-          canApproveDiscounts: true,
-          canViewAnalytics: true,
-          canExportReports: false,
-          canManageRules: false,
-        });
-        break;
-        
-      case 'front_office':
-        setPermissions({
-          canViewDiscounts: true,
-          canCreateDiscountTypes: false,
-          canEditDiscountTypes: false,
-          canDeleteDiscountTypes: false,
-          canApplyDiscounts: true,
-          canApproveDiscounts: false,
-          canViewAnalytics: false,
-          canExportReports: false,
-          canManageRules: false,
-        });
-        break;
-        
-      case 'employee':
-        setPermissions({
-          canViewDiscounts: true,
-          canCreateDiscountTypes: false,
-          canEditDiscountTypes: false,
-          canDeleteDiscountTypes: false,
-          canApplyDiscounts: true,
-          canApproveDiscounts: false,
-          canViewAnalytics: false,
-          canExportReports: false,
-          canManageRules: false,
-        });
-        break;
-        
-      default:
-        setPermissions({
-          canViewDiscounts: false,
-          canCreateDiscountTypes: false,
-          canEditDiscountTypes: false,
-          canDeleteDiscountTypes: false,
-          canApplyDiscounts: false,
-          canApproveDiscounts: false,
-          canViewAnalytics: false,
-          canExportReports: false,
-          canManageRules: false,
-        });
-    }
-  }, [user]);
+    // Use the existing permission system instead of hardcoded roles
+    setPermissions({
+      canViewDiscounts: hasPermission('view', 'discounts') || user.user.is_superuser,
+      canCreateDiscountTypes: hasPermission('add', 'discounts') || user.user.is_superuser,
+      canEditDiscountTypes: hasPermission('change', 'discounts') || user.user.is_superuser,
+      canDeleteDiscountTypes: hasPermission('delete', 'discounts') || user.user.is_superuser,
+      canApplyDiscounts: hasPermission('add', 'discounts') || user.user.is_superuser,
+      canApproveDiscounts: hasPermission('change', 'discounts') || user.user.is_superuser,
+      canViewAnalytics: hasPermission('view', 'analytics') || user.user.is_superuser,
+      canExportReports: hasPermission('view', 'analytics') || user.user.is_superuser,
+      canManageRules: hasPermission('change', 'discounts') || user.user.is_superuser,
+    });
+  }, [user, hasPermission]);
 
   return permissions;
 };

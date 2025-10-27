@@ -55,6 +55,7 @@ const subNavConfigs: Record<string, SubNavConfig> = {
       { label: 'Invoices', path: '/invoices' },
       { label: 'Payment History', path: '/payments' },
       { label: 'POS Dashboard', path: '/pos-dashboard' },
+      { label: 'Discount Management', path: '/discounts' },
     ]
   },
   'Products': {
