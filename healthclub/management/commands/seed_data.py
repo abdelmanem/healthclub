@@ -11,6 +11,7 @@ from reservations.models import Location, Reservation, ReservationService
 from employees.models import Employee, ReservationEmployeeAssignment
 from pos.models import Invoice, Payment
 from config.models import MembershipTier, GenderOption
+from discounts.models import DiscountType, ReservationDiscount
 
 
 class Command(BaseCommand):
@@ -418,7 +419,319 @@ class Command(BaseCommand):
         
         self.stdout.write(self.style.SUCCESS('✅ Invoices and payments created'))
 
-        # 12. Summary
+        # 12. Create discount types
+        self.stdout.write('🎫 Creating discount types...')
+        discount_types_data = [
+            {
+                "name": "First Time Customer",
+                "code": "FIRST10",
+                "description": "10% off for first-time customers",
+                "discount_method": "percentage",
+                "discount_value": 10.0,
+                "is_active": True,
+                "requires_approval": False,
+                "min_order_amount": 50.0,
+                "max_discount_amount": 25.0,
+                "usage_limit_per_guest": 1,
+                "usage_limit_per_day": 5,
+            },
+            {
+                "name": "Loyalty Discount",
+                "code": "LOYAL15",
+                "description": "15% off for loyal customers with 10+ visits",
+                "discount_method": "percentage",
+                "discount_value": 15.0,
+                "is_active": True,
+                "requires_approval": True,
+                "min_order_amount": 100.0,
+                "max_discount_amount": 50.0,
+                "usage_limit_per_guest": 3,
+                "usage_limit_per_day": 10,
+            },
+            {
+                "name": "Senior Citizen",
+                "code": "SENIOR20",
+                "description": "20% off for senior citizens (65+)",
+                "discount_method": "percentage",
+                "discount_value": 20.0,
+                "is_active": True,
+                "requires_approval": False,
+                "min_order_amount": 30.0,
+                "max_discount_amount": 40.0,
+                "usage_limit_per_guest": 5,
+                "usage_limit_per_day": 15,
+            },
+            {
+                "name": "Fixed Amount Off",
+                "code": "SAVE20",
+                "description": "$20 off any service over $100",
+                "discount_method": "fixed_amount",
+                "discount_value": 20.0,
+                "is_active": True,
+                "requires_approval": False,
+                "min_order_amount": 100.0,
+                "max_discount_amount": 20.0,
+                "usage_limit_per_guest": 2,
+                "usage_limit_per_day": 8,
+            },
+            {
+                "name": "Free Service",
+                "code": "FREE1",
+                "description": "One free service (cheapest) with purchase over $150",
+                "discount_method": "free_service",
+                "discount_value": 0.0,
+                "is_active": True,
+                "requires_approval": True,
+                "min_order_amount": 150.0,
+                "max_discount_amount": 50.0,
+                "usage_limit_per_guest": 1,
+                "usage_limit_per_day": 3,
+            },
+            {
+                "name": "Bulk Booking",
+                "code": "BULK25",
+                "description": "25% off when booking 3+ services",
+                "discount_method": "percentage",
+                "discount_value": 25.0,
+                "is_active": True,
+                "requires_approval": False,
+                "min_order_amount": 200.0,
+                "max_discount_amount": 100.0,
+                "usage_limit_per_guest": 2,
+                "usage_limit_per_day": 5,
+            },
+            {
+                "name": "Expired Discount",
+                "code": "EXPIRED",
+                "description": "Expired discount for testing",
+                "discount_method": "percentage",
+                "discount_value": 30.0,
+                "is_active": False,
+                "requires_approval": False,
+                "min_order_amount": 50.0,
+                "max_discount_amount": 30.0,
+                "usage_limit_per_guest": 1,
+                "usage_limit_per_day": 1,
+            },
+            {
+                "name": "Manager Special",
+                "code": "MGR50",
+                "description": "Manager's special 50% off (requires approval)",
+                "discount_method": "percentage",
+                "discount_value": 50.0,
+                "is_active": True,
+                "requires_approval": True,
+                "min_order_amount": 75.0,
+                "max_discount_amount": 200.0,
+                "usage_limit_per_guest": 1,
+                "usage_limit_per_day": 2,
+            },
+        ]
+        
+        created_discount_types = {}
+        for discount_data in discount_types_data:
+            discount_type, created = DiscountType.objects.get_or_create(
+                code=discount_data["code"],
+                defaults=discount_data
+            )
+            created_discount_types[discount_data["code"]] = discount_type
+        
+        self.stdout.write(self.style.SUCCESS('✅ Discount types created'))
+
+        # 13. Create reservation discounts
+        self.stdout.write('🎟️ Creating reservation discounts...')
+        
+        # Apply discounts to some reservations
+        reservation_discounts_data = []
+        
+        # First time customer discount for John Doe
+        john_guest = created_guests["M-1001"]
+        john_reservations = Reservation.objects.filter(guest=john_guest)[:2]
+        for i, reservation in enumerate(john_reservations):
+            if i == 0:  # First reservation gets first-time discount
+                discount_type = created_discount_types["FIRST10"]
+                service_total = sum(rs.service.price for rs in reservation.services.all())
+                discount_amount = service_total * Decimal('0.10')
+                final_amount = service_total - discount_amount
+                
+                reservation_discount = ReservationDiscount.objects.create(
+                    reservation=reservation,
+                    discount_type=discount_type,
+                    original_amount=service_total,
+                    discount_amount=discount_amount,
+                    final_amount=final_amount,
+                    status='applied',
+                    reason='First-time customer discount',
+                    notes='Applied automatically for new customer',
+                    applied_by=admin_user,
+                )
+                reservation_discounts_data.append(reservation_discount)
+        
+        # Loyalty discount for Jane Smith (has 8+ visits)
+        jane_guest = created_guests["M-1002"]
+        jane_reservations = Reservation.objects.filter(guest=jane_guest)[:1]
+        for reservation in jane_reservations:
+            discount_type = created_discount_types["LOYAL15"]
+            service_total = sum(rs.service.price for rs in reservation.services.all())
+            discount_amount = service_total * Decimal('0.15')
+            final_amount = service_total - discount_amount
+            
+            reservation_discount = ReservationDiscount.objects.create(
+                reservation=reservation,
+                discount_type=discount_type,
+                original_amount=service_total,
+                discount_amount=discount_amount,
+                final_amount=final_amount,
+                status='pending',
+                reason='Loyalty discount - requires approval',
+                notes='Customer has 8+ visits, eligible for loyalty discount',
+                applied_by=therapist_user,
+            )
+            reservation_discounts_data.append(reservation_discount)
+        
+        # Senior citizen discount for Mike Johnson
+        mike_guest = created_guests["M-1003"]
+        mike_reservations = Reservation.objects.filter(guest=mike_guest)[:1]
+        for reservation in mike_reservations:
+            discount_type = created_discount_types["SENIOR20"]
+            service_total = sum(rs.service.price for rs in reservation.services.all())
+            discount_amount = service_total * Decimal('0.20')
+            final_amount = service_total - discount_amount
+            
+            reservation_discount = ReservationDiscount.objects.create(
+                reservation=reservation,
+                discount_type=discount_type,
+                original_amount=service_total,
+                discount_amount=discount_amount,
+                final_amount=final_amount,
+                status='applied',
+                reason='Senior citizen discount',
+                notes='Customer is 65+ years old',
+                applied_by=admin_user,
+            )
+            reservation_discounts_data.append(reservation_discount)
+        
+        # Fixed amount discount for a high-value reservation
+        high_value_reservations = Reservation.objects.filter(
+            services__service__price__gte=100
+        )[:1]
+        for reservation in high_value_reservations:
+            discount_type = created_discount_types["SAVE20"]
+            service_total = sum(rs.service.price for rs in reservation.services.all())
+            discount_amount = min(20.0, service_total)  # Fixed $20 off
+            final_amount = service_total - discount_amount
+            
+            reservation_discount = ReservationDiscount.objects.create(
+                reservation=reservation,
+                discount_type=discount_type,
+                original_amount=service_total,
+                discount_amount=discount_amount,
+                final_amount=final_amount,
+                status='applied',
+                reason='Fixed amount discount',
+                notes='$20 off promotion',
+                applied_by=manager_user,
+            )
+            reservation_discounts_data.append(reservation_discount)
+        
+        # Manager special discount (pending approval)
+        manager_special_reservations = Reservation.objects.exclude(
+            id__in=[rd.reservation.id for rd in reservation_discounts_data]
+        )[:1]
+        for reservation in manager_special_reservations:
+            discount_type = created_discount_types["MGR50"]
+            service_total = sum(rs.service.price for rs in reservation.services.all())
+            discount_amount = service_total * Decimal('0.50')
+            final_amount = service_total - discount_amount
+            
+            reservation_discount = ReservationDiscount.objects.create(
+                reservation=reservation,
+                discount_type=discount_type,
+                original_amount=service_total,
+                discount_amount=discount_amount,
+                final_amount=final_amount,
+                status='pending',
+                reason='Manager special discount',
+                notes='High-value customer, manager approval required',
+                applied_by=therapist_user,
+            )
+            reservation_discounts_data.append(reservation_discount)
+        
+        self.stdout.write(self.style.SUCCESS('✅ Reservation discounts created'))
+
+        # 14. Create additional test reservations with various discount scenarios
+        self.stdout.write('🧪 Creating additional test reservations...')
+        
+        # Create a reservation with multiple services for bulk discount testing
+        bulk_reservation = Reservation.objects.create(
+            guest=random.choice(list(created_guests.values())),
+            location=random.choice(list(created_locations.values())),
+            start_time=timezone.now() + timedelta(days=2, hours=10),
+            end_time=timezone.now() + timedelta(days=2, hours=13),
+            status=Reservation.STATUS_BOOKED,
+            notes="Bulk booking test reservation",
+        )
+        
+        # Add multiple services
+        services_for_bulk = list(created_services.values())[:3]
+        for service in services_for_bulk:
+            ReservationService.objects.create(reservation=bulk_reservation, service=service)
+        
+        # Apply bulk discount
+        bulk_discount_type = created_discount_types["BULK25"]
+        service_total = sum(service.price for service in services_for_bulk)
+        discount_amount = service_total * Decimal('0.25')
+        final_amount = service_total - discount_amount
+        
+        ReservationDiscount.objects.create(
+            reservation=bulk_reservation,
+            discount_type=bulk_discount_type,
+            original_amount=service_total,
+            discount_amount=discount_amount,
+            final_amount=final_amount,
+            status='applied',
+            reason='Bulk booking discount',
+            notes='3+ services booked, eligible for bulk discount',
+            applied_by=admin_user,
+        )
+        
+        # Create a reservation with free service discount
+        free_service_reservation = Reservation.objects.create(
+            guest=random.choice(list(created_guests.values())),
+            location=random.choice(list(created_locations.values())),
+            start_time=timezone.now() + timedelta(days=3, hours=14),
+            end_time=timezone.now() + timedelta(days=3, hours=16),
+            status=Reservation.STATUS_BOOKED,
+            notes="Free service test reservation",
+        )
+        
+        # Add services with total over $150
+        expensive_services = [s for s in created_services.values() if s.price >= 80]
+        for service in expensive_services[:2]:
+            ReservationService.objects.create(reservation=free_service_reservation, service=service)
+        
+        # Apply free service discount
+        free_service_discount_type = created_discount_types["FREE1"]
+        service_total = sum(service.price for service in expensive_services[:2])
+        cheapest_service_price = min(service.price for service in expensive_services[:2])
+        discount_amount = cheapest_service_price
+        final_amount = service_total - discount_amount
+        
+        ReservationDiscount.objects.create(
+            reservation=free_service_reservation,
+            discount_type=free_service_discount_type,
+            original_amount=service_total,
+            discount_amount=discount_amount,
+            final_amount=final_amount,
+            status='pending',
+            reason='Free service promotion',
+            notes='Purchase over $150, free cheapest service',
+            applied_by=therapist_user,
+        )
+        
+        self.stdout.write(self.style.SUCCESS('✅ Additional test reservations created'))
+
+        # 15. Summary
         self.stdout.write('\n🎉 Sample data creation completed!')
         self.stdout.write('\n📊 Summary:')
         self.stdout.write(f'  👥 Users: {User.objects.count()}')
@@ -428,9 +741,35 @@ class Command(BaseCommand):
         self.stdout.write(f'  👨‍💼 Employees: {Employee.objects.count()}')
         self.stdout.write(f'  📅 Reservations: {Reservation.objects.count()}')
         self.stdout.write(f'  💰 Invoices: {Invoice.objects.count()}')
+        self.stdout.write(f'  🎫 Discount Types: {DiscountType.objects.count()}')
+        self.stdout.write(f'  🎟️ Applied Discounts: {ReservationDiscount.objects.count()}')
+        
+        self.stdout.write('\n🎫 Discount Types Created:')
+        for code, discount_type in created_discount_types.items():
+            status = "✅ Active" if discount_type.is_active else "❌ Inactive"
+            approval = "🔒 Requires Approval" if discount_type.requires_approval else "🔓 Auto-Apply"
+            self.stdout.write(f'  {code}: {discount_type.name} - {status} - {approval}')
+        
+        self.stdout.write('\n🎟️ Applied Discounts Summary:')
+        applied_count = ReservationDiscount.objects.filter(status='applied').count()
+        pending_count = ReservationDiscount.objects.filter(status='pending').count()
+        self.stdout.write(f'  Applied: {applied_count}')
+        self.stdout.write(f'  Pending Approval: {pending_count}')
         
         self.stdout.write('\n🔑 Login credentials:')
         self.stdout.write('  Admin: admin / admin123')
         self.stdout.write('  Manager: manager1 / manager123')
         self.stdout.write('  Therapist: therapist1 / therapist123')
+        
+        self.stdout.write('\n🧪 Test Scenarios Available:')
+        self.stdout.write('  • First-time customer discount (applied)')
+        self.stdout.write('  • Loyalty discount (pending approval)')
+        self.stdout.write('  • Senior citizen discount (applied)')
+        self.stdout.write('  • Fixed amount discount (applied)')
+        self.stdout.write('  • Manager special discount (pending approval)')
+        self.stdout.write('  • Bulk booking discount (applied)')
+        self.stdout.write('  • Free service discount (pending approval)')
+        self.stdout.write('  • Expired discount (inactive)')
+        
         self.stdout.write('\n🌐 Access the admin at: http://localhost:8000/admin/')
+        self.stdout.write('🎯 Test the discount system at: http://localhost:3000/discounts')
