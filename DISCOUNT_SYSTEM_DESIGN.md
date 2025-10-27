@@ -168,23 +168,263 @@ class DiscountCalculator:
 
 ## 🔄 **Implementation Phases**
 
-### **Phase 1: Core Models & Backend**
-1. Create discount models
-2. Implement discount calculation logic
-3. Add API endpoints
-4. Create serializers and views
+### **Phase 1: Core Models & Backend** ✅ **COMPLETED**
+1. ✅ Create discount models (`DiscountType`, `ReservationDiscount`, `DiscountRule`)
+2. ✅ Implement discount calculation logic
+3. ✅ Add API endpoints (`/discounts/discount-types/`, `/discounts/reservation-discounts/`)
+4. ✅ Create serializers and views
+5. ✅ Add permission controls and audit trails
+6. ✅ Integration with reservation system
 
-### **Phase 2: Frontend Integration**
-1. Update reservation form
-2. Create discount management UI
-3. Implement approval workflow
-4. Add permission controls
+### **Phase 2: Frontend Integration** 🚧 **IN PROGRESS**
+Based on current implementation, Phase 2 includes:
 
-### **Phase 3: Advanced Features**
+#### **2.1 Reservation Form Integration** ✅ **COMPLETED**
+- ✅ Discount selection dropdown in `ReservationBookingForm.tsx`
+- ✅ Discount application dialog with reason/notes
+- ✅ Applied discounts display with amounts
+- ✅ Discount calculation and validation
+- ✅ Integration with existing reservation workflow
+
+#### **2.2 Calendar Integration** ✅ **COMPLETED**
+- ✅ Discount display in `StaffSchedulingCalendar.tsx` sidebar
+- ✅ Applied discounts section showing details
+- ✅ Payment summary with discount amounts
+- ✅ Balance calculation including discounts
+
+#### **2.3 Discount Management UI** 🚧 **TO IMPLEMENT**
+1. **Discount Type Management Interface**
+   - Create/edit/delete discount types
+   - Configure discount rules and limits
+   - Set approval requirements
+   - Manage validity periods
+
+2. **Applied Discounts Management**
+   - View all applied discounts
+   - Filter by status, date, employee
+   - Approve/reject pending discounts
+   - Cancel applied discounts
+
+3. **Approval Workflow Interface**
+   - Pending discounts queue
+   - Approval/rejection with reasons
+   - Notification system
+   - Audit trail display
+
+#### **2.4 Enhanced Features** 🚧 **TO IMPLEMENT**
+1. **Advanced Discount Selection**
+   - Smart discount suggestions based on guest history
+   - Membership tier-based filtering
+   - Service-specific discount eligibility
+   - Real-time discount validation
+
+2. **Reporting & Analytics**
+   - Discount usage statistics
+   - Employee discount performance
+   - Revenue impact analysis
+   - Guest discount history
+
+3. **Permission-Based Access**
+   - Role-based discount limits
+   - Manager approval workflows
+   - Employee discount tracking
+   - Audit trail management
+
+### **Phase 3: Advanced Features** 📋 **PLANNED**
 1. Rule engine implementation
-2. Reporting and analytics
-3. Bulk discount operations
-4. Integration with POS system
+2. Bulk discount operations
+3. Integration with POS system
+4. Advanced reporting and analytics
+5. Mobile app integration
+
+## 🛠️ **Phase 2 Implementation Plan**
+
+### **Current Status Assessment**
+Based on the existing codebase analysis:
+
+#### **✅ Already Implemented:**
+- **Backend Models**: Complete discount system with `DiscountType`, `ReservationDiscount`, `DiscountRule`
+- **API Endpoints**: Full CRUD operations for discount types and reservation discounts
+- **Reservation Integration**: Discount application in `ReservationBookingForm.tsx`
+- **Calendar Display**: Discount information in `StaffSchedulingCalendar.tsx`
+- **Service Layer**: Complete `discountService` with all necessary methods
+
+#### **🚧 To Implement in Phase 2:**
+
+### **2.1 Discount Management Dashboard**
+Create a comprehensive discount management interface:
+
+**File: `healthclub-frontend/src/components/discounts/DiscountManagement.tsx`**
+```typescript
+// Main dashboard component with tabs for:
+// - Discount Types Management
+// - Applied Discounts View
+// - Approval Workflow
+// - Analytics & Reports
+```
+
+**File: `healthclub-frontend/src/components/discounts/DiscountTypeManager.tsx`**
+```typescript
+// CRUD operations for discount types
+// - Create/edit/delete discount types
+// - Configure rules and limits
+// - Set approval requirements
+// - Manage validity periods
+```
+
+**File: `healthclub-frontend/src/components/discounts/AppliedDiscountsManager.tsx`**
+```typescript
+// View and manage applied discounts
+// - Filter by status, date, employee
+// - Approve/reject pending discounts
+// - Cancel applied discounts
+// - View discount history
+```
+
+### **2.2 Approval Workflow Interface**
+Build the approval system for restricted discounts:
+
+**File: `healthclub-frontend/src/components/discounts/ApprovalWorkflow.tsx`**
+```typescript
+// Manager interface for approving discounts
+// - Pending discounts queue
+// - Approval/rejection with reasons
+// - Bulk approval operations
+// - Notification system
+```
+
+**File: `healthclub-frontend/src/components/discounts/DiscountApprovalCard.tsx`**
+```typescript
+// Individual discount approval card
+// - Show discount details
+// - Display guest/reservation info
+// - Approve/reject buttons
+// - Reason input fields
+```
+
+### **2.3 Enhanced Discount Selection**
+Improve the discount application experience:
+
+**File: `healthclub-frontend/src/components/discounts/SmartDiscountSelector.tsx`**
+```typescript
+// Enhanced discount selection with:
+// - Smart suggestions based on guest history
+// - Membership tier filtering
+// - Service-specific eligibility
+// - Real-time validation
+```
+
+**File: `healthclub-frontend/src/components/discounts/DiscountEligibilityChecker.tsx`**
+```typescript
+// Real-time discount eligibility validation
+// - Check guest eligibility
+// - Validate order requirements
+// - Show usage limits
+// - Display discount preview
+```
+
+### **2.4 Reporting & Analytics**
+Create comprehensive reporting system:
+
+**File: `healthclub-frontend/src/components/discounts/DiscountAnalytics.tsx`**
+```typescript
+// Analytics dashboard with:
+// - Discount usage statistics
+// - Employee performance metrics
+// - Revenue impact analysis
+// - Guest discount history
+```
+
+**File: `healthclub-frontend/src/components/discounts/DiscountReports.tsx`**
+```typescript
+// Report generation and export
+// - Usage reports by date range
+// - Employee discount reports
+// - Revenue impact reports
+// - Export to CSV/PDF
+```
+
+### **2.5 Permission-Based Access Control**
+Implement role-based access:
+
+**File: `healthclub-frontend/src/hooks/useDiscountPermissions.ts`**
+```typescript
+// Custom hook for discount permissions
+// - Check user permissions
+// - Role-based access control
+// - Feature flag management
+```
+
+**File: `healthclub-frontend/src/components/discounts/PermissionGate.tsx`**
+```typescript
+// Permission-based component rendering
+// - Show/hide features based on permissions
+// - Role-based UI elements
+// - Access control messages
+```
+
+### **2.6 Navigation Integration**
+Add discount management to main navigation:
+
+**File: `healthclub-frontend/src/components/layout/Navigation.tsx`**
+```typescript
+// Add discount management menu items:
+// - Discount Management (main dashboard)
+// - Pending Approvals (if user has permission)
+// - Discount Reports (if user has permission)
+```
+
+### **2.7 Notification System**
+Implement discount-related notifications:
+
+**File: `healthclub-frontend/src/components/notifications/DiscountNotifications.tsx`**
+```typescript
+// Notification system for:
+// - Pending discount approvals
+// - Discount application confirmations
+// - Approval/rejection notifications
+// - Usage limit warnings
+```
+
+## 📋 **Implementation Checklist**
+
+### **Week 1: Core Management Interface**
+- [ ] Create `DiscountManagement.tsx` main dashboard
+- [ ] Implement `DiscountTypeManager.tsx` for CRUD operations
+- [ ] Add navigation menu items
+- [ ] Set up routing for discount pages
+
+### **Week 2: Approval Workflow**
+- [ ] Build `ApprovalWorkflow.tsx` interface
+- [ ] Create `DiscountApprovalCard.tsx` component
+- [ ] Implement approval/rejection logic
+- [ ] Add notification system
+
+### **Week 3: Enhanced Features**
+- [ ] Develop `SmartDiscountSelector.tsx`
+- [ ] Create `DiscountEligibilityChecker.tsx`
+- [ ] Implement permission-based access control
+- [ ] Add real-time validation
+
+### **Week 4: Analytics & Reporting**
+- [ ] Build `DiscountAnalytics.tsx` dashboard
+- [ ] Create `DiscountReports.tsx` component
+- [ ] Implement data export functionality
+- [ ] Add performance metrics
+
+### **Week 5: Testing & Polish**
+- [ ] Comprehensive testing
+- [ ] UI/UX improvements
+- [ ] Performance optimization
+- [ ] Documentation updates
+
+## 🎯 **Success Metrics**
+
+1. **User Adoption**: 90% of staff using discount system within 2 weeks
+2. **Approval Efficiency**: 50% reduction in approval time
+3. **Error Reduction**: 80% fewer discount application errors
+4. **Audit Compliance**: 100% of discounts tracked and auditable
+5. **User Satisfaction**: 4.5+ rating from staff feedback
 
 ## 🎯 **Benefits**
 
