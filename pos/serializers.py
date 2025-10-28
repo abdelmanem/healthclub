@@ -778,7 +778,6 @@ class RefundModelSerializer(serializers.ModelSerializer):
 class DepositSerializer(serializers.ModelSerializer):
     """Serializer for Deposits"""
     guest_name = serializers.SerializerMethodField()
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
     collected_by_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     remaining_amount = serializers.DecimalField(
@@ -790,7 +789,7 @@ class DepositSerializer(serializers.ModelSerializer):
         model = Deposit
         fields = [
             'id', 'guest', 'guest_name',
-            'reservation', 'invoice', 'invoice_number',
+            'reservation',
             'amount', 'amount_applied', 'remaining_amount',
             'status', 'status_display',
             'payment_method', 'transaction_id', 'reference',
