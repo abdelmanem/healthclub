@@ -46,6 +46,7 @@ import { DepositsTab } from './DepositsTab';
 import { RefundsTab } from './RefundsTab';
 import { DepositDialog } from './DepositDialog';
 import { DepositHistory } from './DepositHistory';
+  import { InvoiceDiscountDialog } from './InvoiceDiscountDialog';
 import dayjs from 'dayjs';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useConfirmDialog } from '../common/useConfirmDialog';
@@ -74,6 +75,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'payments' | 'refunds'>('payments');
 
   const { showConfirmDialog, dialogProps } = useConfirmDialog();
@@ -182,91 +184,7 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
 
   // Handle apply discount with optimistic locking
   const handleApplyDiscount = async () => {
-    if (!invoice) return;
-
-    const discountResult = await showConfirmDialog({
-      title: 'Apply Discount',
-      message: `Current total: $${parseFloat(invoice.total).toFixed(2)}`,
-      confirmText: 'Apply Discount',
-      inputLabel: 'Discount Amount',
-      inputRequired: true,
-      inputType: 'number',
-      inputPlaceholder: '10.00',
-      inputHelperText: `Maximum: $${parseFloat(invoice.subtotal).toFixed(2)}`,
-      maxValue: parseFloat(invoice.subtotal),
-    });
-    if (!discountResult.confirmed) return;
-
-    // ✅ Frontend validation
-    const amountValidation = validateAmount(
-      discountResult.value!, 
-      0.01, 
-      parseFloat(invoice.subtotal)
-    );
-    
-    if (!amountValidation.valid) {
-      showSnackbar(amountValidation.error!, 'error');
-      return;
-    }
-
-    const reasonResult = await showConfirmDialog({
-      title: 'Discount Reason',
-      message: 'Please provide a reason for this discount (optional)',
-      confirmText: 'Continue',
-      inputLabel: 'Reason',
-      inputMultiline: true,
-      inputRows: 3,
-      inputPlaceholder: 'e.g., Loyalty member - 10% off',
-    });
-
-    // ✅ Optimistic update - update UI immediately
-    const previousInvoice = { ...invoice };
-    const discountAmount = parseFloat(discountResult.value!);
-    const newTotal = parseFloat(invoice.total) - discountAmount;
-    const newBalanceDue = parseFloat(invoice.balance_due) - discountAmount;
-    
-    setInvoice(prev => prev ? {
-      ...prev,
-      discount: discountAmount.toFixed(2),
-      total: newTotal.toFixed(2),
-      balance_due: newBalanceDue.toFixed(2),
-    } : null);
-
-    setActionLoading(true);
-    try {
-      const response = await invoicesService.applyDiscount(invoice.id, {
-        discount: discountResult.value!,
-        reason: reasonResult.value || undefined,
-        version: invoice.version,
-      });
-      
-      // ✅ Update with server response
-      setInvoice(prev => prev ? {
-        ...prev,
-        discount: response.discount_applied,
-        total: response.new_total,
-        balance_due: response.new_balance_due,
-        version: response.version || prev.version,
-      } : null);
-      
-      showSnackbar('Discount applied successfully', 'success');
-      
-    } catch (error: any) {
-      // ✅ Rollback on error
-      setInvoice(previousInvoice);
-      
-      if (error?.response?.status === 409) {
-        showSnackbar(
-          'Invoice was modified by another user. Refreshing...',
-          'warning'
-        );
-        await loadInvoice();
-      } else {
-        handleApiError(error, showSnackbar, loadInvoice);
-      }
-    } finally {
-      setActionLoading(false);
-    }
+    setDiscountDialogOpen(true);
   };
 
   // Status color
@@ -796,6 +714,53 @@ export const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({
             loadInvoice();
             onPaymentProcessed?.();
             setDepositDialogOpen(false);
+          }}
+        />
+      )}
+
+      {/* Discount Dialog */}
+      {invoice && (
+        <InvoiceDiscountDialog
+          open={discountDialogOpen}
+          onClose={() => setDiscountDialogOpen(false)}
+          invoiceTotal={parseFloat(invoice.total)}
+          onSubmit={async ({ discountAmount, reason }) => {
+            const previousInvoice = { ...invoice };
+            const newTotal = parseFloat(invoice.total) - parseFloat(discountAmount);
+            const newBalanceDue = parseFloat(invoice.balance_due) - parseFloat(discountAmount);
+            setActionLoading(true);
+            setInvoice(prev => prev ? {
+              ...prev,
+              discount: parseFloat(prev.discount || '0') + parseFloat(discountAmount) + '' as any,
+              total: newTotal.toFixed(2),
+              balance_due: newBalanceDue.toFixed(2),
+            } : null);
+            try {
+              const response = await invoicesService.applyDiscount(invoice.id, {
+                discount: discountAmount,
+                reason,
+                version: invoice.version,
+              });
+              setInvoice(prev => prev ? {
+                ...prev,
+                discount: response.discount_applied,
+                total: response.new_total,
+                balance_due: response.new_balance_due,
+                version: response.version || prev.version,
+              } : null);
+              showSnackbar('Discount applied successfully', 'success');
+              setDiscountDialogOpen(false);
+            } catch (error: any) {
+              setInvoice(previousInvoice);
+              if (error?.response?.status === 409) {
+                showSnackbar('Invoice was modified by another user. Refreshing...', 'warning');
+                await loadInvoice();
+              } else {
+                handleApiError(error, showSnackbar, loadInvoice);
+              }
+            } finally {
+              setActionLoading(false);
+            }
           }}
         />
       )}

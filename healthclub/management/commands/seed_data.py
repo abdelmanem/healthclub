@@ -9,7 +9,7 @@ from guests.models import Guest, GuestAddress, EmergencyContact
 from services.models import Service, ServiceCategory
 from reservations.models import Location, Reservation, ReservationService
 from employees.models import Employee, ReservationEmployeeAssignment
-from pos.models import Invoice, Payment
+from pos.models import Invoice, Payment, PaymentMethod
 from config.models import MembershipTier, GenderOption
 from discounts.models import DiscountType, ReservationDiscount
 
@@ -28,6 +28,30 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('✅ Configurations initialized'))
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'⚠️ Configuration initialization failed: {e}'))
+
+        # 1b. Ensure default payment methods exist
+        self.stdout.write('💳 Creating payment methods...')
+        try:
+            call_command('create_payment_methods', '--force')
+            self.stdout.write(self.style.SUCCESS('✅ Payment methods ensured'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'⚠️ Payment methods setup failed: {e}'))
+
+        # 1c. Ensure POS configuration exists (VAT, service charge)
+        self.stdout.write('🧾 Setting up POS configuration...')
+        try:
+            call_command('setup_pos_config', '--force')
+            self.stdout.write(self.style.SUCCESS('✅ POS configuration ensured'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'⚠️ POS configuration setup failed: {e}'))
+
+        # 1d. Ensure discount types exist
+        self.stdout.write('🏷️  Setting up sample discount types...')
+        try:
+            call_command('setup_discounts')
+            self.stdout.write(self.style.SUCCESS('✅ Discount types ensured'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'⚠️ Discount setup failed: {e}'))
 
         # 2. Get or create membership tiers
         self.stdout.write('👑 Creating membership tiers...')
@@ -326,10 +350,14 @@ class Command(BaseCommand):
         # 10. Create reservations
         self.stdout.write('📅 Creating reservations...')
         
-        # Create some past reservations
+        # Create some "historical" reservations
+        # NOTE: Model validation prevents creating in the past, so we schedule them in the near future
+        # and mark them as completed to simulate past data.
         past_reservations = []
         for i in range(5):
-            start_time = timezone.now() - timedelta(days=random.randint(1, 30), hours=random.randint(9, 17))
+            # Schedule in the next 1-3 days during business hours
+            start_time = timezone.now() + timedelta(days=random.randint(1, 3))
+            start_time = start_time.replace(hour=random.randint(9, 17), minute=0, second=0, microsecond=0)
             service = random.choice(list(created_services.values()))
             location = random.choice(list(created_locations.values()))
             guest = random.choice(list(created_guests.values()))
@@ -341,7 +369,7 @@ class Command(BaseCommand):
                 start_time=start_time,
                 end_time=start_time + timedelta(minutes=service.duration_minutes),
                 status=Reservation.STATUS_COMPLETED,
-                notes=f"Past reservation {i+1}",
+                notes=f"Simulated past reservation {i+1} (scheduled future due to validation)",
             )
             
             # Add service to reservation
@@ -356,10 +384,11 @@ class Command(BaseCommand):
             
             past_reservations.append(reservation)
 
-        # Create future reservations
+        # Create future reservations (explicitly future and valid)
         future_reservations = []
         for i in range(3):
-            start_time = timezone.now() + timedelta(days=random.randint(1, 7), hours=random.randint(9, 17))
+            start_time = timezone.now() + timedelta(days=random.randint(2, 10))
+            start_time = start_time.replace(hour=random.randint(9, 17), minute=0, second=0, microsecond=0)
             service = random.choice(list(created_services.values()))
             location = random.choice(list(created_locations.values()))
             guest = random.choice(list(created_guests.values()))
@@ -741,6 +770,7 @@ class Command(BaseCommand):
         self.stdout.write(f'  👨‍💼 Employees: {Employee.objects.count()}')
         self.stdout.write(f'  📅 Reservations: {Reservation.objects.count()}')
         self.stdout.write(f'  💰 Invoices: {Invoice.objects.count()}')
+        self.stdout.write(f'  💳 Payment Methods: {PaymentMethod.objects.count()}')
         self.stdout.write(f'  🎫 Discount Types: {DiscountType.objects.count()}')
         self.stdout.write(f'  🎟️ Applied Discounts: {ReservationDiscount.objects.count()}')
         
