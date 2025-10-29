@@ -880,7 +880,17 @@ export const depositsService = {
     invoice_balance: string;
     message: string;
   }> {
-    const response = await api.post(`/invoices/${invoiceId}/apply_deposit/`, data);
-    return response.data;
+    try {
+      const response = await api.post(`/invoices/${invoiceId}/apply_deposit/`, data);
+      return response.data;
+    } catch (err: any) {
+      // If the underscore endpoint is not registered on the server (404),
+      // automatically retry the hyphenated alias path.
+      if (err?.response?.status === 404) {
+        const alt = await api.post(`/invoices/${invoiceId}/apply-deposit/`, data);
+        return alt.data;
+      }
+      throw err;
+    }
   },
 };
