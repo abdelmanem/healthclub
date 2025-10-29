@@ -247,6 +247,33 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Guard: prevent regular/manual payments when guest has un-applied deposits
+        # Require using Apply Deposit endpoints instead to avoid double-crediting
+        if payment_type in ['regular', 'manual']:
+            from .models import Deposit
+            from django.db.models import F as _F
+            un_applied = Deposit.objects.filter(
+                guest=invoice.guest,
+                status__in=['pending', 'collected', 'partially_applied'],
+            ).filter(amount__gt=_F('amount_applied'))
+
+            if un_applied.exists():
+                # Optionally compute total remaining for message clarity
+                from decimal import Decimal as _D
+                total_remaining = _D('0.00')
+                for d in un_applied:
+                    total_remaining += (d.amount - d.amount_applied)
+                return Response(
+                    {
+                        'error': (
+                            'Guest has un-applied deposit(s). Use Apply Deposit instead of a regular payment.'
+                        ),
+                        'total_deposit_remaining': str(total_remaining),
+                        'hint': 'POST /api/invoices/{id}/apply_deposit/ with {"deposit_id": ..., "amount": ...}'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Validate amount against balance
         if amount > invoice.balance_due:
             return Response(

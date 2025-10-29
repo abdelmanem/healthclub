@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
+from django.db.models import F
 from django.db.models import OuterRef, Subquery
 from django.db import transaction
 from decimal import Decimal
@@ -632,9 +633,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
             # 🎯 AUTO-APPLY DEPOSITS
             deposits = Deposit.objects.filter(
                 reservation=reservation,
-                status='paid',
-                amount_applied__lt=models.F('amount')
-            ).order_by('collected_at')
+                status__in=['collected', 'partially_applied']
+            ).filter(amount__gt=F('amount_applied')).order_by('collected_at')
             
             deposits_applied = []
             for deposit in deposits:
