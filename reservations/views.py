@@ -872,8 +872,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Create deposit record
-        from pos.models import Deposit
+        # Create deposit record and auto-apply to existing invoice (if present)
+        from pos.models import Deposit, Invoice
         with transaction.atomic():
             deposit = Deposit.objects.create(
                 guest=reservation.guest,
@@ -887,21 +887,46 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 collected_by=request.user if request.user.is_authenticated else None,
                 collected_at=timezone.now()
             )
-            
-            # Update reservation
+
+            # Update reservation deposit flags
             reservation.deposit_paid = True
             reservation.deposit_paid_at = timezone.now()
             reservation.save(update_fields=['deposit_paid', 'deposit_paid_at'])
-        
-        return Response({
+
+            # If an invoice already exists for this reservation, apply the deposit immediately
+            existing_invoice = Invoice.objects.filter(reservation=reservation).first()
+            applied_payment = None
+            if existing_invoice and existing_invoice.balance_due > 0:
+                try:
+                    applied_payment = deposit.apply_to_invoice(existing_invoice)
+                    existing_invoice.refresh_from_db()
+                except Exception:
+                    applied_payment = None
+
+        payload = {
             'success': True,
             'deposit_id': deposit.id,
             'amount': str(deposit.amount),
             'status': deposit.status,
             'reservation_id': reservation.id,
             'collected_at': deposit.collected_at,
-            'message': f'Deposit of ${deposit.amount} collected successfully'
-        }, status=status.HTTP_201_CREATED)
+        }
+        if applied_payment:
+            payload.update({
+                'applied_immediately': True,
+                'applied_payment_id': applied_payment.id,
+                'applied_amount': str(applied_payment.amount),
+                'invoice_id': existing_invoice.id,
+                'invoice_balance_after': str(existing_invoice.balance_due),
+                'message': f'Deposit collected and applied ${applied_payment.amount} to invoice'
+            })
+        else:
+            payload.update({
+                'applied_immediately': False,
+                'message': f'Deposit of ${deposit.amount} collected successfully'
+            })
+
+        return Response(payload, status=status.HTTP_201_CREATED)
 
     @decorators.action(detail=True, methods=["get"], url_path="deposit-status")
     def deposit_status(self, request, pk=None):
