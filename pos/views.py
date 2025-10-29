@@ -1191,6 +1191,11 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    # URL alias to support hyphenated path if needed: /api/invoices/{id}/apply-deposit/
+    @action(detail=True, methods=['post'], url_path='apply-deposit')
+    def apply_deposit_alias(self, request, pk=None):
+        return self.apply_deposit(request, pk)
+
 
 class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
     """

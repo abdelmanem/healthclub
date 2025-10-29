@@ -397,7 +397,16 @@ export const DepositManagement: React.FC<DepositManagementProps> = ({
             variant="contained"
             color="primary"
             onClick={handleApplyDeposit}
-            disabled={applying || !applyAmount || parseFloat(applyAmount) <= 0}
+            disabled={(() => {
+              if (applying) return true;
+              if (!selectedDeposit) return true;
+              const amt = parseFloat(applyAmount || '');
+              if (isNaN(amt)) return true;
+              if (amt <= 0) return true;
+              const max = parseFloat(selectedDeposit.remaining_amount);
+              if (amt > max) return true;
+              return false;
+            })()}
             startIcon={applying ? <CircularProgress size={20} /> : <Payment />}
           >
             {applying ? 'Applying...' : `Apply ${formatCurrency(applyAmount || '0')}`}
