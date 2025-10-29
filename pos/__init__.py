@@ -53,31 +53,16 @@ def create_invoice_for_reservation(reservation, include_deposit_as_line_item=Fal
         ).first()
         
         if existing_deposit:
-            # Apply the existing deposit to this invoice
+            # Apply the existing deposit to this invoice; if it fails, do not create a cash payment fallback.
             try:
                 existing_deposit.apply_to_invoice(invoice)
-            except Exception as e:
-                # If deposit application fails, create a regular payment
-                Payment.objects.create(
-                    invoice=invoice,
-                    method='cash',
-                    payment_type='deposit_application',
-                    amount=existing_deposit.remaining_amount,
-                    status='completed',
-                    notes=f'Deposit payment for reservation #{reservation.id}',
-                    processed_by=None
-                )
+            except Exception:
+                # Leave deposit as collected; user can apply it explicitly later.
+                pass
         else:
-            # Legacy: Create deposit payment directly (for old reservations without Deposit records)
-            Payment.objects.create(
-                invoice=invoice,
-                method='cash',
-                payment_type='deposit_application',
-                amount=reservation.deposit_amount,
-                status='completed',
-                notes=f'Deposit payment for reservation #{reservation.id}',
-                processed_by=None
-            )
+            # No deposit record exists — do not synthesize a cash payment. Keep the invoice unpaid
+            # and let the operator collect a proper Deposit or process a regular payment.
+            pass
 
     invoice.recalculate_totals()
     return invoice
