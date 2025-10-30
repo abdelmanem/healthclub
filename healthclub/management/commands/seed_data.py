@@ -7,7 +7,7 @@ import random
 from accounts.models import Role, User
 from guests.models import Guest, GuestAddress, EmergencyContact
 from services.models import Service, ServiceCategory
-from reservations.models import Location, Reservation, ReservationService
+from reservations.models import Location, Reservation, ReservationService, LocationStatus, LocationType
 from employees.models import Employee, ReservationEmployeeAssignment
 from pos.models import Invoice, Payment, PaymentMethod
 from config.models import MembershipTier, GenderOption, CommissionType, TrainingType, ProductType, BusinessRule, NotificationTemplate
@@ -52,6 +52,23 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('✅ Discount types ensured'))
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'⚠️ Discount setup failed: {e}'))
+
+        # [NEW] Create Location Statuses
+        self.stdout.write('🚦 Creating location statuses...')
+        location_statuses_data = [
+            {'name': 'Available', 'description': 'Location is available for booking.'},
+            {'name': 'Cleaning', 'description': 'Location is currently being cleaned.'},
+            {'name': 'Occupied', 'description': 'Location is currently in use.'},
+            {'name': 'Out of Service', 'description': 'Location is temporarily out of service.'},
+            {'name': 'Maintenance', 'description': 'Location is under maintenance.'},
+        ]
+        created_location_statuses = {}
+        for status_data in location_statuses_data:
+            status, _ = LocationStatus.objects.get_or_create(
+                name=status_data['name'], defaults=status_data
+            )
+            created_location_statuses[status_data['name']] = status
+        self.stdout.write(self.style.SUCCESS('✅ Location statuses created'))
 
         # [NEW] Ensure demo/test CommissionTypes exist
         self.stdout.write('🔌 Seeding commission types for tests...')
@@ -227,25 +244,51 @@ class Command(BaseCommand):
         
         self.stdout.write(self.style.SUCCESS('✅ Users created'))
 
-        # 5. Create locations
-        self.stdout.write('🏢 Creating locations...')
-        locations_data = [
-            {"name": "Room 1", "description": "Massage room", "capacity": 1, "status": "available"},
-            {"name": "Room 2", "description": "Sauna room", "capacity": 2, "status": "available"},
-            {"name": "Room 3", "description": "Spa treatment room", "capacity": 1, "status": "cleaning"},
-            {"name": "Room 4", "description": "Fitness room", "capacity": 10, "status": "available"},
+        # [NEW] Create Location Types
+        self.stdout.write('🏷️ Creating location types...')
+        location_types_data = [
+            {'name': 'Double Room Massage','description': ''},
+            {'name': 'Jacuzzi','description': ''},
+            {'name': 'Reception waiting area','description': ''},
+            {'name': 'Rest area Men','description': ''},
+            {'name': 'Rest area Woman','description': ''},
+            {'name': 'Sawna','description': ''},
+            {'name': 'Single Room Massage','description': ''}
         ]
+        created_location_types = {}
+        for type_data in location_types_data:
+            ltype, _ = LocationType.objects.get_or_create(
+                name=type_data['name'], defaults={**type_data, 'is_active': True}
+            )
+            created_location_types[type_data['name']] = ltype
+        self.stdout.write(self.style.SUCCESS(f'✅ Location types: {[lt["name"] for lt in location_types_data]}'))
+
+        # 5. Create locations... now assign types
+        locations_data = [
+            {"name": "Room 1 (Vacant Clean)", "description": "Massage room", "capacity": 1, "is_occupied": False, "is_clean": True, "status": "Available", "type": created_location_types['Single Room Massage']},
+            {"name": "Room 2 (Vacant Dirty)", "description": "Sauna room", "capacity": 2, "is_occupied": False, "is_clean": False, "status": "Cleaning", "type": created_location_types['Sawna']},
+            {"name": "Room 3 (Occupied Clean)", "description": "Spa treatment room", "capacity": 1, "is_occupied": True, "is_clean": True, "status": "Occupied", "type": created_location_types['Double Room Massage']},
+            {"name": "Room 4 (Occupied Dirty)", "description": "Fitness room", "capacity": 10, "is_occupied": True, "is_clean": False, "status": "Occupied", "type": created_location_types['Rest area Men']},
+            {"name": "Room 5 (Out of Service)", "description": "Yoga studio", "capacity": 15, "is_occupied": False, "is_clean": True, "is_out_of_service": True, "status": "Out of Service", "type": created_location_types['Reception waiting area']},
+            {"name": "Room 6 (Jacuzzi)", "description": "Jacuzzi area", "capacity": 2, "is_occupied": False, "is_clean": True, "status": "Available", "type": created_location_types['Jacuzzi']},
+            {"name": "Room 7 (Rest area Woman)", "description": "Rest area for women only", "capacity": 5, "is_occupied": False, "is_clean": True, "status": "Available", "type": created_location_types['Rest area Woman']},
+        ]
+        
         created_locations = {}
         for loc_data in locations_data:
+            status_obj = created_location_statuses.get(loc_data.get('status'))
+            
+            defaults = {k: v for k, v in loc_data.items() if k not in ['name', 'status', 'type']}
+            defaults['status'] = status_obj
+            defaults['type'] = loc_data['type'] # Assign the type
+
             location, created = Location.objects.get_or_create(
                 name=loc_data["name"],
-                defaults={k: v for k, v in loc_data.items() if k != 'name'}
+                defaults=defaults
             )
             if not created:
-                # Optionally update status if you want to re-sync for test/dev
-                for k,v in loc_data.items():
-                    if k != 'name':
-                        setattr(location, k, v)
+                for k,v in defaults.items():
+                    setattr(location, k, v)
                 location.save()
             created_locations[loc_data["name"]] = location
         self.stdout.write(self.style.SUCCESS('✅ Locations created/status updated'))
@@ -290,12 +333,12 @@ class Command(BaseCommand):
             created_services[service_data["name"]] = service
         
         # Link services to locations
-        created_services["Swedish Massage"].locations.set([created_locations["Room 1"]])
-        created_services["Deep Tissue Massage"].locations.set([created_locations["Room 1"]])
-        created_services["Hot Stone Massage"].locations.set([created_locations["Room 3"]])
-        created_services["Sauna Session"].locations.set([created_locations["Room 2"]])
-        created_services["Facial Treatment"].locations.set([created_locations["Room 3"]])
-        created_services["Personal Training"].locations.set([created_locations["Room 4"]])
+        created_services["Swedish Massage"].locations.set([created_locations["Room 1 (Vacant Clean)"]])
+        created_services["Deep Tissue Massage"].locations.set([created_locations["Room 1 (Vacant Clean)"]])
+        created_services["Hot Stone Massage"].locations.set([created_locations["Room 3 (Occupied Clean)"]])
+        created_services["Sauna Session"].locations.set([created_locations["Room 2 (Vacant Dirty)"]])
+        created_services["Facial Treatment"].locations.set([created_locations["Room 3 (Occupied Clean)"]])
+        created_services["Personal Training"].locations.set([created_locations["Room 4 (Occupied Dirty)"]])
         
         self.stdout.write(self.style.SUCCESS('✅ Services created'))
 
@@ -342,7 +385,7 @@ class Command(BaseCommand):
                 "email": "john.doe@example.com",
                 "phone": "+1234567890",
                 "gender": male_gender,
-                "membership_tier": gold_tier,
+                "membership_tier": created_tiers["gold"],
                 "loyalty_points": 1500,
                 "total_spent": 2500.00,
                 "visit_count": 15,
@@ -357,7 +400,7 @@ class Command(BaseCommand):
                 "email": "jane.smith@example.com",
                 "phone": "+1234567891",
                 "gender": female_gender,
-                "membership_tier": silver_tier,
+                "membership_tier": created_tiers["silver"],
                 "loyalty_points": 800,
                 "total_spent": 1200.00,
                 "visit_count": 8,
@@ -372,7 +415,7 @@ class Command(BaseCommand):
                 "email": "mike.johnson@example.com",
                 "phone": "+1234567892",
                 "gender": male_gender,
-                "membership_tier": bronze_tier,
+                "membership_tier": created_tiers["bronze"],
                 "loyalty_points": 200,
                 "total_spent": 300.00,
                 "visit_count": 3,
@@ -872,6 +915,7 @@ class Command(BaseCommand):
         self.stdout.write(f'  📅 Reservations: {Reservation.objects.count()}')
         self.stdout.write(f'  💰 Invoices: {Invoice.objects.count()}')
         self.stdout.write(f'  💳 Payment Methods: {PaymentMethod.objects.count()}')
+        self.stdout.write(f'  🚦 Location Statuses: {LocationStatus.objects.count()}')
         self.stdout.write(f'  🎫 Discount Types: {DiscountType.objects.count()}')
         self.stdout.write(f'  🎟️ Applied Discounts: {ReservationDiscount.objects.count()}')
         
