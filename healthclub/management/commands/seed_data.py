@@ -10,7 +10,7 @@ from services.models import Service, ServiceCategory
 from reservations.models import Location, Reservation, ReservationService
 from employees.models import Employee, ReservationEmployeeAssignment
 from pos.models import Invoice, Payment, PaymentMethod
-from config.models import MembershipTier, GenderOption
+from config.models import MembershipTier, GenderOption, CommissionType, TrainingType, ProductType, BusinessRule, NotificationTemplate
 from discounts.models import DiscountType, ReservationDiscount
 
 
@@ -53,19 +53,115 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'⚠️ Discount setup failed: {e}'))
 
+        # [NEW] Ensure demo/test CommissionTypes exist
+        self.stdout.write('🔌 Seeding commission types for tests...')
+        commission_types = [
+            ('service', 'Service Commission', 'Commission for providing services', 10.0),
+            ('sales', 'Sales Commission', 'Commission for sales activities', 5.0),
+            ('bonus', 'Performance Bonus', 'Performance-based bonus', 0.0),
+            ('overtime', 'Overtime Pay', 'Additional pay for overtime work', 0.0)
+        ]
+        for code, name, desc, rate in commission_types:
+            obj, _ = CommissionType.objects.get_or_create(
+                code=code, defaults={
+                    'name': name, 'description': desc, 'default_rate': rate,
+                    'sort_order': len(commission_types) - commission_types.index((code, name, desc, rate))
+                })
+        self.stdout.write(self.style.SUCCESS(f'✓ Commission types: {[ct[0] for ct in commission_types]}'))
+
+        # [NEW] Ensure demo/test TrainingTypes exist
+        self.stdout.write('🏋️ Seeding training types for tests...')
+        training_types = [
+            ('certification', 'Certification', 'Professional certification training', True, 7),
+            ('workshop', 'Workshop', 'Hands-on workshop training', False, 1),
+            ('seminar', 'Educational seminar', 'Educational seminar', False, 1),
+            ('online', 'Online Course', 'Online learning course', False, 3),
+            ('on_job', 'On-the-Job Training', 'Practical on-site training', False, 5)
+        ]
+        for code, name, desc, requires_cert, duration in training_types:
+            obj, _ = TrainingType.objects.get_or_create(
+                code=code, defaults={
+                    'name': name, 'description': desc,
+                    'requires_certification': requires_cert, 'default_duration_days': duration,
+                    'sort_order': len(training_types) - training_types.index((code, name, desc, requires_cert, duration))
+                })
+        self.stdout.write(self.style.SUCCESS(f'✓ Training types: {[tt[0] for tt in training_types]}'))
+
+        # [NEW] Ensure demo/test ProductTypes exist
+        self.stdout.write('📦 Seeding product types for tests...')
+        product_types = [
+            ('retail', 'Retail Product', 'Products sold to customers', True, 8.5),
+            ('supply', 'Supply Item', 'Internal supply items', True, 0.0),
+            ('equipment', 'Equipment', 'Equipment and tools', True, 0.0),
+            ('consumable', 'Consumable', 'Consumable items', True, 0.0)
+        ]
+        for code, name, desc, tracking, tax in product_types:
+            obj, _ = ProductType.objects.get_or_create(
+                code=code, defaults={
+                    'name': name, 'description': desc,
+                    'requires_tracking': tracking, 'default_tax_rate': tax,
+                    'sort_order': len(product_types) - product_types.index((code, name, desc, tracking, tax))
+                })
+        self.stdout.write(self.style.SUCCESS(f'✓ Product types: {[pt[0] for pt in product_types]}'))
+
+        # [NEW] Ensure Business Rules exist for tests
+        self.stdout.write('🔏 Seeding business rules for demo...')
+        business_rules = [
+            ('booking', 'Min Advance Booking Hours', 'min_advance_booking_hours', '24', 'integer'),
+            ('booking', 'Max Advance Booking Days', 'max_advance_booking_days', '30', 'integer'),
+            ('cancellation', 'Cancellation Deadline Hours', 'cancellation_deadline_hours', '24', 'integer'),
+            ('cancellation', 'Cancellation Fee Percentage', 'cancellation_fee_percentage', '10.0', 'decimal'),
+            ('cancellation', 'No Show Fee Percentage', 'no_show_fee_percentage', '50.0', 'decimal'),
+            ('payment', 'Default Payment Terms', 'default_payment_terms', 'Due on receipt', 'string'),
+            ('payment', 'Late Fee Amount', 'late_fee_amount', '25.00', 'decimal'),
+            ('loyalty', 'Points Per Dollar', 'points_per_dollar', '1', 'integer'),
+            ('loyalty', 'Points Expiry Days', 'points_expiry_days', '365', 'integer'),
+            ('inventory', 'Low Stock Alert Threshold', 'low_stock_threshold', '10', 'integer'),
+            ('inventory', 'Auto Reorder Enabled', 'auto_reorder_enabled', 'false', 'boolean'),
+            ('employee', 'Default Commission Rate', 'default_commission_rate', '10.0', 'decimal'),
+            ('employee', 'Performance Review Frequency Days', 'review_frequency_days', '90', 'integer'),
+        ]
+        for cat, name, key, value, dtype in business_rules:
+            obj, _ = BusinessRule.objects.get_or_create(
+                key=key, defaults={
+                    'category': cat, 'name': name, 'value': value, 'data_type': dtype
+                })
+        self.stdout.write(self.style.SUCCESS(f'✓ Business rules rostered.'))
+
+        # [NEW] Ensure demo Notification Templates exist
+        self.stdout.write('📩 Seeding notification templates for demo...')
+        notification_templates = [
+            ('email', 'Appointment Confirmation', 'Appointment Confirmed - {{service_name}}', 'Dear {{guest_name}},\n\nYour appointment for {{service_name}} has been confirmed for {{appointment_date}} at {{appointment_time}}.\n\nLocation: {{location_name}}\nTherapist: {{therapist_name}}\n\nPlease arrive 15 minutes early.\n\nThank you!', ['guest_name', 'service_name', 'appointment_date', 'appointment_time', 'location_name', 'therapist_name']),
+            ('email', 'Appointment Reminder', 'Reminder: Your appointment tomorrow', 'Dear {{guest_name}},\n\nThis is a reminder that you have an appointment tomorrow:\n\nService: {{service_name}}\nTime: {{appointment_time}}\nLocation: {{location_name}}\n\nTherapist: {{therapist_name}}\n\nWe look forward to seeing you!\n\nThank you!', ['guest_name', 'service_name', 'appointment_time', 'location_name', 'therapist_name']),
+            ('sms', 'Appointment Confirmation', '', 'Hi {{guest_name}}, your {{service_name}} appointment is confirmed for {{appointment_date}} at {{appointment_time}}. Location: {{location_name}}', ['guest_name', 'service_name', 'appointment_date', 'appointment_time', 'location_name']),
+            ('email', 'Loyalty Points Earned', 'You earned loyalty points!', 'Dear {{guest_name}},\n\nYou have earned {{points_earned}} loyalty points from your recent visit!\n\nTotal points: {{total_points}}\n\nThank you for your continued patronage!', ['guest_name', 'points_earned', 'total_points'])
+        ]
+        for ttype, name, subj, body, vars in notification_templates:
+            obj, _ = NotificationTemplate.objects.get_or_create(
+                name=name, template_type=ttype,
+                defaults={'subject': subj, 'body': body, 'variables': vars})
+        self.stdout.write(self.style.SUCCESS(f'✓ Notification templates seeded.'))
+
         # 2. Get or create membership tiers
         self.stdout.write('👑 Creating membership tiers...')
-        try:
-            bronze_tier = MembershipTier.objects.get(name='bronze')
-            silver_tier = MembershipTier.objects.get(name='silver')
-            gold_tier = MembershipTier.objects.get(name='gold')
-            self.stdout.write(self.style.SUCCESS('✅ Membership tiers found'))
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(f'⚠️ Membership tiers not found: {e}'))
-            # Create basic tiers if they don't exist
-            bronze_tier = MembershipTier.objects.create(name='bronze', display_name='Bronze', discount_percentage=0)
-            silver_tier = MembershipTier.objects.create(name='silver', display_name='Silver', discount_percentage=5)
-            gold_tier = MembershipTier.objects.create(name='gold', display_name='Gold', discount_percentage=10)
+        membership_tiers = [
+            ('bronze', 'Bronze', 'Basic membership tier', 0, False, 0, 0, 1.0),
+            ('silver', 'Silver', 'Mid-tier membership with some benefits', 5, False, 1, 100, 1.2),
+            ('gold', 'Gold', 'Premium membership with priority booking', 10, True, 2, 500, 1.5),
+            ('platinum', 'Platinum', 'VIP membership with exclusive benefits', 15, True, 3, 1000, 2.0),
+            ('vip', 'VIP', 'Ultimate membership tier', 20, True, 5, 2000, 2.5)
+        ]
+        created_tiers = {}
+        for code, name, desc, discount, priority, free_services, min_spend, multiplier in membership_tiers:
+            mt, _ = MembershipTier.objects.get_or_create(
+                name=code, defaults={
+                    'display_name': name, 'description': desc, 'discount_percentage': discount,
+                    'priority_booking': priority, 'free_services_count': free_services,
+                    'min_spend_required': min_spend, 'points_multiplier': multiplier,
+                    'sort_order': len(membership_tiers) - membership_tiers.index((code, name, desc, discount, priority, free_services, min_spend, multiplier))
+                })
+            created_tiers[code] = mt
+        self.stdout.write(self.style.SUCCESS(f'✓ Membership tiers: {[t[0] for t in membership_tiers]}'))
 
         # 3. Get or create gender options
         self.stdout.write('⚧ Creating gender options...')
@@ -134,20 +230,25 @@ class Command(BaseCommand):
         # 5. Create locations
         self.stdout.write('🏢 Creating locations...')
         locations_data = [
-            {"name": "Room 1", "description": "Massage room", "capacity": 1},
-            {"name": "Room 2", "description": "Sauna room", "capacity": 2},
-            {"name": "Room 3", "description": "Spa treatment room", "capacity": 1},
-            {"name": "Room 4", "description": "Fitness room", "capacity": 10},
+            {"name": "Room 1", "description": "Massage room", "capacity": 1, "status": "available"},
+            {"name": "Room 2", "description": "Sauna room", "capacity": 2, "status": "available"},
+            {"name": "Room 3", "description": "Spa treatment room", "capacity": 1, "status": "cleaning"},
+            {"name": "Room 4", "description": "Fitness room", "capacity": 10, "status": "available"},
         ]
-        
         created_locations = {}
         for loc_data in locations_data:
             location, created = Location.objects.get_or_create(
                 name=loc_data["name"],
-                defaults=loc_data
+                defaults={k: v for k, v in loc_data.items() if k != 'name'}
             )
+            if not created:
+                # Optionally update status if you want to re-sync for test/dev
+                for k,v in loc_data.items():
+                    if k != 'name':
+                        setattr(location, k, v)
+                location.save()
             created_locations[loc_data["name"]] = location
-        self.stdout.write(self.style.SUCCESS('✅ Locations created'))
+        self.stdout.write(self.style.SUCCESS('✅ Locations created/status updated'))
 
         # 6. Create service categories and services
         self.stdout.write('💆 Creating services...')
