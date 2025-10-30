@@ -310,6 +310,16 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   const renderInvoiceContent = () => (
     <Box>
       <Box className="invoice-header" sx={{ position: 'relative' }}>
+        {onClose && !previewMode && (
+          <IconButton
+            aria-label="Close"
+            onClick={onClose}
+            className="no-print"
+            sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}
+          >
+            <Cancel />
+          </IconButton>
+        )}
         <Box className="invoice-logo" sx={{ mb: 3 }}>
           {/* (Optional) Logo or Business Name */}
           <Typography variant="h4" fontWeight={700} color="primary">{companyName}</Typography>
@@ -422,12 +432,7 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          {/* Only show the printable-invoice (invoice box) for preview */}
           <Box id="printable-invoice" ref={printRef} className="invoice-box print-template" sx={{ mx: 'auto' }}>
-            {/* duplicate the invoice rendering area here ONLY -- not full controls or quick actions */}
-            {/* ===== Invoice Header, Table, Totals, Notes, Payment Instructions etc go here ===== */}
-            {/* Existing invoice rendering logic, EXCLUDING the control, quick actions, etc */}
-            {/* Extract main invoice content into a renderInvoiceContent() helper if needed, to DRY it */}
             {renderInvoiceContent()}
           </Box>
         </DialogContent>
@@ -451,29 +456,13 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
       {/* Print-friendly styles */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #printable-invoice, #printable-invoice * {
-            visibility: visible;
-          }
-          #printable-invoice {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: white;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .print-only {
-            display: block !important;
-          }
+          body * { visibility: hidden; }
+          #printable-invoice, #printable-invoice * { visibility: visible; }
+          #printable-invoice { position: absolute; left: 0; top: 0; width: 100%; background: white; }
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
         }
-        .print-only {
-          display: none;
-        }
+        .print-only { display: none; }
       `}</style>
 
       {/* Action Bar - Hidden in print */}
@@ -579,36 +568,6 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
       {/* Printable Invoice Container */}
       <Box id="printable-invoice" ref={printRef} className="invoice-box print-template">
-        <Box className="invoice-header" sx={{ position: 'relative' }}>
-          <Box className="invoice-logo" sx={{ mb: 3 }}>
-            {/* (Optional) Logo or Business Name */}
-            <Typography variant="h4" fontWeight={700} color="primary">{companyName}</Typography>
-          </Box>
-          <Box className="invoice-header-details" sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Box>
-              <Typography variant="h6" fontWeight={600}>Invoice</Typography>
-              <Typography variant="body2" color="text.secondary">{invoice.invoice_number}</Typography>
-              <Typography variant="body2">Date: {formatDate(invoice.date)}</Typography>
-              <Typography variant="body2">Due Date: {formatDate(invoice.due_date)}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2">Bill to:</Typography>
-              <Typography fontWeight={700}>{invoice.guest_name}</Typography>
-              {invoice.guest_email && <Typography color="text.secondary">{invoice.guest_email}</Typography>}
-            </Box>
-          </Box>
-          <Divider sx={{ mb: 2 }} />
-          {onClose && (
-            <IconButton
-              aria-label="Close"
-              onClick={onClose}
-              className="no-print"
-              sx={{ position: 'absolute', top: 0, right: 0 }}
-            >
-              <Cancel />
-            </IconButton>
-          )}
-        </Box>
         {renderInvoiceContent()}
       </Box>
 
