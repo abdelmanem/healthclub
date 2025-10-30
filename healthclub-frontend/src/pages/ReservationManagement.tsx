@@ -37,7 +37,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { Add, Check, DirectionsRun, DoneAll, Logout, Edit, Cancel } from '@mui/icons-material';
-import { InvoiceDetails } from '../components/pos/InvoiceDetails';
+import InvoiceDetails from '../components/pos/InvoiceDetails';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';

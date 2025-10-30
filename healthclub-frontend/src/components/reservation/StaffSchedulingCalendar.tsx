@@ -60,7 +60,7 @@ import { useNavigate } from 'react-router-dom';
 import { guestsService } from '../../services/guests';
 import { reservationsService } from '../../services/reservations';
 import { EditGuestDialog } from '../guest/EditGuestDialog';
-import { InvoiceDetails } from '../pos/InvoiceDetails';
+import InvoiceDetails from '../pos/InvoiceDetails';
 import { ReservationDepositForm } from './ReservationDepositForm';
 import { RefundDialog } from './RefundDialog';
 

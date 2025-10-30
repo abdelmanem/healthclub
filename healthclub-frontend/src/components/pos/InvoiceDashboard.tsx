@@ -23,7 +23,7 @@ import {
 } from '@mui/icons-material';
 import { invoicesService, paymentsService, InvoiceSummary, PaymentSummary } from '../../services/invoices';
 import { InvoiceList } from './InvoiceList';
-import { InvoiceDetails } from './InvoiceDetails';
+import InvoiceDetails from './InvoiceDetails';
 import dayjs from 'dayjs';
 
 export const InvoiceDashboard: React.FC = () => {
@@ -288,9 +288,7 @@ export const InvoiceDashboard: React.FC = () => {
           <InvoiceDetails
             invoiceId={selectedInvoiceId}
             onClose={() => setSelectedInvoiceId(null)}
-            onPaymentProcessed={() => {
-              loadSummaries();
-            }}
+            onPaymentProcessed={() => { loadSummaries(); }}
           />
         )}
       </Dialog>

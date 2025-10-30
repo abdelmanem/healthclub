@@ -3,7 +3,7 @@
  */
 
 export { InvoiceList } from './InvoiceList';
-export { InvoiceDetails } from './InvoiceDetails';
+export { default as InvoiceDetails } from './InvoiceDetails';
 export { PaymentDialog } from './PaymentDialog';
 export { RefundDialog } from './RefundDialog';
 export { InvoiceDashboard } from './InvoiceDashboard';
