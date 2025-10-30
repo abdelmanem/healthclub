@@ -58,6 +58,10 @@ import {
 } from '@mui/icons-material';
 import './InvoiceDetails.css';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
+import { PaymentDialog } from './PaymentDialog';
+import { RefundDialog } from './RefundDialog';
+import { DepositDialog } from './DepositDialog';
+import { InvoiceDiscountDialog } from './InvoiceDiscountDialog';
 
 // Mock data for demonstration
 const mockInvoice = {
@@ -140,7 +144,7 @@ type InvoiceDetailsProps = {
 const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onPaymentProcessed }) => {
   const { getConfigValue } = useConfiguration();
   // If this is a demo, keep the old mockInvoice; in prod/fetch real data by invoiceId
-  const [invoice, setInvoice] = useState<any>(mockInvoice);
+  const [invoice, setInvoice] = useState<any>(invoiceId ? null : mockInvoice);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('payments');
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -149,15 +153,25 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   const [emailSent, setEmailSent] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (invoiceId) {
-      // Example: Fetch the invoice from api (async function)
-      // setLoading(true);
-      // invoiceService.get(invoiceId).then(data => {...}).finally(() => setLoading(false));
-      // For now, just mock:
-      setInvoice({ ...mockInvoice, id: invoiceId, invoice_number: `INV-${invoiceId}` });
+      setLoading(true);
+      import('../../services/invoices').then(({ invoicesService }) => {
+        invoicesService.retrieve(invoiceId)
+          .then((data: any) => { if(isMounted) setInvoice(data); })
+          .catch(() => { if(isMounted) setInvoice(null); })
+          .finally(() => { if(isMounted) setLoading(false); });
+      });
+    } else {
+      setInvoice(mockInvoice);
     }
+    return () => { isMounted = false; };
   }, [invoiceId]);
 
   const getStatusIcon = (status: string): React.ReactElement => {
@@ -194,33 +208,45 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   };
 
   const handlePrint = () => {
-    window.print();
+    if (printRef.current) {
+      printRef.current.scrollIntoView({ block: 'start' });
+    }
+    setTimeout(() => {
+      window.print();
+    }, 50);
   };
 
   const handleDownloadPDF = async () => {
-    const element = document.getElementById('printable-invoice');
+    const element = printRef.current || document.getElementById('printable-invoice');
     if (!(window as any).html2pdf || !element) {
       alert('PDF generation library html2pdf.js is not loaded.');
       return;
     }
-    // Clone the element to avoid modifying the original
     const clonedElement = element.cloneNode(true) as HTMLElement;
     clonedElement.classList.add('pdf-generating');
-    // Remove all .no-print elements from the clone
     clonedElement.querySelectorAll('.no-print').forEach(el => el.remove());
-    // Show all .print-only elements
     clonedElement.querySelectorAll('.print-only').forEach(el => {
       (el as HTMLElement).style.display = 'block';
     });
-    // Append off-screen
-    clonedElement.style.position = 'absolute';
-    clonedElement.style.left = '-9999px';
-    clonedElement.style.top = '0';
+    clonedElement.style.position = 'static';
+    clonedElement.style.width = '800px';
+    clonedElement.style.background = '#fff';
+    clonedElement.style.maxWidth = '800px';
+    clonedElement.style.margin = '0 auto';
     document.body.appendChild(clonedElement);
-    // PDF options
+
+    try {
+      if ((document as any).fonts && (document as any).fonts.ready) {
+        await (document as any).fonts.ready;
+      }
+      const images = Array.from(clonedElement.querySelectorAll('img')) as HTMLImageElement[];
+      await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = () => res(null); img.onerror = () => res(null); })));
+      await new Promise(res => setTimeout(res, 50));
+    } catch {}
+
     const opt = {
-      margin: [10, 10, 10, 10], // top, left, bottom, right in mm
-      filename: `${invoice.invoice_number || 'Invoice'}.pdf`,
+      margin: [10, 10, 10, 10],
+      filename: `${invoice?.invoice_number || 'Invoice'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: 2,
@@ -240,7 +266,8 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
         after: '.page-break-after',
         avoid: ['.no-break', '.MuiCard-root', '.invoice-totals', 'tr']
       }
-    };
+    } as const;
+
     try {
       await (window as any).html2pdf().set(opt).from(clonedElement).save();
     } catch (err) {
@@ -269,6 +296,7 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   };
 
   const calculateDaysUntilDue = (): number => {
+    if (!invoice || !invoice.due_date) return 0;
     const today = new Date();
     const dueDate = new Date(invoice.due_date);
     const diffTime = dueDate.getTime() - today.getTime();
@@ -278,6 +306,145 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
   const daysUntilDue = calculateDaysUntilDue();
   const companyName = getConfigValue('company_name', 'Health Club Management System');
+
+  const renderInvoiceContent = () => (
+    <Box>
+      <Box className="invoice-header" sx={{ position: 'relative' }}>
+        <Box className="invoice-logo" sx={{ mb: 3 }}>
+          {/* (Optional) Logo or Business Name */}
+          <Typography variant="h4" fontWeight={700} color="primary">{companyName}</Typography>
+        </Box>
+        <Box className="invoice-header-details" sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={600}>Invoice</Typography>
+            <Typography variant="body2" color="text.secondary">{invoice.invoice_number}</Typography>
+            <Typography variant="body2">Date: {formatDate(invoice.date)}</Typography>
+            <Typography variant="body2">Due Date: {formatDate(invoice.due_date)}</Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2">Bill to:</Typography>
+            <Typography fontWeight={700}>{invoice.guest_name}</Typography>
+            {invoice.guest_email && <Typography color="text.secondary">{invoice.guest_email}</Typography>}
+          </Box>
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+      </Box>
+      <TableContainer className="invoice-table print-table">
+        <Table>
+          <TableHead>
+            <TableRow sx={{ background: '#f5f5f5' }}>
+              <TableCell>Description</TableCell>
+              <TableCell align="center">Qty</TableCell>
+              <TableCell align="right">Unit Price</TableCell>
+              <TableCell align="right">Tax</TableCell>
+              <TableCell align="right">Total</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {invoice.items.map((item: any) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.product_name} {item.notes && <span style={{ color: '#888' }}>({item.notes})</span>}</TableCell>
+                <TableCell align="center">{item.quantity}</TableCell>
+                <TableCell align="right">{formatCurrency(item.unit_price)}</TableCell>
+                <TableCell align="right">{parseFloat(item.tax_rate).toFixed(1)}%</TableCell>
+                <TableCell align="right">{formatCurrency(item.line_total)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <Box className="invoice-totals print-totals" sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ minWidth: 280 }}>
+          <Stack spacing={1.5}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2">Subtotal:</Typography>
+              <Typography variant="body2" fontWeight={600}>{formatCurrency(invoice.subtotal)}</Typography>
+            </Box>
+            {parseFloat(invoice.service_charge) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2">Service Charge:</Typography>
+                <Typography variant="body2">{formatCurrency(invoice.service_charge)}</Typography>
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2">Tax:</Typography>
+              <Typography variant="body2">{formatCurrency(invoice.tax)}</Typography>
+            </Box>
+            {parseFloat(invoice.discount) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="success.main">Discount:</Typography>
+                <Typography variant="body2" color="success.main">-{formatCurrency(invoice.discount)}</Typography>
+              </Box>
+            )}
+            <Divider sx={{ my: 1 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body1" fontWeight={700}>Total:</Typography>
+              <Typography variant="body1" fontWeight={700}>{formatCurrency(invoice.total)}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">Amount Paid:</Typography>
+              <Typography variant="body2" color="success.main">{formatCurrency(invoice.amount_paid)}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" fontWeight={700} color="primary.main">Balance Due:</Typography>
+              <Typography variant="body2" fontWeight={700} color="primary.main">{formatCurrency(invoice.balance_due)}</Typography>
+            </Box>
+          </Stack>
+        </Box>
+      </Box>
+      {invoice.notes && (
+        <Box className="invoice-notes print-notes" sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" fontWeight={700}>Notes:</Typography>
+          <Typography variant="body2">{invoice.notes}</Typography>
+        </Box>
+      )}
+      <Box sx={{ mt: 4, textAlign: 'center', fontSize: 12, color: '#888' }}>
+        Payment due within 30 days. Please include invoice number with payment.<br />Thank you for your business.
+      </Box>
+    </Box>
+  );
+
+  if (loading || !invoice) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (previewMode) {
+    return (
+      <Dialog open onClose={() => setPreviewMode(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          Invoice Preview
+          <IconButton aria-label="Close" onClick={() => setPreviewMode(false)}>
+            <Cancel />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {/* Only show the printable-invoice (invoice box) for preview */}
+          <Box id="printable-invoice" ref={printRef} className="invoice-box print-template" sx={{ mx: 'auto' }}>
+            {/* duplicate the invoice rendering area here ONLY -- not full controls or quick actions */}
+            {/* ===== Invoice Header, Table, Totals, Notes, Payment Instructions etc go here ===== */}
+            {/* Existing invoice rendering logic, EXCLUDING the control, quick actions, etc */}
+            {/* Extract main invoice content into a renderInvoiceContent() helper if needed, to DRY it */}
+            {renderInvoiceContent()}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreviewMode(false)} variant="outlined" fullWidth>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  // Can safely access invoice fields below
+  const invoiceCanPay = ['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status) && parseFloat(invoice.balance_due) > 0 && !['paid', 'refunded', 'cancelled'].includes(invoice.status);
+  const invoiceCanRefund = (['paid', 'partial', 'overdue', 'cancelled'].includes(invoice.status)) && parseFloat(invoice.amount_paid) > 0;
+  const invoiceCanDeposit = ['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status);
+  const invoiceCanDiscount = invoiceCanPay && parseFloat(invoice.discount) === 0;
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
@@ -412,7 +579,7 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
       {/* Printable Invoice Container */}
       <Box id="printable-invoice" ref={printRef} className="invoice-box print-template">
-        <Box className="invoice-header">
+        <Box className="invoice-header" sx={{ position: 'relative' }}>
           <Box className="invoice-logo" sx={{ mb: 3 }}>
             {/* (Optional) Logo or Business Name */}
             <Typography variant="h4" fontWeight={700} color="primary">{companyName}</Typography>
@@ -431,79 +598,18 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
             </Box>
           </Box>
           <Divider sx={{ mb: 2 }} />
+          {onClose && (
+            <IconButton
+              aria-label="Close"
+              onClick={onClose}
+              className="no-print"
+              sx={{ position: 'absolute', top: 0, right: 0 }}
+            >
+              <Cancel />
+            </IconButton>
+          )}
         </Box>
-        <TableContainer className="invoice-table print-table">
-          <Table>
-            <TableHead>
-              <TableRow sx={{ background: '#f5f5f5' }}>
-                <TableCell>Description</TableCell>
-                <TableCell align="center">Qty</TableCell>
-                <TableCell align="right">Unit Price</TableCell>
-                <TableCell align="right">Tax</TableCell>
-                <TableCell align="right">Total</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {invoice.items.map((item: any) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.product_name} {item.notes && <span style={{ color: '#888' }}>({item.notes})</span>}</TableCell>
-                  <TableCell align="center">{item.quantity}</TableCell>
-                  <TableCell align="right">{formatCurrency(item.unit_price)}</TableCell>
-                  <TableCell align="right">{parseFloat(item.tax_rate).toFixed(1)}%</TableCell>
-                  <TableCell align="right">{formatCurrency(item.line_total)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <Box className="invoice-totals print-totals" sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Box sx={{ minWidth: 280 }}>
-            <Stack spacing={1.5}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2">Subtotal:</Typography>
-                <Typography variant="body2" fontWeight={600}>{formatCurrency(invoice.subtotal)}</Typography>
-              </Box>
-              {parseFloat(invoice.service_charge) > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Service Charge:</Typography>
-                  <Typography variant="body2">{formatCurrency(invoice.service_charge)}</Typography>
-                </Box>
-              )}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2">Tax:</Typography>
-                <Typography variant="body2">{formatCurrency(invoice.tax)}</Typography>
-              </Box>
-              {parseFloat(invoice.discount) > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="success.main">Discount:</Typography>
-                  <Typography variant="body2" color="success.main">-{formatCurrency(invoice.discount)}</Typography>
-                </Box>
-              )}
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body1" fontWeight={700}>Total:</Typography>
-                <Typography variant="body1" fontWeight={700}>{formatCurrency(invoice.total)}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2" color="text.secondary">Amount Paid:</Typography>
-                <Typography variant="body2" color="success.main">{formatCurrency(invoice.amount_paid)}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2" fontWeight={700} color="primary.main">Balance Due:</Typography>
-                <Typography variant="body2" fontWeight={700} color="primary.main">{formatCurrency(invoice.balance_due)}</Typography>
-              </Box>
-            </Stack>
-          </Box>
-        </Box>
-        {invoice.notes && (
-          <Box className="invoice-notes print-notes" sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" fontWeight={700}>Notes:</Typography>
-            <Typography variant="body2">{invoice.notes}</Typography>
-          </Box>
-        )}
-        <Box sx={{ mt: 4, textAlign: 'center', fontSize: 12, color: '#888' }}>
-          Payment due within 30 days. Please include invoice number with payment.<br />Thank you for your business.
-        </Box>
+        {renderInvoiceContent()}
       </Box>
 
       {/* Tabs - Hidden in print */}
@@ -558,7 +664,7 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                               <PaymentIcon color="success" />
                               <Box>
-                                <Typography variant="body1" fontWeight={600}>
+                                <Typography variant="body1" fontWeight={600} component="span">
                                   {payment.payment_method_name || payment.method}
                                 </Typography>
                                 {payment.payment_type === 'deposit_application' && (
@@ -572,14 +678,14 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                                 )}
                               </Box>
                             </Box>
-                            <Typography variant="h6" fontWeight={700} color="success.main">
+                            <Typography variant="h6" fontWeight={700} color="success.main" component="span">
                               +{formatCurrency(payment.amount)}
                             </Typography>
                           </Box>
                         }
                         secondary={
                           <Box sx={{ mt: 1 }}>
-                            <Typography variant="caption" display="block" color="text.secondary">
+                            <Typography variant="caption" display="block" color="text.secondary" component="span">
                               {new Date(payment.payment_date).toLocaleString('en-US', {
                                 year: 'numeric',
                                 month: 'short',
@@ -589,12 +695,12 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                               })}
                             </Typography>
                             {payment.reference_number && (
-                              <Typography variant="caption" display="block" color="text.secondary">
+                              <Typography variant="caption" display="block" color="text.secondary" component="span">
                                 Reference: {payment.reference_number}
                               </Typography>
                             )}
                             {payment.transaction_id && (
-                              <Typography variant="caption" display="block" color="text.secondary">
+                              <Typography variant="caption" display="block" color="text.secondary" component="span">
                                 Transaction: {payment.transaction_id}
                               </Typography>
                             )}
@@ -610,6 +716,8 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                             )}
                           </Box>
                         }
+                        primaryTypographyProps={{ component: 'span' }}
+                        secondaryTypographyProps={{ component: 'span' }}
                       />
                     </ListItem>
                   ))}
@@ -646,6 +754,8 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                 size="large"
                 startIcon={<PaymentIcon />}
                 sx={{ minWidth: 180 }}
+                disabled={!invoiceCanPay}
+                onClick={() => setPaymentDialogOpen(true)}
               >
                 Process Payment
               </Button>
@@ -654,6 +764,8 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                 color="warning"
                 startIcon={<Undo />}
                 sx={{ minWidth: 180 }}
+                disabled={!invoiceCanRefund}
+                onClick={() => setRefundDialogOpen(true)}
               >
                 Process Refund
               </Button>
@@ -662,15 +774,18 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                 color="info"
                 startIcon={<AccountBalance />}
                 sx={{ minWidth: 180 }}
+                disabled={!invoiceCanDeposit}
+                onClick={() => setDepositDialogOpen(true)}
               >
                 Collect Deposit
               </Button>
-              {parseFloat(invoice.discount) === 0 && (
+              {invoiceCanDiscount && (
                 <Button
                   variant="outlined"
                   color="secondary"
                   startIcon={<LocalOffer />}
                   sx={{ minWidth: 180 }}
+                  onClick={() => setDiscountDialogOpen(true)}
                 >
                   Apply Discount
                 </Button>
@@ -746,6 +861,31 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
           </DialogActions>
         )}
       </Dialog>
+
+      <PaymentDialog
+        open={paymentDialogOpen}
+        onClose={() => setPaymentDialogOpen(false)}
+        invoice={invoice}
+        onPaymentProcessed={onPaymentProcessed || (() => {})}
+      />
+      <RefundDialog
+        open={refundDialogOpen}
+        onClose={() => setRefundDialogOpen(false)}
+        invoice={invoice}
+        onRefundProcessed={() => setRefundDialogOpen(false)}
+      />
+      <DepositDialog
+        open={depositDialogOpen}
+        onClose={() => setDepositDialogOpen(false)}
+        invoice={invoice}
+        onDepositCollected={() => setDepositDialogOpen(false)}
+      />
+      <InvoiceDiscountDialog
+        open={discountDialogOpen}
+        onClose={() => setDiscountDialogOpen(false)}
+        invoiceTotal={parseFloat(invoice.total)}
+        onSubmit={() => setDiscountDialogOpen(false)}
+      />
     </Box>
   );
 }

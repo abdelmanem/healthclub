@@ -25,11 +25,21 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>Health Club</title>
+    <style>
+      /* Ensure colors render in print across browsers */
+      @media print {
+        html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+      // Expose a flag for app code to know when html2pdf is ready
+      window.__HTML2PDF_READY__ = typeof html2pdf !== 'undefined';
+    </script>
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

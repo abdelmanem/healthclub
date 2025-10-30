@@ -27,13 +27,13 @@
     visibility: visible !important;
   }
   #printable-invoice {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    position: static !important;
+    width: auto !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    background: #fff !important;
+    page-break-inside: avoid !important;
   }
   .MuiBox-root,
   .MuiCard-root,
@@ -61,7 +61,6 @@
   .MuiTabs-root,
   .MuiTab-root,
   .MuiChip-root:not(.print-chip),
-  .MuiDialog-root,
   .MuiAppBar-root,
   .MuiDrawer-root,
   .MuiFab-root {
