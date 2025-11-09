@@ -94,6 +94,8 @@ export const ConfigurationManager: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [shiftConfigurations, setShiftConfigurations] = useState<any[]>([]);
   const [editingShift, setEditingShift] = useState<any | null>(null);
+  const [systemConfigsList, setSystemConfigsList] = useState<any[]>([]);
+  const [businessRulesList, setBusinessRulesList] = useState<any[]>([]);
   
   const { showSuccess, showError, showWarning, showInfo } = useToast();
   
@@ -168,6 +170,9 @@ export const ConfigurationManager: React.FC = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // Import configService once at the top
+      const { configService } = await import('../../services/config');
+
       // Shift configurations save
       if (tabValue === SHIFT_TAB_INDEX && editingShift) {
         if (editingShift.id) {
@@ -182,15 +187,105 @@ export const ConfigurationManager: React.FC = () => {
         return;
       }
 
-      // Other types (placeholder)
-      console.log('Save configuration:', editingItem);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      showSuccess('Configuration saved successfully!');
-      setIsDialogOpen(false);
-      setEditingItem(null);
-      await refreshConfigurations();
-    } catch (error) {
-      showError('Failed to save configuration');
+      // System Configurations (tab 0)
+      if (tabValue === 0 && editingItem) {
+        if (editingItem.id) {
+          // Update existing configuration
+          await configService.updateSystemConfig(editingItem.id, editingItem);
+          showSuccess('System configuration updated successfully!');
+        } else {
+          // Create new configuration
+          await configService.createSystemConfig(editingItem);
+          showSuccess('System configuration created successfully!');
+        }
+        setIsDialogOpen(false);
+        setEditingItem(null);
+        await refreshConfigurations();
+        // Reload full configs list
+        const configs = await configService.getSystemConfigs().catch(() => []);
+        setSystemConfigsList(configs);
+        return;
+      }
+
+      // Membership Tiers (tab 1)
+      if (tabValue === 1 && editingItem) {
+        if (editingItem.id) {
+          await configService.updateMembershipTier(editingItem.id, editingItem);
+          showSuccess('Membership tier updated successfully!');
+        } else {
+          await configService.createMembershipTier(editingItem);
+          showSuccess('Membership tier created successfully!');
+        }
+        setIsDialogOpen(false);
+        setEditingItem(null);
+        await refreshConfigurations();
+        return;
+      }
+
+      // Gender Options (tab 2)
+      if (tabValue === 2 && editingItem) {
+        if (editingItem.id) {
+          await configService.updateGenderOption(editingItem.id, editingItem);
+          showSuccess('Gender option updated successfully!');
+        } else {
+          await configService.createGenderOption(editingItem);
+          showSuccess('Gender option created successfully!');
+        }
+        setIsDialogOpen(false);
+        setEditingItem(null);
+        await refreshConfigurations();
+        return;
+      }
+
+      // Business Rules (tab 3)
+      if (tabValue === 3 && editingItem) {
+        if (editingItem.id) {
+          await configService.updateBusinessRule(editingItem.id, editingItem);
+          showSuccess('Business rule updated successfully!');
+        } else {
+          await configService.createBusinessRule(editingItem);
+          showSuccess('Business rule created successfully!');
+        }
+        setIsDialogOpen(false);
+        setEditingItem(null);
+        await refreshConfigurations();
+        // Reload full business rules list
+        const rules = await configService.getBusinessRules().catch(() => []);
+        setBusinessRulesList(rules);
+        return;
+      }
+
+      // Other types - use generic API calls
+      if (editingItem) {
+        const endpointMap: { [key: number]: string } = {
+          4: '/config/commission-types/',
+          5: '/config/training-types/',
+          6: '/config/product-types/',
+          7: '/config/notification-templates/',
+        };
+        
+        const endpoint = endpointMap[tabValue];
+        if (endpoint) {
+          if (editingItem.id) {
+            await api.patch(`${endpoint}${editingItem.id}/`, editingItem);
+            showSuccess('Configuration updated successfully!');
+          } else {
+            await api.post(endpoint, editingItem);
+            showSuccess('Configuration created successfully!');
+          }
+          setIsDialogOpen(false);
+          setEditingItem(null);
+          await refreshConfigurations();
+          return;
+        }
+      }
+
+      // Fallback for unsupported types
+      console.warn('Save not implemented for tab:', tabValue);
+      showWarning('Save functionality not yet implemented for this configuration type');
+    } catch (error: any) {
+      console.error('Failed to save configuration:', error);
+      showError(error?.response?.data?.error || 'Failed to save configuration');
     } finally {
       setLoading(false);
     }
@@ -265,7 +360,22 @@ export const ConfigurationManager: React.FC = () => {
     }
   };
 
+  // Load full system configs and business rules lists for editing
   useEffect(() => {
+    const loadFullConfigs = async () => {
+      try {
+        const { configService } = await import('../../services/config');
+        const [configs, rules] = await Promise.all([
+          configService.getSystemConfigs().catch(() => []),
+          configService.getBusinessRules().catch(() => [])
+        ]);
+        setSystemConfigsList(configs);
+        setBusinessRulesList(rules);
+      } catch (error) {
+        console.error('Failed to load full configs:', error);
+      }
+    };
+    loadFullConfigs();
     loadShiftConfigurations();
   }, []);
 
@@ -357,10 +467,14 @@ export const ConfigurationManager: React.FC = () => {
   // Get data for current tab
   const getDataForTab = (tabIndex: number): any[] => {
     switch (tabIndex) {
-      case 0: return Object.entries(systemConfigs).map(([key, value]) => ({ key, value }));
+      case 0: 
+        // Return full system config objects with IDs for editing
+        return systemConfigsList;
       case 1: return membershipTiers;
       case 2: return genderOptions;
-      case 3: return Object.entries(businessRules).map(([key, value]) => ({ key, value, name: key }));
+      case 3: 
+        // Return full business rules objects with IDs for editing
+        return businessRulesList;
       case 4: return commissionTypes;
       case 5: return trainingTypes;
       case 6: return productTypes;

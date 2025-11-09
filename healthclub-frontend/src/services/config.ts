@@ -122,6 +122,11 @@ export const configService = {
     return response.data;
   },
 
+  createGenderOption: async (data: Omit<GenderOption, 'id'>): Promise<GenderOption> => {
+    const response = await api.post('/config/gender-options/', data);
+    return response.data;
+  },
+
   // Business Rules
   getBusinessRules: async (): Promise<BusinessRule[]> => {
     try {
