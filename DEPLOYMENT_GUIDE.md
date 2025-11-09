@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers deploying the Health Club POS system to production, including:
+This guide covers deploying the Health Club system to production, including:
 - Backend (Django + Gunicorn + Nginx)
 - Frontend (React + Nginx)
 - Database setup
