@@ -23,29 +23,73 @@
     color-adjust: exact !important;
   }
 
-  /* Hide everything by default - but using display instead of visibility */
-  body > *:not(#printable-invoice) {
-    display: none !important;
+  /* Hide everything by default using visibility (more reliable than display) */
+  body * {
+    visibility: hidden !important;
   }
 
-  /* Show only printable invoice */
+  /* Show only printable invoice and ALL its descendants */
   #printable-invoice {
     display: block !important;
-    position: static !important;
+    visibility: visible !important;
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    max-width: 800px !important;
-    margin: 0 auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 20px !important;
     background: white !important;
     page-break-inside: avoid !important;
     box-shadow: none !important;
   }
   
+  /* Ensure ALL descendants of printable invoice are visible */
   #printable-invoice,
-  #printable-invoice * {
+  #printable-invoice *,
+  #printable-invoice *::before,
+  #printable-invoice *::after {
     visibility: visible !important;
+  }
+  
+  /* Force proper display types for Material-UI components - but preserve flex */
+  /* Don't force block on all Box - let them keep their original display */
+  
+  #printable-invoice .MuiTypography-root {
+    display: block !important;
+  }
+  
+  #printable-invoice table,
+  #printable-invoice .MuiTable-root {
+    display: table !important;
+  }
+  
+  #printable-invoice .MuiTableRow-root {
+    display: table-row !important;
+  }
+  
+  #printable-invoice .MuiTableCell-root {
+    display: table-cell !important;
+  }
+  
+  /* Handle flex containers properly - preserve flex display */
+  #printable-invoice .MuiStack-root {
+    display: flex !important;
+  }
+  
+  #printable-invoice .invoice-header-details {
+    display: flex !important;
+  }
+  
+  #printable-invoice .invoice-totals {
+    display: flex !important;
+  }
+  
+  /* Ensure Box with flex display is preserved - check both inline style and class */
+  #printable-invoice .MuiBox-root[style*="display: flex"],
+  #printable-invoice .MuiBox-root[style*="display:flex"],
+  #printable-invoice .invoice-totals .MuiBox-root {
+    display: flex !important;
   }
 
   /* Hide non-printable elements */
@@ -73,16 +117,24 @@
     visibility: visible !important;
   }
 
-  /* Reset Material-UI components for print */
-  .MuiBox-root,
-  .MuiCard-root,
-  .MuiCardContent-root,
-  .MuiPaper-root {
+  /* Reset Material-UI components for print - preserve original display */
+  #printable-invoice .MuiBox-root {
     box-shadow: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
     background: transparent !important;
     page-break-inside: avoid !important;
+  }
+
+  #printable-invoice .MuiCard-root,
+  #printable-invoice .MuiCardContent-root,
+  #printable-invoice .MuiPaper-root {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    page-break-inside: avoid !important;
+    display: block !important;
   }
 
   .MuiCard-root {
@@ -180,6 +232,38 @@
   .invoice-header-details {
     margin-bottom: 20px !important;
     display: flex !important;
+    visibility: visible !important;
+  }
+
+  /* Ensure all invoice content is visible with correct display types */
+  #printable-invoice .invoice-header {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .invoice-logo {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .invoice-header-details {
+    display: flex !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .invoice-table {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .invoice-totals {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .invoice-notes {
+    display: block !important;
+    visibility: visible !important;
   }
 
   .invoice-table {
@@ -221,21 +305,55 @@
   }
 
   /* Stack layout for print */
-  .MuiStack-root {
+  #printable-invoice .MuiStack-root {
     display: block !important;
   }
 
-  /* Remove animations and transitions */
-  * {
+  /* Remove animations and transitions - but only for printable content */
+  #printable-invoice * {
     animation: none !important;
     transition: none !important;
-    transform: none !important;
   }
 
-  /* Ensure proper spacing */
-  .MuiBox-root {
-    margin: 0 !important;
-    padding: 0 !important;
+  /* Ensure proper spacing - but preserve display for flex containers */
+  #printable-invoice .MuiBox-root[style*="display: flex"],
+  #printable-invoice .MuiBox-root[style*="display:flex"] {
+    display: flex !important;
+  }
+
+  /* Typography must be visible - preserve inline/block as needed */
+  #printable-invoice .MuiTypography-root {
+    visibility: visible !important;
+  }
+  
+  /* Typography that should be block */
+  #printable-invoice .MuiTypography-h1,
+  #printable-invoice .MuiTypography-h2,
+  #printable-invoice .MuiTypography-h3,
+  #printable-invoice .MuiTypography-h4,
+  #printable-invoice .MuiTypography-h5,
+  #printable-invoice .MuiTypography-h6,
+  #printable-invoice .MuiTypography-body1,
+  #printable-invoice .MuiTypography-body2 {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Tables must be visible */
+  #printable-invoice table,
+  #printable-invoice .MuiTable-root {
+    display: table !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .MuiTableRow-root {
+    display: table-row !important;
+    visibility: visible !important;
+  }
+
+  #printable-invoice .MuiTableCell-root {
+    display: table-cell !important;
+    visibility: visible !important;
   }
 
   /* List styling */

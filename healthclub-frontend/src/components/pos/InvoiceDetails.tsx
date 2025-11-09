@@ -325,16 +325,31 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
         (el as HTMLElement).style.display = 'block';
       });
 
-      // Set up clone for PDF generation
-      clonedElement.style.position = 'absolute';
+      // Set up clone for PDF generation - make it visible but off-screen
+      clonedElement.style.position = 'fixed';
       clonedElement.style.left = '-9999px';
       clonedElement.style.top = '0';
       clonedElement.style.width = '800px';
       clonedElement.style.background = '#fff';
       clonedElement.style.maxWidth = '800px';
-      clonedElement.style.margin = '0 auto';
+      clonedElement.style.margin = '0';
       clonedElement.style.padding = '20px';
+      clonedElement.style.zIndex = '9999';
+      clonedElement.style.visibility = 'visible';
+      clonedElement.style.display = 'block';
+      clonedElement.style.opacity = '1';
+      // Ensure all children are visible
+      const allChildren = clonedElement.querySelectorAll('*');
+      allChildren.forEach((child: any) => {
+        if (child.style) {
+          child.style.visibility = 'visible';
+          child.style.opacity = '1';
+        }
+      });
       document.body.appendChild(clonedElement);
+      
+      // Force a reflow to ensure rendering
+      void clonedElement.offsetHeight;
 
       try {
         // Wait for fonts and images to load
