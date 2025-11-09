@@ -35,6 +35,8 @@ import {
   DialogActions,
   TextField,
   Skeleton,
+  Snackbar,
+  Backdrop,
 } from '@mui/material';
 import {
   Payment as PaymentIcon,
@@ -55,13 +57,16 @@ import {
   Receipt,
   History,
   AttachMoney,
+  Error as ErrorIcon,
 } from '@mui/icons-material';
+import html2pdf from 'html2pdf.js';
 import './InvoiceDetails.css';
 import { useConfiguration } from '../../contexts/ConfigurationContext';
 import { PaymentDialog } from './PaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { DepositDialog } from './DepositDialog';
 import { InvoiceDiscountDialog } from './InvoiceDiscountDialog';
+import { invoicesService } from '../../services/invoices';
 
 // Mock data for demonstration
 const mockInvoice = {
@@ -170,6 +175,10 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [printLoading, setPrintLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -250,73 +259,153 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
     });
   };
 
-  const handlePrint = () => {
-    if (printRef.current) {
-      printRef.current.scrollIntoView({ block: 'start' });
-    }
-    setTimeout(() => {
+  const handlePrint = async () => {
+    if (!invoice) return;
+    
+    setPrintLoading(true);
+    try {
+      if (printRef.current) {
+        printRef.current.scrollIntoView({ block: 'start' });
+      }
+      // Wait a bit for any animations or layout updates
+      await new Promise(resolve => setTimeout(resolve, 100));
       window.print();
-    }, 50);
+      setSuccessMessage('Print dialog opened');
+    } catch (error) {
+      console.error('Print error:', error);
+      setErrorMessage('Failed to open print dialog. Please try again.');
+    } finally {
+      setPrintLoading(false);
+    }
   };
 
   const handleDownloadPDF = async () => {
-    const element = printRef.current || document.getElementById('printable-invoice');
-    if (!(window as any).html2pdf || !element) {
-      alert('PDF generation library html2pdf.js is not loaded.');
+    if (!invoice || !invoiceId) {
+      setErrorMessage('Invoice data not available');
       return;
     }
-    const clonedElement = element.cloneNode(true) as HTMLElement;
-    clonedElement.classList.add('pdf-generating');
-    clonedElement.querySelectorAll('.no-print').forEach(el => el.remove());
-    clonedElement.querySelectorAll('.print-only').forEach(el => {
-      (el as HTMLElement).style.display = 'block';
-    });
-    clonedElement.style.position = 'static';
-    clonedElement.style.width = '800px';
-    clonedElement.style.background = '#fff';
-    clonedElement.style.maxWidth = '800px';
-    clonedElement.style.margin = '0 auto';
-    document.body.appendChild(clonedElement);
+
+    setPdfLoading(true);
+    setErrorMessage(null);
 
     try {
-      if ((document as any).fonts && (document as any).fonts.ready) {
-        await (document as any).fonts.ready;
+      // First, try to use backend PDF generation (more reliable)
+      try {
+        const pdfBlob = await invoicesService.downloadPDF(invoiceId);
+        const url = window.URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${invoice.invoice_number || 'Invoice'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        setSuccessMessage('PDF downloaded successfully');
+        return;
+      } catch (backendError) {
+        console.warn('Backend PDF generation failed, falling back to client-side:', backendError);
+        // Fall through to client-side generation
       }
-      const images = Array.from(clonedElement.querySelectorAll('img')) as HTMLImageElement[];
-      await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = () => res(null); img.onerror = () => res(null); })));
-      await new Promise(res => setTimeout(res, 50));
-    } catch {}
 
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: `${invoice?.invoice_number || 'Invoice'}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        letterRendering: true,
-        logging: false,
-        scrollY: 0,
-        scrollX: 0,
-        windowWidth: 800,
-        windowHeight: clonedElement.scrollHeight + 100,
-        removeContainer: false,
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-      pagebreak: {
-        mode: ['avoid-all', 'css', 'legacy'],
-        before: '.page-break-before',
-        after: '.page-break-after',
-        avoid: ['.no-break', '.MuiCard-root', '.invoice-totals', 'tr']
+      // Fallback to client-side PDF generation
+      const element = printRef.current || document.getElementById('printable-invoice');
+      if (!element) {
+        throw new Error('Printable invoice element not found');
       }
-    } as const;
 
-    try {
-      await (window as any).html2pdf().set(opt).from(clonedElement).save();
-    } catch (err) {
-      alert('Failed to generate PDF.');
+      // Clone element for PDF generation
+      const clonedElement = element.cloneNode(true) as HTMLElement;
+      clonedElement.classList.add('pdf-generating');
+      
+      // Remove no-print elements
+      clonedElement.querySelectorAll('.no-print').forEach(el => el.remove());
+      
+      // Show print-only elements
+      clonedElement.querySelectorAll('.print-only').forEach(el => {
+        (el as HTMLElement).style.display = 'block';
+      });
+
+      // Set up clone for PDF generation
+      clonedElement.style.position = 'absolute';
+      clonedElement.style.left = '-9999px';
+      clonedElement.style.top = '0';
+      clonedElement.style.width = '800px';
+      clonedElement.style.background = '#fff';
+      clonedElement.style.maxWidth = '800px';
+      clonedElement.style.margin = '0 auto';
+      clonedElement.style.padding = '20px';
+      document.body.appendChild(clonedElement);
+
+      try {
+        // Wait for fonts and images to load
+        if ((document as any).fonts && (document as any).fonts.ready) {
+          await (document as any).fonts.ready;
+        }
+        
+        const images = Array.from(clonedElement.querySelectorAll('img')) as HTMLImageElement[];
+        await Promise.all(
+          images.map(img => 
+            img.complete 
+              ? Promise.resolve() 
+              : new Promise<void>((resolve, reject) => {
+                  const timeout = setTimeout(() => resolve(), 5000); // 5s timeout
+                  img.onload = () => { clearTimeout(timeout); resolve(); };
+                  img.onerror = () => { clearTimeout(timeout); resolve(); }; // Continue even if image fails
+                })
+          )
+        );
+        
+        // Small delay to ensure rendering is complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (loadError) {
+        console.warn('Error loading fonts/images:', loadError);
+        // Continue with PDF generation even if some resources fail to load
+      }
+
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: `${invoice.invoice_number || 'Invoice'}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+          scrollY: 0,
+          scrollX: 0,
+          windowWidth: 800,
+          windowHeight: clonedElement.scrollHeight + 100,
+          removeContainer: false,
+          backgroundColor: '#ffffff',
+        },
+        jsPDF: { 
+          unit: 'mm' as const, 
+          format: 'a4' as const, 
+          orientation: 'portrait' as const, 
+          compress: true 
+        },
+        pagebreak: {
+          mode: ['avoid-all', 'css', 'legacy'] as any,
+          before: '.page-break-before',
+          after: '.page-break-after',
+          avoid: ['.no-break', '.MuiCard-root', '.invoice-totals', 'tr'] as any
+        }
+      };
+
+      await html2pdf().set(opt).from(clonedElement).save();
+      setSuccessMessage('PDF generated and downloaded successfully');
+    } catch (err: any) {
+      console.error('PDF generation error:', err);
+      setErrorMessage(
+        err?.message || 'Failed to generate PDF. Please try again or use the Print option.'
+      );
     } finally {
-      document.body.removeChild(clonedElement);
+      // Cleanup cloned element
+      const clonedElement = document.querySelector('.pdf-generating');
+      if (clonedElement && clonedElement.parentNode) {
+        clonedElement.parentNode.removeChild(clonedElement);
+      }
+      setPdfLoading(false);
     }
   };
 
@@ -483,21 +572,62 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
   if (previewMode) {
     return (
-      <Dialog open onClose={() => setPreviewMode(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          Invoice Preview
+      <Dialog 
+        open 
+        onClose={() => setPreviewMode(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+          }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Visibility />
+            <Typography variant="h6">Invoice Preview</Typography>
+          </Box>
           <IconButton aria-label="Close" onClick={() => setPreviewMode(false)}>
             <Cancel />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
-          <Box id="printable-invoice" ref={printRef} className="invoice-box print-template" sx={{ mx: 'auto' }}>
-            {renderInvoiceContent()}
+        <DialogContent sx={{ p: 3, backgroundColor: '#f5f5f5' }}>
+          <Box 
+            sx={{ 
+              backgroundColor: 'white',
+              p: 4,
+              borderRadius: 2,
+              boxShadow: 3,
+              maxWidth: '800px',
+              mx: 'auto',
+            }}
+          >
+            <Box id="printable-invoice" ref={printRef} className="invoice-box print-template">
+              {renderInvoiceContent()}
+            </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPreviewMode(false)} variant="outlined" fullWidth>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider', gap: 1 }}>
+          <Button onClick={() => setPreviewMode(false)} variant="outlined">
             Close
+          </Button>
+          <Button 
+            onClick={handlePrint} 
+            variant="contained" 
+            startIcon={printLoading ? <CircularProgress size={16} /> : <Print />}
+            disabled={printLoading}
+          >
+            {printLoading ? 'Printing...' : 'Print'}
+          </Button>
+          <Button 
+            onClick={handleDownloadPDF} 
+            variant="contained" 
+            color="primary"
+            startIcon={pdfLoading ? <CircularProgress size={16} /> : <Download />}
+            disabled={pdfLoading}
+          >
+            {pdfLoading ? 'Generating...' : 'Download PDF'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -516,17 +646,6 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
-      {/* Print-friendly styles */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #printable-invoice, #printable-invoice * { visibility: visible; }
-          #printable-invoice { position: absolute; left: 0; top: 0; width: 100%; background: white; }
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-        }
-        .print-only { display: none; }
-      `}</style>
 
       {/* Action Bar - Hidden in print */}
       <Card sx={{ mb: 3 }} className="no-print">
@@ -582,20 +701,22 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
               <Tooltip title="Print Invoice">
                 <Button
                   variant="outlined"
-                  startIcon={<Print />}
+                  startIcon={printLoading ? <CircularProgress size={16} /> : <Print />}
                   onClick={handlePrint}
+                  disabled={printLoading}
                 >
-                  Print
+                  {printLoading ? 'Printing...' : 'Print'}
                 </Button>
               </Tooltip>
               
               <Tooltip title="Download as PDF">
                 <Button
                   variant="outlined"
-                  startIcon={<Download />}
+                  startIcon={pdfLoading ? <CircularProgress size={16} /> : <Download />}
                   onClick={handleDownloadPDF}
+                  disabled={pdfLoading}
                 >
-                  PDF
+                  {pdfLoading ? 'Generating...' : 'PDF'}
                 </Button>
               </Tooltip>
 
@@ -619,9 +740,14 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
           <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
           Copy Invoice Link
         </MenuItem>
-        <MenuItem onClick={() => { handleDownloadPDF(); setMenuAnchor(null); }}>
-          <ListItemIcon><Download fontSize="small" /></ListItemIcon>
-          Download PDF
+        <MenuItem 
+          onClick={() => { handleDownloadPDF(); setMenuAnchor(null); }}
+          disabled={pdfLoading}
+        >
+          <ListItemIcon>
+            {pdfLoading ? <CircularProgress size={16} /> : <Download fontSize="small" />}
+          </ListItemIcon>
+          {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
         </MenuItem>
         <MenuItem onClick={() => setMenuAnchor(null)}>
           <ListItemIcon><Share fontSize="small" /></ListItemIcon>
@@ -902,6 +1028,53 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
         invoiceTotal={parseFloat(invoice.total)}
         onSubmit={async () => { await refreshInvoice(); setDiscountDialogOpen(false); }}
       />
+
+      {/* Loading Backdrop for PDF Generation */}
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+        open={pdfLoading}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <CircularProgress color="inherit" />
+          <Typography variant="h6">Generating PDF...</Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8 }}>
+            Please wait while we create your invoice PDF
+          </Typography>
+        </Box>
+      </Backdrop>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!errorMessage}
+        autoHideDuration={6000}
+        onClose={() => setErrorMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setErrorMessage(null)} 
+          severity="error" 
+          sx={{ width: '100%' }}
+          icon={<ErrorIcon />}
+        >
+          {errorMessage}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSuccessMessage(null)} 
+          severity="success" 
+          sx={{ width: '100%' }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

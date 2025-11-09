@@ -1,8 +1,15 @@
 /* ============================================
    PRINT & PDF FIX - Complete Solution
+   Improved for cross-browser compatibility
    ============================================ */
 
 @media print {
+  /* Reset body and html for printing */
+  @page {
+    size: A4 portrait;
+    margin: 15mm 10mm;
+  }
+
   html, body {
     width: 100% !important;
     height: auto !important;
@@ -10,31 +17,62 @@
     padding: 0 !important;
     overflow: visible !important;
     background: white !important;
+    /* Ensure colors print correctly across browsers */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  * {
-    position: static !important;
-    transform: none !important;
-    overflow: visible !important;
-    float: none !important;
-    box-shadow: none !important;
-  }
+
+  /* Hide everything by default */
   body * {
     visibility: hidden !important;
   }
-  #printable-invoice, #printable-invoice * {
+
+  /* Show only printable invoice */
+  #printable-invoice,
+  #printable-invoice * {
     visibility: visible !important;
   }
+
   #printable-invoice {
-    position: static !important;
-    width: auto !important;
-    max-width: 800px !important;
-    margin: 0 auto !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 0 !important;
-    background: #fff !important;
+    background: white !important;
     page-break-inside: avoid !important;
+    box-shadow: none !important;
   }
+
+  /* Hide non-printable elements */
+  .no-print,
+  .no-print *,
+  button:not(.print-button),
+  .MuiButton-root:not(.print-button),
+  .MuiIconButton-root,
+  .MuiTabs-root,
+  .MuiTab-root,
+  .MuiChip-root:not(.print-chip),
+  .MuiAppBar-root,
+  .MuiDrawer-root,
+  .MuiFab-root,
+  .MuiDialog-root,
+  .MuiBackdrop-root,
+  .MuiSnackbar-root {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Reset Material-UI components for print */
   .MuiBox-root,
   .MuiCard-root,
   .MuiCardContent-root,
@@ -42,73 +80,162 @@
     box-shadow: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
+    background: transparent !important;
+    page-break-inside: avoid !important;
   }
+
   .MuiCard-root {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    border: none !important;
   }
-  .MuiTableRow-root {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
+
   .MuiCardContent-root {
     padding: 12px !important;
   }
-  .no-print,
-  button,
-  .MuiButton-root,
-  .MuiIconButton-root,
-  .MuiTabs-root,
-  .MuiTab-root,
-  .MuiChip-root:not(.print-chip),
-  .MuiAppBar-root,
-  .MuiDrawer-root,
-  .MuiFab-root {
-    display: none !important;
-  }
+
+  /* Table styling for print */
   table {
     width: 100% !important;
     border-collapse: collapse !important;
+    page-break-inside: auto !important;
   }
-  th, td {
-    padding: 8px !important;
+
+  .MuiTable-root {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  .MuiTableRow-root {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  th, td,
+  .MuiTableCell-root {
+    padding: 8px 10px !important;
     font-size: 11px !important;
     border: 1px solid #ddd !important;
+    background: white !important;
   }
-  th {
+
+  th,
+  .MuiTableCell-head {
     background: #f5f5f5 !important;
     font-weight: 600 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  h1, h2, h3, h4, h5, h6 {
+
+  /* Typography for print */
+  h1, h2, h3, h4, h5, h6,
+  .MuiTypography-h1,
+  .MuiTypography-h2,
+  .MuiTypography-h3,
+  .MuiTypography-h4,
+  .MuiTypography-h5,
+  .MuiTypography-h6 {
     page-break-after: avoid !important;
     break-after: avoid !important;
+    margin-top: 0 !important;
   }
-  p {
+
+  p,
+  .MuiTypography-body1,
+  .MuiTypography-body2 {
     orphans: 3 !important;
     widows: 3 !important;
+    page-break-inside: avoid !important;
   }
+
+  /* Grid system for print */
   .MuiGrid-container {
     display: block !important;
+    width: 100% !important;
   }
+
   .MuiGrid-item {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
     flex-basis: 100% !important;
+    margin: 0 !important;
   }
+
+  /* Invoice-specific styling */
   .invoice-header {
     margin-bottom: 20px !important;
+    page-break-after: avoid !important;
   }
+
+  .invoice-logo {
+    margin-bottom: 15px !important;
+  }
+
+  .invoice-header-details {
+    margin-bottom: 20px !important;
+  }
+
+  .invoice-table {
+    margin: 15px 0 !important;
+    page-break-inside: auto !important;
+  }
+
   .invoice-totals {
     margin-top: 20px !important;
+    margin-bottom: 20px !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background: #fafafa !important;
+    padding: 12px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  @page {
-    size: A4 portrait;
-    margin: 15mm 10mm;
+
+  .invoice-notes {
+    margin-top: 20px !important;
+    page-break-inside: avoid !important;
+    padding: 12px !important;
+    background: #fafafa !important;
+    border-left: 4px solid #2196f3 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .print-only {
+
+  /* Ensure dividers print */
+  .MuiDivider-root {
+    border-color: #ddd !important;
+    margin: 10px 0 !important;
+  }
+
+  /* Stack layout for print */
+  .MuiStack-root {
     display: block !important;
+  }
+
+  /* Remove animations and transitions */
+  * {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  /* Ensure proper spacing */
+  .MuiBox-root {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* List styling */
+  .MuiList-root {
+    padding: 0 !important;
+  }
+
+  .MuiListItem-root {
+    padding: 8px 0 !important;
+    page-break-inside: avoid !important;
   }
 }
 
@@ -191,29 +318,53 @@
   border-radius: 4px;
 }
 
-/* PDF Generation: */
+/* PDF Generation: Improved styling */
 .pdf-generating {
   position: absolute !important;
-  left: 0 !important;
+  left: -9999px !important;
   top: 0 !important;
-  width: 210mm !important;
-  max-width: 210mm !important;
-  margin: 0 !important;
-  padding: 15mm !important;
+  width: 800px !important;
+  max-width: 800px !important;
+  margin: 0 auto !important;
+  padding: 20px !important;
   background: white !important;
   box-shadow: none !important;
   border: none !important;
   transform: scale(1) !important;
+  z-index: -1 !important;
 }
+
 .pdf-generating * {
   box-shadow: none !important;
   transform: none !important;
+  animation: none !important;
+  transition: none !important;
 }
+
 .pdf-generating .no-print {
   display: none !important;
+  visibility: hidden !important;
 }
+
 .pdf-generating .print-only {
   display: block !important;
+  visibility: visible !important;
+}
+
+.pdf-generating table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.pdf-generating th,
+.pdf-generating td {
+  padding: 8px 10px !important;
+  border: 1px solid #ddd !important;
+}
+
+.pdf-generating th {
+  background: #f5f5f5 !important;
+  font-weight: 600 !important;
 }
 
 @media screen and (max-width: 768px) {

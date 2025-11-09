@@ -587,6 +587,22 @@ export const invoicesService = {
     const response = await api.post(`/invoices/${invoiceId}/send-to-guest/`, data);
     return response.data;
   },
+
+  /**
+   * Download invoice as PDF
+   * 
+   * @param invoiceId - Invoice ID
+   * @returns PDF blob data
+   * 
+   * @example
+   * const pdfBlob = await invoicesService.downloadPDF(42);
+   */
+  async downloadPDF(invoiceId: number): Promise<Blob> {
+    const response = await api.get(`/invoices/${invoiceId}/pdf/`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 export const paymentsService = {

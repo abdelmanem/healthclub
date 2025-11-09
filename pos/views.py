@@ -901,6 +901,49 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'total_available_amount': str(total_available),
             'deposits': serializer.data
         })
+    
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """
+        Generate and download invoice as PDF
+        
+        Endpoint: GET /api/invoices/{id}/pdf/
+        
+        Returns:
+            PDF file as binary response with Content-Type: application/pdf
+        
+        Example:
+            GET /api/invoices/42/pdf/
+            Response: PDF binary data
+        """
+        from django.http import HttpResponse
+        from .pdf_generator import generate_invoice_pdf
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            invoice = self.get_object()
+            
+            # Generate PDF
+            pdf_buffer = generate_invoice_pdf(invoice)
+            
+            # Create response
+            response = HttpResponse(pdf_buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{invoice.invoice_number}.pdf"'
+            response['Content-Length'] = len(pdf_buffer.getvalue())
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error generating PDF for invoice {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {
+                    'error': 'Failed to generate PDF',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
