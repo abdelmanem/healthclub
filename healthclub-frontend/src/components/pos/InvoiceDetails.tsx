@@ -235,12 +235,31 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
   const formatCurrency = (amount: string | number) => {
     const numericAmount = parseFloat(String(amount));
-    if (Number.isNaN(numericAmount)) return currencyCode ? new Intl.NumberFormat(locale, { style: 'currency', currency: String(currencyCode), maximumFractionDigits: 2 }).format(0) : `${currencySymbol || ''}0.00`;
+    if (Number.isNaN(numericAmount)) {
+      // If we have a currency code, try to use it; otherwise use symbol
+      if (currencyCode) {
+        try {
+          return new Intl.NumberFormat(locale, { style: 'currency', currency: String(currencyCode), maximumFractionDigits: 2 }).format(0);
+        } catch {
+          // If currency code is invalid (like "LE"), use it as symbol
+          return `${currencyCode || currencySymbol || ''}0.00`;
+        }
+      }
+      return `${currencySymbol || ''}0.00`;
+    }
+    
     try {
       if (currencyCode) {
+        // Try to use currency code with Intl.NumberFormat
         return new Intl.NumberFormat(locale, { style: 'currency', currency: String(currencyCode), maximumFractionDigits: 2 }).format(numericAmount);
       }
-    } catch {}
+    } catch {
+      // If currency code is invalid (like "LE"), treat it as a symbol
+      const symbol = currencyCode || currencySymbol || '';
+      return `${symbol}${numericAmount.toFixed(2)}`;
+    }
+    
+    // Fallback to symbol
     return `${currencySymbol || ''}${numericAmount.toFixed(2)}`;
   };
 

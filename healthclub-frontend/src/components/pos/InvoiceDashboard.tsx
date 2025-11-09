@@ -24,6 +24,7 @@ import {
 import { invoicesService, paymentsService, InvoiceSummary, PaymentSummary } from '../../services/invoices';
 import { InvoiceList } from './InvoiceList';
 import InvoiceDetails from './InvoiceDetails';
+import { useCurrencyFormatter } from '../../utils/currency';
 import dayjs from 'dayjs';
 
 export const InvoiceDashboard: React.FC = () => {
@@ -35,6 +36,7 @@ export const InvoiceDashboard: React.FC = () => {
     start: dayjs().startOf('month').format('YYYY-MM-DD'),
     end: dayjs().endOf('month').format('YYYY-MM-DD'),
   });
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Load summaries
   const loadSummaries = async () => {
@@ -135,7 +137,7 @@ export const InvoiceDashboard: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Total Revenue"
-            value={`$${parseFloat(paymentSummary?.net_revenue || '0').toFixed(2)}`}
+            value={formatCurrency(paymentSummary?.net_revenue || '0')}
             icon={<AttachMoney />}
             color="success"
             subtitle={`${paymentSummary?.completed_count || 0} payments`}
@@ -146,7 +148,7 @@ export const InvoiceDashboard: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Total Invoiced"
-            value={`$${parseFloat(invoiceSummary?.total_amount || '0').toFixed(2)}`}
+            value={formatCurrency(invoiceSummary?.total_amount || '0')}
             icon={<Receipt />}
             color="primary"
             subtitle={`${invoiceSummary?.total_invoices || 0} invoices`}
@@ -157,7 +159,7 @@ export const InvoiceDashboard: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Outstanding"
-            value={`$${parseFloat(invoiceSummary?.total_outstanding || '0').toFixed(2)}`}
+            value={formatCurrency(invoiceSummary?.total_outstanding || '0')}
             icon={<TrendingUp />}
             color="warning"
             subtitle={`${invoiceSummary?.pending_count || 0} pending`}
@@ -258,7 +260,7 @@ export const InvoiceDashboard: React.FC = () => {
                         {method.replace('_', ' ')}
                       </Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        ${parseFloat(amount as string).toFixed(2)}
+                        {formatCurrency(amount as string)}
                       </Typography>
                     </Box>
                   ))}

@@ -33,6 +33,7 @@ import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '
 import { useSnackbar } from '../common/useSnackbar';
 import { handleApiError } from '../../utils/errorHandler';
 import { validateAmount, validateRequired } from '../../utils/validation';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 interface DepositDialogProps {
   open: boolean;
@@ -56,6 +57,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Load payment methods
   useEffect(() => {
@@ -156,11 +158,6 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({
     } finally {
       setProcessing(false);
     }
-  };
-
-  // Format currency
-  const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   return (

@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { invoicesService, Invoice } from '../../services/invoices';
 import { useSnackbar } from '../common/useSnackbar';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 interface RefundDialogProps {
   open: boolean;
@@ -54,6 +55,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -108,11 +110,6 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
     } finally {
       setProcessing(false);
     }
-  };
-
-  // Format currency
-  const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   // Calculate remaining paid amount after refund

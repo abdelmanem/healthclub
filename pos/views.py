@@ -20,6 +20,7 @@ from .serializers import (
     RefundModelSerializer,
     DepositSerializer,
 )
+from config.utils import format_currency
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -278,7 +279,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if amount > invoice.balance_due:
             return Response(
                 {
-                    'error': f'Payment amount ${amount} cannot exceed balance due of ${invoice.balance_due}',
+                    'error': f'Payment amount {format_currency(amount)} cannot exceed balance due of {format_currency(invoice.balance_due)}',
                     'balance_due': str(invoice.balance_due),
                     'amount_requested': str(amount)
                 },
@@ -324,7 +325,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'payment_status': payment.status,
             'loyalty_points_earned': int(payment.amount),
             'version': invoice.version,
-            'message': f'Payment of ${payment.amount} processed successfully'
+            'message': f'Payment of {format_currency(payment.amount)} processed successfully'
         })
     
     @action(detail=True, methods=['post'])
@@ -412,7 +413,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if amount > invoice.amount_paid:
             return Response(
                 {
-                    'error': f'Refund amount ${amount} cannot exceed amount paid ${invoice.amount_paid}',
+                    'error': f'Refund amount {format_currency(amount)} cannot exceed amount paid {format_currency(invoice.amount_paid)}',
                     'amount_paid': str(invoice.amount_paid),
                     'refund_requested': str(amount)
                 },
@@ -454,7 +455,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'invoice_status': invoice.status,
             'loyalty_points_deducted': int(amount),
             'version': invoice.version,
-            'message': f'Refund of ${amount} processed successfully'
+            'message': f'Refund of {format_currency(amount)} processed successfully'
         })
     
     @action(detail=True, methods=['post'])
@@ -637,7 +638,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         if discount_amount > invoice.subtotal:
             return Response(
-                {'error': f'Discount cannot exceed subtotal of ${invoice.subtotal}'},
+                {'error': f'Discount cannot exceed subtotal of {format_currency(invoice.subtotal)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -677,7 +678,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'discount_applied': str(discount_amount),
             'new_total': str(invoice.total),
             'new_balance_due': str(invoice.balance_due),
-            'message': f'Discount of ${discount_amount} applied'
+            'message': f'Discount of {format_currency(discount_amount)} applied'
         })
     
     @action(detail=True, methods=['get'])
@@ -1253,7 +1254,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
                 'amount_applied': str(payment.amount),
                 'deposit_remaining': str(deposit.remaining_amount),
                 'invoice_balance': str(invoice.balance_due),
-                'message': f'Deposit of ${payment.amount} applied successfully'
+                'message': f'Deposit of {format_currency(payment.amount)} applied successfully'
             })
         except ValidationError as e:
             return Response(

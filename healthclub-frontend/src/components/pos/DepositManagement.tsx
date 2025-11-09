@@ -41,6 +41,7 @@ import { depositsService, Deposit } from '../../services/invoices';
 import { useSnackbar } from '../common/useSnackbar';
 import { handleApiError } from '../../utils/errorHandler';
 import { validateAmount } from '../../utils/validation';
+import { useCurrencyFormatter } from '../../utils/currency';
 import dayjs from 'dayjs';
 
 interface DepositManagementProps {
@@ -71,6 +72,7 @@ export const DepositManagement: React.FC<DepositManagementProps> = ({
   const [error, setError] = useState('');
   
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Load available deposits
   const loadAvailableDeposits = async () => {
@@ -143,10 +145,6 @@ export const DepositManagement: React.FC<DepositManagementProps> = ({
     setError('');
   };
 
-  // Format currency
-  const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
-  };
 
   // Get status color
   const getStatusColor = (status: string) => {

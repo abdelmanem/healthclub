@@ -43,6 +43,7 @@ import { invoicesService, paymentMethodsService, Invoice, PaymentMethod } from '
 import { useSnackbar } from '../common/useSnackbar';
 import { handleApiError } from '../../utils/errorHandler';
 import { validateAmount, validateRequired } from '../../utils/validation';
+import { useCurrencyFormatter } from '../../utils/currency';
 import dayjs from 'dayjs';
 
 interface PaymentDialogProps {
@@ -69,6 +70,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'pay' | 'recent'>('pay');
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Load payment methods (with cleanup to avoid memory leaks)
   useEffect(() => {
@@ -190,10 +192,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     } finally {
       setProcessing(false);
     }
-  };
-
-  const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   const remainingBalance = parseFloat(invoice.balance_due) - parseFloat(amount || '0');

@@ -93,3 +93,70 @@ def get_gender_choices():
 def get_membership_tier_choices():
     """Get membership tier choices for forms"""
     return [(tier.name, tier.display_name) for tier in get_membership_tiers()]
+
+
+def format_currency(amount):
+    """
+    Format currency amount using system configuration
+    
+    Args:
+        amount: Decimal, float, or string amount to format
+        
+    Returns:
+        str: Formatted currency string with symbol
+    """
+    from decimal import Decimal
+    
+    # Get currency configuration - check multiple keys like frontend does
+    currency_code = (
+        get_config('system_currency_code') or
+        get_config('system_currency') or
+        get_config('default_currency') or
+        get_config('currency_code') or
+        get_config('currency') or
+        None
+    )
+    
+    currency_symbol = (
+        get_config('system_currency_symbol') or
+        get_config('currency_symbol') or
+        get_config('currency.sign') or
+        None
+    )
+    
+    # Convert amount to float
+    try:
+        if isinstance(amount, Decimal):
+            amount_float = float(amount)
+        elif isinstance(amount, str):
+            amount_float = float(amount)
+        else:
+            amount_float = float(amount)
+    except (ValueError, TypeError):
+        amount_float = 0.0
+    
+    # If currency_code is set but not a valid ISO code (like "LE"), use it as symbol
+    # Valid ISO currency codes are 3 letters (USD, EUR, EGP, LBP, etc.)
+    # If it's 2 letters or not standard, treat it as a symbol
+    final_symbol = currency_symbol
+    if currency_code:
+        # Check if it looks like a valid ISO currency code (3 uppercase letters)
+        if len(currency_code) == 3 and currency_code.isupper() and currency_code.isalpha():
+            # It's a valid ISO code, but we still need a symbol for display
+            # Try to get symbol from config, or use the code as fallback
+            if not final_symbol:
+                # For common currencies, map code to symbol
+                currency_map = {
+                    'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥',
+                    'EGP': 'E£', 'LBP': 'L£', 'SAR': '﷼', 'AED': 'د.إ',
+                }
+                final_symbol = currency_map.get(currency_code, currency_code)
+        else:
+            # Not a valid ISO code, treat it as a symbol (e.g., "LE", "L.E.")
+            final_symbol = currency_code
+    
+    # Final fallback
+    if not final_symbol:
+        final_symbol = '$'
+    
+    return f"{final_symbol}{amount_float:.2f}"

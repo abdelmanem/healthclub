@@ -1,6 +1,7 @@
 import React from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Box, Typography } from '@mui/material';
 import { discountService, DiscountType } from '../../services/discounts';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 interface InvoiceDiscountDialogProps {
   open: boolean;
@@ -15,6 +16,7 @@ export const InvoiceDiscountDialog: React.FC<InvoiceDiscountDialogProps> = ({ op
   const [selectedDiscountId, setSelectedDiscountId] = React.useState<number | ''>('' as any);
   const [reason, setReason] = React.useState('');
   const [calculatedAmount, setCalculatedAmount] = React.useState<string>('0.00');
+  const { formatCurrency } = useCurrencyFormatter();
 
   React.useEffect(() => {
     if (!open) return;
@@ -68,15 +70,15 @@ export const InvoiceDiscountDialog: React.FC<InvoiceDiscountDialogProps> = ({ op
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography color="text.secondary">Invoice Total</Typography>
-            <Typography>${invoiceTotal.toFixed(2)}</Typography>
+            <Typography>{formatCurrency(invoiceTotal)}</Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography color="text.secondary">Calculated Discount</Typography>
-            <Typography>- ${calculatedAmount}</Typography>
+            <Typography>-{formatCurrency(calculatedAmount)}</Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="subtitle1">New Total</Typography>
-            <Typography variant="subtitle1">${(invoiceTotal - Number(calculatedAmount)).toFixed(2)}</Typography>
+            <Typography variant="subtitle1">{formatCurrency(invoiceTotal - Number(calculatedAmount))}</Typography>
           </Box>
         </Box>
       </DialogContent>

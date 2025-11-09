@@ -702,8 +702,9 @@ class Payment(models.Model):
         
         if not self.pk and self.status == 'completed':
             if self.amount > self.invoice.balance_due:
+                from config.utils import format_currency
                 raise ValidationError(
-                    f"Payment amount ${self.amount} exceeds balance due ${self.invoice.balance_due}"
+                    f"Payment amount {format_currency(self.amount)} exceeds balance due {format_currency(self.invoice.balance_due)}"
                 )
     
     def save(self, *args, **kwargs):
@@ -739,7 +740,8 @@ class Payment(models.Model):
                     guest_locked.save(update_fields=['loyalty_points', 'total_spent'])
     
     def get_display_amount(self):
-        return f"${self.amount:.2f}"
+        from config.utils import format_currency
+        return format_currency(self.amount)
     
     def can_be_refunded(self):
         """
@@ -859,17 +861,19 @@ class Refund(models.Model):
         ]
     
     def __str__(self):
-        return f"Refund ${self.amount} for {self.invoice.invoice_number}"
+        from config.utils import format_currency
+        return f"Refund {format_currency(self.amount)} for {self.invoice.invoice_number}"
     
     def clean(self):
         if self.amount <= 0:
             raise ValidationError("Refund amount must be positive")
         
         if self.invoice:
+            from config.utils import format_currency
             total_refunded = self.invoice.get_total_refunded(exclude_id=self.pk)
             if (total_refunded + self.amount) > self.invoice.amount_paid:
                 raise ValidationError(
-                    f"Total refunds (${total_refunded + self.amount}) cannot exceed amount paid (${self.invoice.amount_paid})"
+                    f"Total refunds ({format_currency(total_refunded + self.amount)}) cannot exceed amount paid ({format_currency(self.invoice.amount_paid)})"
                 )
     
     def save(self, *args, **kwargs):
@@ -957,7 +961,8 @@ class GiftCard(models.Model):
         ordering = ['-issued_date']
 
     def __str__(self) -> str:
-        return f"Gift Card {self.code} - ${self.remaining_amount}"
+        from config.utils import format_currency
+        return f"Gift Card {self.code} - {format_currency(self.remaining_amount)}"
     
     def use_amount(self, amount):
         """Use a specific amount from the gift card"""
@@ -1201,7 +1206,8 @@ class Deposit(models.Model):
         ]
     
     def __str__(self):
-        return f"Deposit ${self.amount} for {self.guest}"
+        from config.utils import format_currency
+        return f"Deposit {format_currency(self.amount)} for {self.guest}"
     
     @property
     def remaining_amount(self):
@@ -1228,8 +1234,9 @@ class Deposit(models.Model):
             raise ValidationError("Application amount must be positive")
         
         if amount > self.remaining_amount:
+            from config.utils import format_currency
             raise ValidationError(
-                f"Cannot apply ${amount}, only ${self.remaining_amount} available"
+                f"Cannot apply {format_currency(amount)}, only {format_currency(self.remaining_amount)} available"
             )
         
         if amount > invoice.balance_due:

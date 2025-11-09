@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Card, CardContent, CircularProgress, List, ListItem, ListItemText, Typography } from '@mui/material';
 import dayjs from 'dayjs';
 import { invoicesService, RefundHistoryResponse } from '../../services/invoices';
-import { formatCurrency } from '../../utils/invoiceUtils';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 interface RefundsTabProps {
   invoiceId: number;
@@ -12,6 +12,7 @@ export const RefundsTab: React.FC<RefundsTabProps> = ({ invoiceId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<RefundHistoryResponse | null>(null);
+  const { formatCurrency } = useCurrencyFormatter();
 
   useEffect(() => {
     let mounted = true;

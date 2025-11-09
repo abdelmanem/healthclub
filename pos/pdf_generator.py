@@ -10,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from decimal import Decimal
+from config.utils import get_config
 
 
 def generate_invoice_pdf(invoice):
@@ -22,6 +23,55 @@ def generate_invoice_pdf(invoice):
     Returns:
         BytesIO: PDF file as bytes
     """
+    # Get currency configuration - check multiple keys like frontend does
+    currency_code = (
+        get_config('system_currency_code') or
+        get_config('system_currency') or
+        get_config('default_currency') or
+        get_config('currency_code') or
+        get_config('currency') or
+        None
+    )
+    
+    currency_symbol = (
+        get_config('system_currency_symbol') or
+        get_config('currency_symbol') or
+        get_config('currency.sign') or
+        None
+    )
+    
+    # If currency_code is set but not a valid ISO code (like "LE"), use it as symbol
+    # Valid ISO currency codes are 3 letters (USD, EUR, EGP, LBP, etc.)
+    # If it's 2 letters or not standard, treat it as a symbol
+    final_symbol = currency_symbol
+    if currency_code:
+        # Check if it looks like a valid ISO currency code (3 uppercase letters)
+        if len(currency_code) == 3 and currency_code.isupper() and currency_code.isalpha():
+            # It's a valid ISO code, but we still need a symbol for PDF
+            # Try to get symbol from config, or use the code as fallback
+            if not final_symbol:
+                # For common currencies, map code to symbol
+                currency_map = {
+                    'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥',
+                    'EGP': 'E£', 'LBP': 'L£', 'SAR': '﷼', 'AED': 'د.إ',
+                }
+                final_symbol = currency_map.get(currency_code, currency_code)
+        else:
+            # Not a valid ISO code, treat it as a symbol (e.g., "LE", "L.E.")
+            final_symbol = currency_code
+    
+    # Final fallback
+    if not final_symbol:
+        final_symbol = '$'
+    
+    def format_currency(amount):
+        """Format currency amount with configured symbol"""
+        try:
+            amount_float = float(amount)
+            return f"{final_symbol}{amount_float:.2f}"
+        except (ValueError, TypeError):
+            return f"{final_symbol}0.00"
+    
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm,
                            leftMargin=15*mm, rightMargin=15*mm)
@@ -152,9 +202,9 @@ def generate_invoice_pdf(invoice):
         items_data.append([
             description,
             str(item.quantity),
-            f"${float(item.unit_price):.2f}",
+            format_currency(item.unit_price),
             f"{float(item.tax_rate):.1f}%",
-            f"${line_total:.2f}",
+            format_currency(line_total),
         ])
     
     items_table = Table(items_data, colWidths=[80*mm, 20*mm, 25*mm, 20*mm, 25*mm])
@@ -251,19 +301,19 @@ def generate_invoice_pdf(invoice):
     totals_data = []
     totals_data.append([
         Paragraph('Subtotal:', totals_label_style), 
-        Paragraph(f"${float(invoice.subtotal):.2f}", totals_value_style)
+        Paragraph(format_currency(invoice.subtotal), totals_value_style)
     ])
     
     service_charge_val = Decimal(str(invoice.service_charge)) if invoice.service_charge else Decimal('0.00')
     if service_charge_val > 0:
         totals_data.append([
             Paragraph('Service Charge:', totals_label_style), 
-            Paragraph(f"${float(service_charge_val):.2f}", totals_value_style)
+            Paragraph(format_currency(service_charge_val), totals_value_style)
         ])
     
     totals_data.append([
         Paragraph('Tax:', totals_label_style), 
-        Paragraph(f"${float(invoice.tax):.2f}", totals_value_style)
+        Paragraph(format_currency(invoice.tax), totals_value_style)
     ])
     
     discount_val = Decimal(str(invoice.discount)) if invoice.discount else Decimal('0.00')
@@ -282,7 +332,7 @@ def generate_invoice_pdf(invoice):
         )
         totals_data.append([
             Paragraph('Discount:', discount_label_style), 
-            Paragraph(f"-${float(discount_val):.2f}", discount_value_style)
+            Paragraph(f"-{format_currency(discount_val)}", discount_value_style)
         ])
     
     # Spacer row
@@ -291,19 +341,19 @@ def generate_invoice_pdf(invoice):
     # Total - BOLD BLACK
     totals_data.append([
         Paragraph('Total:', total_label_bold),
-        Paragraph(f"${float(invoice.total):.2f}", total_value_bold)
+        Paragraph(format_currency(invoice.total), total_value_bold)
     ])
     
     # Amount Paid - BLACK LABEL, GREEN VALUE
     totals_data.append([
         Paragraph('Amount Paid:', amount_paid_label_style),
-        Paragraph(f"${float(invoice.amount_paid):.2f}", amount_paid_value_style)
+        Paragraph(format_currency(invoice.amount_paid), amount_paid_value_style)
     ])
     
     # Balance Due - BOLD BLUE
     totals_data.append([
         Paragraph('Balance Due:', balance_due_label_bold),
-        Paragraph(f"${float(invoice.balance_due):.2f}", balance_due_value_bold)
+        Paragraph(format_currency(invoice.balance_due), balance_due_value_bold)
     ])
     
     # Find row indices for lines

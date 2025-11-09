@@ -6,14 +6,23 @@ import dayjs from 'dayjs';
 import { Invoice, Payment } from '../services/invoices';
 
 /**
- * Format currency amount
+ * Format currency amount using system configuration
+ * This function requires config values to be passed, or use the hook version in components
+ * @deprecated Use useCurrencyFormatter hook in React components instead
+ * For backward compatibility, this falls back to USD if no config is provided
  */
-export const formatCurrency = (amount: string | number): string => {
-  const value = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(value);
+export const formatCurrency = (amount: string | number, currencyCode?: string, currencySymbol?: string, locale?: string): string => {
+  // If no config provided, use USD as fallback for backward compatibility
+  if (!currencyCode && !currencySymbol) {
+    const value = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat(locale || 'en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(value);
+  }
+  // Import dynamically to avoid circular dependency
+  const { formatCurrencyWithConfig } = require('./currency');
+  return formatCurrencyWithConfig(amount, currencyCode, currencySymbol, locale);
 };
 
 /**

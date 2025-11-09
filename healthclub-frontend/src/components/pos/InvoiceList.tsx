@@ -39,6 +39,7 @@ import {
   FilterList,
 } from '@mui/icons-material';
 import { invoicesService, InvoiceListItem } from '../../services/invoices';
+import { useCurrencyFormatter } from '../../utils/currency';
 import dayjs from 'dayjs';
 
 interface InvoiceListProps {
@@ -66,6 +67,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     start?: string;
     end?: string;
   }>({});
+  const { formatCurrency } = useCurrencyFormatter();
 
   // Load invoices
   const loadInvoices = async () => {
@@ -121,11 +123,6 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
       refunded: 'secondary',
     };
     return colors[status] || 'default';
-  };
-
-  // Format currency
-  const formatCurrency = (amount: string) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   // Calculate totals
