@@ -23,28 +23,29 @@
     color-adjust: exact !important;
   }
 
-  /* Hide everything by default */
-  body * {
-    visibility: hidden !important;
+  /* Hide everything by default - but using display instead of visibility */
+  body > *:not(#printable-invoice) {
+    display: none !important;
   }
 
   /* Show only printable invoice */
-  #printable-invoice,
-  #printable-invoice * {
-    visibility: visible !important;
-  }
-
   #printable-invoice {
-    position: absolute !important;
+    display: block !important;
+    position: static !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    padding: 20px !important;
     background: white !important;
     page-break-inside: avoid !important;
     box-shadow: none !important;
+  }
+  
+  #printable-invoice,
+  #printable-invoice * {
+    visibility: visible !important;
   }
 
   /* Hide non-printable elements */
@@ -168,19 +169,28 @@
   .invoice-header {
     margin-bottom: 20px !important;
     page-break-after: avoid !important;
+    display: block !important;
   }
 
   .invoice-logo {
     margin-bottom: 15px !important;
+    display: block !important;
   }
 
   .invoice-header-details {
     margin-bottom: 20px !important;
+    display: flex !important;
   }
 
   .invoice-table {
     margin: 15px 0 !important;
     page-break-inside: auto !important;
+    display: table !important;
+  }
+  
+  .invoice-box.print-template {
+    display: block !important;
+    padding: 20px !important;
   }
 
   .invoice-totals {

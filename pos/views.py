@@ -1265,6 +1265,35 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post'], url_path='apply-deposit')
     def apply_deposit_alias(self, request, pk=None):
         return self.apply_deposit(request, pk)
+    
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        """
+        Generate and download invoice as PDF
+        
+        GET /api/invoices/{id}/pdf/
+        
+        Returns: PDF file as binary response
+        """
+        from django.http import HttpResponse
+        from .pdf_generator import generate_invoice_pdf
+        
+        invoice = self.get_object()
+        
+        try:
+            # Generate PDF
+            pdf_buffer = generate_invoice_pdf(invoice)
+            
+            # Create response
+            response = HttpResponse(pdf_buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{invoice.invoice_number}.pdf"'
+            
+            return response
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to generate PDF: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
