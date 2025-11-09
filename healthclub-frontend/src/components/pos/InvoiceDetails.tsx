@@ -143,6 +143,19 @@ type InvoiceDetailsProps = {
 
 const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onPaymentProcessed }) => {
   const { getConfigValue } = useConfiguration();
+  const locale = getConfigValue('locale', 'en-US');
+  // Try multiple config keys to locate system currency settings
+  const currencyCode =
+    getConfigValue('system_currency_code',
+      getConfigValue('system_currency',
+        getConfigValue('default_currency',
+          getConfigValue('currency_code',
+            getConfigValue('currency', undefined)))));
+  const currencySymbol =
+    getConfigValue('system_currency_symbol',
+      getConfigValue('currency_symbol',
+        getConfigValue('currency.sign', '')));
+  const dateStyle = getConfigValue('date_style', undefined); // 'full' | 'long' | 'medium' | 'short'
   // If this is a demo, keep the old mockInvoice; in prod/fetch real data by invoiceId
   const [invoice, setInvoice] = useState<any>(invoiceId ? null : mockInvoice);
   const [loading, setLoading] = useState(false);
@@ -160,19 +173,35 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
 
   useEffect(() => {
     let isMounted = true;
-    if (invoiceId) {
+    const fetchInvoice = async () => {
+      if (!invoiceId) return;
       setLoading(true);
-      import('../../services/invoices').then(({ invoicesService }) => {
-        invoicesService.retrieve(invoiceId)
-          .then((data: any) => { if(isMounted) setInvoice(data); })
-          .catch(() => { if(isMounted) setInvoice(null); })
-          .finally(() => { if(isMounted) setLoading(false); });
-      });
+      try {
+        const { invoicesService } = await import('../../services/invoices');
+        const data: any = await invoicesService.retrieve(invoiceId);
+        if (isMounted) setInvoice(data);
+      } catch {
+        if (isMounted) setInvoice(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    if (invoiceId) {
+      fetchInvoice();
     } else {
       setInvoice(mockInvoice);
     }
     return () => { isMounted = false; };
   }, [invoiceId]);
+
+  const refreshInvoice = async () => {
+    if (!invoiceId) return;
+    try {
+      const { invoicesService } = await import('../../services/invoices');
+      const data: any = await invoicesService.retrieve(invoiceId);
+      setInvoice(data);
+    } catch {}
+  };
 
   const getStatusIcon = (status: string): React.ReactElement => {
     const icons: { [key: string]: React.ReactElement } = {
@@ -196,14 +225,28 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   };
 
   const formatCurrency = (amount: string | number) => {
-    return `$${parseFloat(String(amount)).toFixed(2)}`;
+    const numericAmount = parseFloat(String(amount));
+    if (Number.isNaN(numericAmount)) return currencyCode ? new Intl.NumberFormat(locale, { style: 'currency', currency: String(currencyCode), maximumFractionDigits: 2 }).format(0) : `${currencySymbol || ''}0.00`;
+    try {
+      if (currencyCode) {
+        return new Intl.NumberFormat(locale, { style: 'currency', currency: String(currencyCode), maximumFractionDigits: 2 }).format(numericAmount);
+      }
+    } catch {}
+    return `${currencySymbol || ''}${numericAmount.toFixed(2)}`;
   };
 
   const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return '';
+    if (dateStyle) {
+      try {
+        return d.toLocaleDateString(locale, { dateStyle });
+      } catch {}
+    }
+    return d.toLocaleDateString(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
   };
 
@@ -277,10 +320,26 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const link = `${window.location.origin}/invoices/${invoice.invoice_number}`;
-    navigator.clipboard.writeText(link);
-    alert('Invoice link copied to clipboard!');
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = link;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-1000px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      alert('Invoice link copied to clipboard!');
+    } catch {
+      alert('Failed to copy link. Please copy manually: ' + link);
+    }
   };
 
   const handleSendEmail = async (emailData: any) => {
@@ -446,10 +505,14 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
   }
 
   // Can safely access invoice fields below
-  const invoiceCanPay = ['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status) && parseFloat(invoice.balance_due) > 0 && !['paid', 'refunded', 'cancelled'].includes(invoice.status);
-  const invoiceCanRefund = (['paid', 'partial', 'overdue', 'cancelled'].includes(invoice.status)) && parseFloat(invoice.amount_paid) > 0;
-  const invoiceCanDeposit = ['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status);
-  const invoiceCanDiscount = invoiceCanPay && parseFloat(invoice.discount) === 0;
+  const allowed = Array.isArray((invoice as any).allowed_actions) ? (invoice as any).allowed_actions as string[] : null;
+  const balanceDue = parseFloat(String(invoice.balance_due));
+  const amountPaid = parseFloat(String(invoice.amount_paid));
+  const discountVal = parseFloat(String(invoice.discount));
+  const invoiceCanPay = allowed ? allowed.includes('pay') : (['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status) && balanceDue > 0 && !['paid', 'refunded', 'cancelled'].includes(invoice.status));
+  const invoiceCanRefund = allowed ? allowed.includes('refund') : ((['paid', 'partial', 'overdue', 'cancelled'].includes(invoice.status)) && amountPaid > 0);
+  const invoiceCanDeposit = allowed ? allowed.includes('collect_deposit') : ['issued', 'pending', 'partial', 'overdue', 'draft'].includes(invoice.status);
+  const invoiceCanDiscount = allowed ? allowed.includes('discount') : (invoiceCanPay && discountVal === 0);
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
@@ -645,13 +708,7 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
                         secondary={
                           <Box sx={{ mt: 1 }}>
                             <Typography variant="caption" display="block" color="text.secondary" component="span">
-                              {new Date(payment.payment_date).toLocaleString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                              {(() => { const d = new Date(payment.payment_date); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(locale, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); })()}
                             </Typography>
                             {payment.reference_number && (
                               <Typography variant="caption" display="block" color="text.secondary" component="span">
@@ -825,25 +882,25 @@ const InvoiceDetails: React.FC<InvoiceDetailsProps> = ({ invoiceId, onClose, onP
         open={paymentDialogOpen}
         onClose={() => setPaymentDialogOpen(false)}
         invoice={invoice}
-        onPaymentProcessed={onPaymentProcessed || (() => {})}
+        onPaymentProcessed={async () => { await refreshInvoice(); (onPaymentProcessed || (() => {}))(); setPaymentDialogOpen(false); }}
       />
       <RefundDialog
         open={refundDialogOpen}
         onClose={() => setRefundDialogOpen(false)}
         invoice={invoice}
-        onRefundProcessed={() => setRefundDialogOpen(false)}
+        onRefundProcessed={async () => { await refreshInvoice(); setRefundDialogOpen(false); }}
       />
       <DepositDialog
         open={depositDialogOpen}
         onClose={() => setDepositDialogOpen(false)}
         invoice={invoice}
-        onDepositCollected={() => setDepositDialogOpen(false)}
+        onDepositCollected={async () => { await refreshInvoice(); setDepositDialogOpen(false); }}
       />
       <InvoiceDiscountDialog
         open={discountDialogOpen}
         onClose={() => setDiscountDialogOpen(false)}
         invoiceTotal={parseFloat(invoice.total)}
-        onSubmit={() => setDiscountDialogOpen(false)}
+        onSubmit={async () => { await refreshInvoice(); setDiscountDialogOpen(false); }}
       />
     </Box>
   );

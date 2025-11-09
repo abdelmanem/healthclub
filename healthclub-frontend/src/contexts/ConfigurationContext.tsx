@@ -74,6 +74,46 @@ export const ConfigurationProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       }
 
+      // Ensure currency symbol exists; if missing but a currency code exists, derive and persist it
+      try {
+        const detectedCurrencyCode =
+          configObj['system_currency_code'] ||
+          configObj['system_currency'] ||
+          configObj['default_currency'] ||
+          configObj['currency_code'] ||
+          configObj['currency'];
+        const existingCurrencySymbol =
+          configObj['system_currency_symbol'] ||
+          configObj['currency_symbol'] ||
+          configObj['currency.sign'];
+
+        if (!existingCurrencySymbol && detectedCurrencyCode) {
+          const localeGuess = (navigator?.language) || 'en-US';
+          let derivedSymbol = '';
+          try {
+            const parts = new Intl.NumberFormat(localeGuess, { style: 'currency', currency: String(detectedCurrencyCode) }).formatToParts(0);
+            derivedSymbol = (parts.find(p => p.type === 'currency')?.value) || '';
+          } catch {}
+
+          if (derivedSymbol) {
+            try {
+              const created = await configService.createSystemConfig({
+                key: 'currency_symbol',
+                value: derivedSymbol,
+                description: 'Currency symbol auto-derived from currency code',
+                data_type: 'string',
+                is_active: true
+              } as any);
+              // Reflect immediately in local config map
+              configObj['currency_symbol'] = created?.value || derivedSymbol;
+            } catch (e) {
+              // If backend creation fails, still set locally for session
+              configObj['currency_symbol'] = derivedSymbol;
+            }
+          }
+        }
+      } catch {}
+
       setSystemConfigs(configObj);
       setMembershipTiers(Array.isArray(tiers) ? tiers.filter(tier => tier.is_active) : []);
       setGenderOptions(Array.isArray(genders) ? genders.filter(gender => gender.is_active) : []);
