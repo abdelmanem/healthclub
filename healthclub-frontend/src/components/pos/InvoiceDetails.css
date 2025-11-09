@@ -3,505 +3,236 @@
    Improved for cross-browser compatibility
    ============================================ */
 
-@media print {
-  /* Reset body and html for printing */
-  @page {
-    size: A4 portrait;
-    margin: 15mm 10mm;
-  }
-
-  html, body {
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    background: white !important;
-    /* Ensure colors print correctly across browsers */
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  /* Hide everything by default using visibility (more reliable than display) */
-  body * {
-    visibility: hidden !important;
-  }
-
-  /* Show only printable invoice and ALL its descendants */
-  #printable-invoice {
-    display: block !important;
-    visibility: visible !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 20px !important;
-    background: white !important;
-    page-break-inside: avoid !important;
-    box-shadow: none !important;
+   @media print {
+    /* Reset body and html for printing */
+    @page {
+      size: A4 portrait;
+      margin: 15mm 10mm;
+    }
+  
+    html, body {
+      width: 100% !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: white !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  
+    /* Hide everything except printable invoice */
+    body > *:not(#printable-invoice):not(script):not(style) {
+      display: none !important;
+    }
+  
+    /* Show only printable invoice */
+    #printable-invoice {
+      display: block !important;
+      visibility: visible !important;
+      position: static !important;
+      left: auto !important;
+      top: auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 20px !important;
+      background: white !important;
+      page-break-inside: avoid !important;
+      box-shadow: none !important;
+    }
+    
+    /* Ensure ALL descendants are visible */
+    #printable-invoice,
+    #printable-invoice *,
+    #printable-invoice *::before,
+    #printable-invoice *::after {
+      visibility: visible !important;
+      color: inherit !important;
+    }
+    
+    /* Preserve flex layouts */
+    #printable-invoice .MuiStack-root,
+    #printable-invoice .invoice-header-details,
+    #printable-invoice .invoice-totals,
+    #printable-invoice .MuiBox-root[style*="display: flex"],
+    #printable-invoice .MuiBox-root[style*="display:flex"] {
+      display: flex !important;
+    }
+    
+    /* Table display types */
+    #printable-invoice table,
+    #printable-invoice .MuiTable-root {
+      display: table !important;
+    }
+    
+    #printable-invoice .MuiTableRow-root {
+      display: table-row !important;
+    }
+    
+    #printable-invoice .MuiTableCell-root {
+      display: table-cell !important;
+    }
+  
+    /* Hide non-printable elements */
+    .no-print,
+    button:not(.print-button),
+    .MuiButton-root:not(.print-button),
+    .MuiIconButton-root,
+    .MuiTabs-root,
+    .MuiTab-root,
+    .MuiChip-root:not(.print-chip),
+    .MuiAppBar-root,
+    .MuiDrawer-root,
+    .MuiFab-root,
+    .MuiDialog-root:not(#printable-invoice *),
+    .MuiBackdrop-root,
+    .MuiSnackbar-root {
+      display: none !important;
+    }
+  
+    /* Reset Material-UI components for print */
+    #printable-invoice .MuiBox-root {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+    }
+  
+    #printable-invoice .MuiCard-root,
+    #printable-invoice .MuiCardContent-root,
+    #printable-invoice .MuiPaper-root {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      display: block !important;
+    }
+  
+    /* Table styling for print */
+    table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+    }
+  
+    th, td,
+    .MuiTableCell-root {
+      padding: 8px 10px !important;
+      font-size: 11px !important;
+      border: 1px solid #ddd !important;
+      background: white !important;
+    }
+  
+    th,
+    .MuiTableCell-head {
+      background: #f5f5f5 !important;
+      font-weight: 600 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  
+    /* Typography for print */
+    h1, h2, h3, h4, h5, h6 {
+      page-break-after: avoid !important;
+      margin-top: 0 !important;
+    }
+  
+    p {
+      orphans: 3 !important;
+      widows: 3 !important;
+    }
+  
+    /* Invoice-specific styling */
+    .invoice-totals {
+      margin-top: 20px !important;
+      padding: 12px !important;
+      background: #fafafa !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  
+    .invoice-notes {
+      margin-top: 20px !important;
+      padding: 12px !important;
+      background: #fafafa !important;
+      border-left: 4px solid #2196f3 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  
+    /* Remove animations */
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
   }
   
-  /* Ensure ALL descendants of printable invoice are visible */
-  #printable-invoice,
-  #printable-invoice *,
-  #printable-invoice *::before,
-  #printable-invoice *::after {
-    visibility: visible !important;
-  }
-  
-  /* Force proper display types for Material-UI components - but preserve flex */
-  /* Don't force block on all Box - let them keep their original display */
-  
-  #printable-invoice .MuiTypography-root {
-    display: block !important;
-  }
-  
-  #printable-invoice table,
-  #printable-invoice .MuiTable-root {
-    display: table !important;
-  }
-  
-  #printable-invoice .MuiTableRow-root {
-    display: table-row !important;
-  }
-  
-  #printable-invoice .MuiTableCell-root {
-    display: table-cell !important;
-  }
-  
-  /* Handle flex containers properly - preserve flex display */
-  #printable-invoice .MuiStack-root {
-    display: flex !important;
-  }
-  
-  #printable-invoice .invoice-header-details {
-    display: flex !important;
-  }
-  
-  #printable-invoice .invoice-totals {
-    display: flex !important;
-  }
-  
-  /* Ensure Box with flex display is preserved - check both inline style and class */
-  #printable-invoice .MuiBox-root[style*="display: flex"],
-  #printable-invoice .MuiBox-root[style*="display:flex"],
-  #printable-invoice .invoice-totals .MuiBox-root {
-    display: flex !important;
-  }
-
-  /* Hide non-printable elements */
-  .no-print,
-  .no-print *,
-  button:not(.print-button),
-  .MuiButton-root:not(.print-button),
-  .MuiIconButton-root,
-  .MuiTabs-root,
-  .MuiTab-root,
-  .MuiChip-root:not(.print-chip),
-  .MuiAppBar-root,
-  .MuiDrawer-root,
-  .MuiFab-root,
-  .MuiDialog-root,
-  .MuiBackdrop-root,
-  .MuiSnackbar-root {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  /* Show print-only elements */
   .print-only {
-    display: block !important;
-    visibility: visible !important;
+    display: none;
   }
-
-  /* Reset Material-UI components for print - preserve original display */
-  #printable-invoice .MuiBox-root {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    page-break-inside: avoid !important;
+  
+  #printable-invoice {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
   }
-
-  #printable-invoice .MuiCard-root,
-  #printable-invoice .MuiCardContent-root,
-  #printable-invoice .MuiPaper-root {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    page-break-inside: avoid !important;
-    display: block !important;
+  
+  .invoice-box.print-template {
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    background: #fff;
+    max-width: 800px;
+    margin: auto;
+    padding: 24px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    box-shadow: 0 0 8px #ccc;
+    color: #222;
   }
-
-  .MuiCard-root {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    border: none !important;
-  }
-
-  .MuiCardContent-root {
-    padding: 12px !important;
-  }
-
-  /* Table styling for print */
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    page-break-inside: auto !important;
-  }
-
-  .MuiTable-root {
-    border-collapse: collapse !important;
-    width: 100% !important;
-  }
-
-  .MuiTableRow-root {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    page-break-after: auto !important;
-  }
-
-  th, td,
-  .MuiTableCell-root {
-    padding: 8px 10px !important;
-    font-size: 11px !important;
-    border: 1px solid #ddd !important;
-    background: white !important;
-  }
-
-  th,
-  .MuiTableCell-head {
-    background: #f5f5f5 !important;
-    font-weight: 600 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  /* Typography for print */
-  h1, h2, h3, h4, h5, h6,
-  .MuiTypography-h1,
-  .MuiTypography-h2,
-  .MuiTypography-h3,
-  .MuiTypography-h4,
-  .MuiTypography-h5,
-  .MuiTypography-h6 {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-    margin-top: 0 !important;
-  }
-
-  p,
-  .MuiTypography-body1,
-  .MuiTypography-body2 {
-    orphans: 3 !important;
-    widows: 3 !important;
-    page-break-inside: avoid !important;
-  }
-
-  /* Grid system for print */
-  .MuiGrid-container {
-    display: block !important;
-    width: 100% !important;
-  }
-
-  .MuiGrid-item {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    flex-basis: 100% !important;
-    margin: 0 !important;
-  }
-
-  /* Invoice-specific styling */
+  
   .invoice-header {
-    margin-bottom: 20px !important;
-    page-break-after: avoid !important;
-    display: block !important;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #eee;
   }
-
+  
   .invoice-logo {
-    margin-bottom: 15px !important;
-    display: block !important;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2196f3;
+    margin-bottom: 8px;
   }
-
-  .invoice-header-details {
-    margin-bottom: 20px !important;
-    display: flex !important;
-    visibility: visible !important;
-  }
-
-  /* Ensure all invoice content is visible with correct display types */
-  #printable-invoice .invoice-header {
-    display: block !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .invoice-logo {
-    display: block !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .invoice-header-details {
-    display: flex !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .invoice-table {
-    display: block !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .invoice-totals {
-    display: block !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .invoice-notes {
-    display: block !important;
-    visibility: visible !important;
-  }
-
+  
   .invoice-table {
-    margin: 15px 0 !important;
-    page-break-inside: auto !important;
-    display: table !important;
+    background: #fff;
+    margin: 20px 0;
   }
   
-  .invoice-box.print-template {
-    display: block !important;
-    padding: 20px !important;
+  .invoice-table .MuiTableHead-root th {
+    background: #f4f4f4;
+    font-weight: 700;
+    border-bottom: 2px solid #ddd;
+    padding: 12px 10px;
   }
-
+  
   .invoice-totals {
-    margin-top: 20px !important;
-    margin-bottom: 20px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    background: #fafafa !important;
-    padding: 12px !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .invoice-notes {
-    margin-top: 20px !important;
-    page-break-inside: avoid !important;
-    padding: 12px !important;
-    background: #fafafa !important;
-    border-left: 4px solid #2196f3 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Ensure dividers print */
-  .MuiDivider-root {
-    border-color: #ddd !important;
-    margin: 10px 0 !important;
-  }
-
-  /* Stack layout for print */
-  #printable-invoice .MuiStack-root {
-    display: block !important;
-  }
-
-  /* Remove animations and transitions - but only for printable content */
-  #printable-invoice * {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  /* Ensure proper spacing - but preserve display for flex containers */
-  #printable-invoice .MuiBox-root[style*="display: flex"],
-  #printable-invoice .MuiBox-root[style*="display:flex"] {
-    display: flex !important;
-  }
-
-  /* Typography must be visible - preserve inline/block as needed */
-  #printable-invoice .MuiTypography-root {
-    visibility: visible !important;
+    margin-top: 20px;
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
   }
   
-  /* Typography that should be block */
-  #printable-invoice .MuiTypography-h1,
-  #printable-invoice .MuiTypography-h2,
-  #printable-invoice .MuiTypography-h3,
-  #printable-invoice .MuiTypography-h4,
-  #printable-invoice .MuiTypography-h5,
-  #printable-invoice .MuiTypography-h6,
-  #printable-invoice .MuiTypography-body1,
-  #printable-invoice .MuiTypography-body2 {
-    display: block !important;
-    visibility: visible !important;
+  .invoice-notes {
+    background: #fafafa;
+    border-left: 4px solid #2196f3;
+    padding: 12px 16px;
+    margin-top: 20px;
+    border-radius: 4px;
   }
-
-  /* Tables must be visible */
-  #printable-invoice table,
-  #printable-invoice .MuiTable-root {
-    display: table !important;
-    visibility: visible !important;
+  
+  @media screen and (max-width: 768px) {
+    .invoice-box.print-template {
+      padding: 16px;
+      margin: 16px;
+    }
   }
-
-  #printable-invoice .MuiTableRow-root {
-    display: table-row !important;
-    visibility: visible !important;
-  }
-
-  #printable-invoice .MuiTableCell-root {
-    display: table-cell !important;
-    visibility: visible !important;
-  }
-
-  /* List styling */
-  .MuiList-root {
-    padding: 0 !important;
-  }
-
-  .MuiListItem-root {
-    padding: 8px 0 !important;
-    page-break-inside: avoid !important;
-  }
-}
-
-.print-only {
-  display: none;
-}
-
-#printable-invoice {
-  position: relative;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  background: white;
-}
-
-.invoice-box.print-template {
-  font-family: 'Segoe UI', 'Arial', sans-serif;
-  background: #fff;
-  max-width: 800px;
-  margin: auto;
-  padding: 24px;
-  border: 1px solid #eee;
-  border-radius: 10px;
-  box-shadow: 0 0 8px #ccc;
-  color: #222;
-}
-
-.invoice-header {
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid #eee;
-}
-
-.invoice-logo {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #2196f3;
-  margin-bottom: 8px;
-}
-
-.invoice-header-details {
-  font-size: 1rem;
-  color: #666;
-}
-
-.invoice-table {
-  background: #fff;
-  margin: 20px 0;
-}
-
-.invoice-table .MuiTableHead-root th {
-  background: #f4f4f4;
-  font-weight: 700;
-  border-bottom: 2px solid #ddd;
-  padding: 12px 10px;
-}
-
-.invoice-table .MuiTable-root,
-.invoice-table .MuiTable-root th,
-.invoice-table .MuiTable-root td {
-  border: 1px solid #eee;
-}
-
-.invoice-table .MuiTableBody-root td {
-  padding: 10px;
-}
-
-.invoice-totals {
-  margin-top: 20px;
-  padding: 16px;
-  background: #fafafa;
-  border-radius: 8px;
-}
-
-.invoice-notes {
-  background: #fafafa;
-  border-left: 4px solid #2196f3;
-  padding: 12px 16px;
-  margin-top: 20px;
-  border-radius: 4px;
-}
-
-/* PDF Generation: Improved styling */
-.pdf-generating {
-  position: absolute !important;
-  left: -9999px !important;
-  top: 0 !important;
-  width: 800px !important;
-  max-width: 800px !important;
-  margin: 0 auto !important;
-  padding: 20px !important;
-  background: white !important;
-  box-shadow: none !important;
-  border: none !important;
-  transform: scale(1) !important;
-  z-index: -1 !important;
-}
-
-.pdf-generating * {
-  box-shadow: none !important;
-  transform: none !important;
-  animation: none !important;
-  transition: none !important;
-}
-
-.pdf-generating .no-print {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-.pdf-generating .print-only {
-  display: block !important;
-  visibility: visible !important;
-}
-
-.pdf-generating table {
-  width: 100% !important;
-  border-collapse: collapse !important;
-}
-
-.pdf-generating th,
-.pdf-generating td {
-  padding: 8px 10px !important;
-  border: 1px solid #ddd !important;
-}
-
-.pdf-generating th {
-  background: #f5f5f5 !important;
-  font-weight: 600 !important;
-}
-
-@media screen and (max-width: 768px) {
-  .invoice-box.print-template {
-    padding: 16px;
-    margin: 16px;
-  }
-  .invoice-table .MuiTableBody-root td {
-    padding: 8px;
-    font-size: 12px;
-  }
-}

@@ -4,15 +4,12 @@ PDF generation utility for invoices using reportlab
 
 from io import BytesIO
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from decimal import Decimal
-from django.utils import timezone
-from datetime import datetime
 
 
 def generate_invoice_pdf(invoice):
@@ -29,19 +26,16 @@ def generate_invoice_pdf(invoice):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm,
                            leftMargin=15*mm, rightMargin=15*mm)
     
-    # Container for the 'Flowable' objects
     elements = []
-    
-    # Define styles
     styles = getSampleStyleSheet()
     
-    # Title style - dark blue, bold, left-aligned, larger font
+    # Title style
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
         fontSize=20,
         fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#3f51b5'),  # Dark blue like Material-UI primary
+        textColor=colors.HexColor('#3f51b5'),
         spaceAfter=20,
         alignment=TA_LEFT,
     )
@@ -62,18 +56,15 @@ def generate_invoice_pdf(invoice):
         textColor=colors.HexColor('#333333'),
     )
     
-    # Get company name (you can make this configurable)
+    # Company name
     company_name = "Health Club Management System"
-    
-    # Title - left-aligned
     elements.append(Paragraph(company_name, title_style))
     elements.append(Spacer(1, 12*mm))
     
-    # Invoice header - handle dates properly
+    # Format dates
     invoice_date_str = ''
     if invoice.date:
         try:
-            # invoice.date is a DateTimeField, convert to date if needed
             if hasattr(invoice.date, 'date'):
                 invoice_date_str = invoice.date.date().strftime('%b %d, %Y')
             elif hasattr(invoice.date, 'strftime'):
@@ -86,7 +77,6 @@ def generate_invoice_pdf(invoice):
     due_date_str = ''
     if invoice.due_date:
         try:
-            # invoice.due_date is a DateField
             if hasattr(invoice.due_date, 'strftime'):
                 due_date_str = invoice.due_date.strftime('%b %d, %Y')
             else:
@@ -94,11 +84,11 @@ def generate_invoice_pdf(invoice):
         except (AttributeError, ValueError):
             due_date_str = str(invoice.due_date)
     
-    # Create a two-column layout for Invoice details (left) and Bill To (right)
+    # Guest info
     guest_name = f"{invoice.guest.first_name} {invoice.guest.last_name}" if invoice.guest else "N/A"
     guest_email = invoice.guest.email if invoice.guest and invoice.guest.email else ""
     
-    # Left column: Invoice details
+    # Header table styles
     invoice_label_style = ParagraphStyle(
         'InvoiceLabel',
         parent=normal_style,
@@ -106,14 +96,6 @@ def generate_invoice_pdf(invoice):
         textColor=colors.HexColor('#333333'),
     )
     
-    invoice_value_style = ParagraphStyle(
-        'InvoiceValue',
-        parent=normal_style,
-        fontSize=10,
-        textColor=colors.HexColor('#333333'),
-    )
-    
-    # Right column: Bill To
     bill_to_label_style = ParagraphStyle(
         'BillToLabel',
         parent=normal_style,
@@ -122,30 +104,23 @@ def generate_invoice_pdf(invoice):
         alignment=TA_RIGHT,
     )
     
-    bill_to_value_style = ParagraphStyle(
-        'BillToValue',
-        parent=normal_style,
-        fontSize=10,
-        textColor=colors.HexColor('#333333'),
-        alignment=TA_RIGHT,
-    )
-    
+    # Header table
     header_data = [
         [
             Paragraph('Invoice', invoice_label_style),
             Paragraph('Bill to:', bill_to_label_style)
         ],
         [
-            Paragraph(invoice.invoice_number or 'N/A', invoice_value_style),
-            Paragraph(guest_name, bill_to_value_style)
+            Paragraph(invoice.invoice_number or 'N/A', invoice_label_style),
+            Paragraph(guest_name, bill_to_label_style)
         ],
         [
-            Paragraph(f'Date: {invoice_date_str}', invoice_value_style),
-            Paragraph(guest_email if guest_email else '', bill_to_value_style)
+            Paragraph(f'Date: {invoice_date_str}', invoice_label_style),
+            Paragraph(guest_email if guest_email else '', bill_to_label_style)
         ],
         [
-            Paragraph(f'Due Date: {due_date_str}', invoice_value_style),
-            Paragraph('', bill_to_value_style)
+            Paragraph(f'Due Date: {due_date_str}', invoice_label_style),
+            Paragraph('', bill_to_label_style)
         ],
     ]
     
@@ -161,7 +136,7 @@ def generate_invoice_pdf(invoice):
     elements.append(header_table)
     elements.append(Spacer(1, 12*mm))
     
-    # Invoice items table
+    # Items table
     items_data = [['Description', 'Qty', 'Unit Price', 'Tax %', 'Total']]
     
     for item in invoice.items.all():
@@ -169,11 +144,9 @@ def generate_invoice_pdf(invoice):
         if hasattr(item, 'notes') and item.notes:
             description += f" ({item.notes})"
         
-        # Calculate line total - it's a property, so just access it directly
         try:
             line_total = float(item.line_total)
         except (AttributeError, TypeError, ValueError):
-            # Fallback calculation if property doesn't exist
             line_total = float(item.unit_price) * int(item.quantity)
         
         items_data.append([
@@ -186,20 +159,18 @@ def generate_invoice_pdf(invoice):
     
     items_table = Table(items_data, colWidths=[80*mm, 20*mm, 25*mm, 20*mm, 25*mm])
     items_table.setStyle(TableStyle([
-        # Header row - dark gray text, bold, light gray background
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f5f5f5')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#333333')),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),  # Description left
-        ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),  # Others right
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
         ('TOPPADDING', (0, 0), (-1, 0), 10),
-        # Data rows
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 1), (0, -1), 'LEFT'),  # Description left
-        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),  # Others right
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
@@ -211,48 +182,72 @@ def generate_invoice_pdf(invoice):
     elements.append(items_table)
     elements.append(Spacer(1, 10*mm))
     
-    # Totals section - match preview exactly
-    # Create styles that match the preview
+    # Totals section - MATCH SCREENSHOT EXACTLY
+    # Regular label and value (Subtotal, Tax)
     totals_label_style = ParagraphStyle(
         'TotalsLabel',
         parent=normal_style,
         fontSize=10,
-        textColor=colors.HexColor('#333333'),
+        textColor=colors.HexColor('#333333'),  # Black for labels
     )
     
     totals_value_style = ParagraphStyle(
         'TotalsValue',
         parent=normal_style,
         fontSize=10,
-        textColor=colors.HexColor('#333333'),
+        textColor=colors.HexColor('#333333'),  # Black for values
     )
     
-    # Total row - bold black (not blue!)
-    total_bold_style = ParagraphStyle(
-        'TotalBold',
+    # Total - BOLD BLACK
+    total_label_bold = ParagraphStyle(
+        'TotalLabelBold',
         parent=normal_style,
         fontSize=10,
         fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#333333'),  # Black, not blue
+        textColor=colors.HexColor('#333333'),  # Bold black
     )
     
-    # Amount Paid value - green
+    total_value_bold = ParagraphStyle(
+        'TotalValueBold',
+        parent=normal_style,
+        fontSize=10,
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#333333'),  # Bold black
+    )
+    
+    # Amount Paid - REGULAR LABEL, GREEN VALUE
+    amount_paid_label_style = ParagraphStyle(
+        'AmountPaidLabel',
+        parent=normal_style,
+        fontSize=10,
+        textColor=colors.HexColor('#333333'),  # Black label
+    )
+    
     amount_paid_value_style = ParagraphStyle(
         'AmountPaidValue',
         parent=normal_style,
         fontSize=10,
-        textColor=colors.HexColor('#2e7d32'),  # Green
+        textColor=colors.HexColor('#4caf50'),  # Green value
     )
     
-    # Balance Due - bold blue
-    balance_due_bold_style = ParagraphStyle(
-        'BalanceDueBold',
+    # Balance Due - BOLD BLUE (BOTH LABEL AND VALUE)
+    balance_due_label_bold = ParagraphStyle(
+        'BalanceDueLabelBold',
         parent=normal_style,
         fontSize=10,
         fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#1a73e8'),  # Blue
+        textColor=colors.HexColor('#1976d2'),  # Bold blue
     )
     
+    balance_due_value_bold = ParagraphStyle(
+        'BalanceDueValueBold',
+        parent=normal_style,
+        fontSize=10,
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#1976d2'),  # Bold blue
+    )
+    
+    # Build totals data
     totals_data = []
     totals_data.append([
         Paragraph('Subtotal:', totals_label_style), 
@@ -273,65 +268,74 @@ def generate_invoice_pdf(invoice):
     
     discount_val = Decimal(str(invoice.discount)) if invoice.discount else Decimal('0.00')
     if discount_val > 0:
-        discount_style = ParagraphStyle(
-            'Discount',
+        discount_label_style = ParagraphStyle(
+            'DiscountLabel',
             parent=normal_style,
             fontSize=10,
-            textColor=colors.HexColor('#2e7d32'),  # Green for discount
+            textColor=colors.HexColor('#333333'),  # Black label
+        )
+        discount_value_style = ParagraphStyle(
+            'DiscountValue',
+            parent=normal_style,
+            fontSize=10,
+            textColor=colors.HexColor('#4caf50'),  # Green value
         )
         totals_data.append([
-            Paragraph('Discount:', discount_style), 
-            Paragraph(f"-${float(discount_val):.2f}", discount_style)
+            Paragraph('Discount:', discount_label_style), 
+            Paragraph(f"-${float(discount_val):.2f}", discount_value_style)
         ])
     
-    totals_data.append([Paragraph('', normal_style), Paragraph('', normal_style)])  # Spacer
+    # Spacer row
+    totals_data.append([Paragraph('', normal_style), Paragraph('', normal_style)])
     
-    # Total row - bold black (both label and value)
-    total_label = Paragraph('Total:', total_bold_style)
-    total_value = Paragraph(f"${float(invoice.total):.2f}", total_bold_style)
-    totals_data.append([total_label, total_value])
+    # Total - BOLD BLACK
+    totals_data.append([
+        Paragraph('Total:', total_label_bold),
+        Paragraph(f"${float(invoice.total):.2f}", total_value_bold)
+    ])
     
-    # Amount Paid - label black, value green
-    amount_paid_label = Paragraph('Amount Paid:', totals_label_style)
-    amount_paid_value = Paragraph(f"${float(invoice.amount_paid):.2f}", amount_paid_value_style)
-    totals_data.append([amount_paid_label, amount_paid_value])
+    # Amount Paid - BLACK LABEL, GREEN VALUE
+    totals_data.append([
+        Paragraph('Amount Paid:', amount_paid_label_style),
+        Paragraph(f"${float(invoice.amount_paid):.2f}", amount_paid_value_style)
+    ])
     
-    # Balance Due - bold blue (both label and value)
-    balance_due_label = Paragraph('Balance Due:', balance_due_bold_style)
-    balance_due_value = Paragraph(f"${float(invoice.balance_due):.2f}", balance_due_bold_style)
-    totals_data.append([balance_due_label, balance_due_value])
+    # Balance Due - BOLD BLUE
+    totals_data.append([
+        Paragraph('Balance Due:', balance_due_label_bold),
+        Paragraph(f"${float(invoice.balance_due):.2f}", balance_due_value_bold)
+    ])
     
-    # Calculate row indices for lines dynamically
-    # Structure: Subtotal, [Service Charge], Tax, [Discount], Spacer, Total, Amount Paid, Balance Due
-    # We need: line above Total (separating Tax from Total), line above Balance Due (separating Amount Paid from Balance Due)
+    # Find row indices for lines
     num_rows = len(totals_data)
-    total_row_idx = num_rows - 3  # Total is 3rd from end (before Amount Paid and Balance Due)
-    balance_due_row_idx = num_rows - 1  # Balance Due is last
+    total_row_idx = num_rows - 3  # Total row
+    balance_due_row_idx = num_rows - 1  # Balance Due row
     
-    totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
+    # Create table with proper column widths for spacing
+    totals_table = Table(totals_data, colWidths=[130*mm, 40*mm])
     totals_table.setStyle(TableStyle([
-        # Alignment - right-aligned
-        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),  # Labels right-aligned
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),  # Values right-aligned
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        # Lines - thicker line above Total (separating Tax from Total), thin line above Balance Due
-        ('LINEABOVE', (0, total_row_idx), (-1, total_row_idx), 1.5, colors.HexColor('#333333')),  # Thicker line above Total
-        ('LINEABOVE', (0, balance_due_row_idx), (-1, balance_due_row_idx), 1, colors.HexColor('#cccccc')),  # Thin line above Balance Due
+        ('LEFTPADDING', (0, 0), (0, -1), 8),   # Left padding for labels
+        ('RIGHTPADDING', (0, 0), (0, -1), 20),  # More right padding for labels (creates space)
+        ('LEFTPADDING', (1, 0), (1, -1), 10),   # Left padding for values
+        ('RIGHTPADDING', (1, 0), (1, -1), 8),   # Right padding for values
+        ('LINEABOVE', (0, total_row_idx), (-1, total_row_idx), 1.5, colors.HexColor('#333333')),
+        ('LINEABOVE', (0, balance_due_row_idx), (-1, balance_due_row_idx), 1, colors.HexColor('#cccccc')),
     ]))
     elements.append(totals_table)
     elements.append(Spacer(1, 10*mm))
     
-    # Notes section
+    # Notes
     if invoice.notes:
         elements.append(Paragraph('<b>Notes:</b>', heading_style))
         elements.append(Paragraph(invoice.notes, normal_style))
         elements.append(Spacer(1, 8*mm))
     
-    # Footer - centered, lighter gray, smaller font
+    # Footer
     footer_text = "Payment due within 30 days. Please include invoice number with payment. Thank you for your business."
     elements.append(Spacer(1, 12*mm))
     footer_style = ParagraphStyle(
@@ -348,4 +352,3 @@ def generate_invoice_pdf(invoice):
     doc.build(elements)
     buffer.seek(0)
     return buffer
-
