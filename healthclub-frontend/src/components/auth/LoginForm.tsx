@@ -34,10 +34,8 @@ export const LoginForm: React.FC = () => {
 
     try {
       await authService.login(credentials);
-      // Reload permissions after successful login with a small delay
-      setTimeout(() => {
-        reloadPermissions();
-      }, 100);
+      // Ensure permissions are loaded before navigation
+      await reloadPermissions();
       navigate(from, { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Login failed. Please try again.');

@@ -43,9 +43,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   // Add a function to reload permissions (useful after login)
-  const reloadPermissions = () => {
+  const reloadPermissions = async () => {
     setIsLoading(true);
-    loadUserPermissions();
+    await loadUserPermissions();
   };
 
   const hasPermission = (permission: string, model?: string): boolean => {
