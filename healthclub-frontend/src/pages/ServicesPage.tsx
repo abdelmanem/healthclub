@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete, CircularProgress } from '@mui/material';
+import { Box, Button, Paper, Stack, TextField, Typography, Chip, Autocomplete, CircularProgress, InputAdornment } from '@mui/material';
 import { servicesApi, ServiceInput, ServiceRecord, serviceCategoriesApi, ServiceCategoryRecord } from '../services/services';
 import { locationsApi, Location } from '../services/locations';
 import { PageWrapper } from '../components/common/PageWrapper';
+import { useCurrencyFormatter } from '../utils/currency';
 
 export const ServicesPage: React.FC = () => {
   const [services, setServices] = useState<ServiceRecord[]>([]);
@@ -14,6 +15,7 @@ export const ServicesPage: React.FC = () => {
   const [catForm, setCatForm] = useState<{ name: string; description?: string }>({ name: '', description: '' });
   const [selectedLocations, setSelectedLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const { formatCurrency, currencySymbol } = useCurrencyFormatter();
 
   const load = async () => {
     setLoading(true);
@@ -118,6 +120,13 @@ export const ServicesPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} 
                 sx={{ flex: '0 0 150px' }} 
                 required 
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Typography fontWeight={600}>{currencySymbol || ''}</Typography>
+                    </InputAdornment>
+                  )
+                }}
               />
             </Box>
             <Box display="flex" gap={2} flexWrap="wrap">
@@ -161,7 +170,7 @@ export const ServicesPage: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">{s.description}</Typography>
                 <Stack direction="row" spacing={1} mt={1}>
                   <Chip label={`${s.duration_minutes} min`} size="small" />
-                  <Chip label={`$${Number(s.price).toFixed(2)}`} size="small" />
+                  <Chip label={formatCurrency(s.price)} size="small" />
                   {(s as any).category && <Chip label={(s as any).category.name} size="small" />}
                 </Stack>
               </Box>

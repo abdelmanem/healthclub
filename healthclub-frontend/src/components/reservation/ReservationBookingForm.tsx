@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import { api } from '../../services/api';
+import { useCurrencyFormatter } from '../../utils/currency';
 import { reservationsService, Reservation } from '../../services/reservations';
 import { ConflictResolver } from './advanced/ConflictResolver';
 import { guestsService } from '../../services/guests';
@@ -57,6 +58,7 @@ export const ReservationBookingForm: React.FC<{
   // Initialize dayjs plugins
   dayjs.extend(utc);
   dayjs.extend(timezone);
+  const { formatCurrency } = useCurrencyFormatter();
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -547,7 +549,7 @@ export const ReservationBookingForm: React.FC<{
   const calculateDiscountAmount = (discountType: DiscountType, originalAmount: number): number => {
     // Check minimum order amount
     if (discountType.min_order_amount && originalAmount < discountType.min_order_amount) {
-      throw new Error(`Minimum order amount of $${discountType.min_order_amount} required`);
+      throw new Error(`Minimum order amount of ${formatCurrency(discountType.min_order_amount)} required`);
     }
 
     if (discountType.discount_method === 'percentage') {

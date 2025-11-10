@@ -55,7 +55,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const { showSnackbar, SnackbarComponent } = useSnackbar();
-  const { formatCurrency } = useCurrencyFormatter();
+  const { formatCurrency, currencySymbol } = useCurrencyFormatter();
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -268,7 +268,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Typography fontWeight={600}>$</Typography>
+                  <Typography fontWeight={600}>{currencySymbol || ''}</Typography>
                 </InputAdornment>
               ),
             }}
@@ -306,7 +306,7 @@ export const RefundDialog: React.FC<RefundDialogProps> = ({
                 .filter((p) => !p.is_refund && Number(p.amount) > 0)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    Payment #{p.id} • {p.payment_method_name || p.method} • ${Math.abs(Number(p.amount)).toFixed(2)}
+                    Payment #{p.id} • {p.payment_method_name || p.method} • {formatCurrency(Math.abs(Number(p.amount)).toString())}
                   </option>
                 ))}
             </TextField>

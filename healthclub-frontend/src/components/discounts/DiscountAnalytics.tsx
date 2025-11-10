@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from '../common/useSnackbar';
 import { discountService, ReservationDiscount, DiscountType } from '../../services/discounts';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 export const DiscountAnalytics: React.FC = () => {
   const [analytics, setAnalytics] = useState({
@@ -57,6 +58,7 @@ export const DiscountAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState('30'); // days
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency, locale } = useCurrencyFormatter();
 
   // Load analytics data
   const loadAnalytics = async () => {
@@ -130,12 +132,8 @@ export const DiscountAnalytics: React.FC = () => {
     showSnackbar('Export functionality coming soon', 'info');
   };
 
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
-  };
-
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString(locale || 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

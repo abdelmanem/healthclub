@@ -51,6 +51,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from '../common/useSnackbar';
 import { discountService, ReservationDiscount } from '../../services/discounts';
+import { useCurrencyFormatter } from '../../utils/currency';
 
 interface AppliedDiscountsManagerProps {
   onRefresh: () => void;
@@ -72,6 +73,7 @@ export const AppliedDiscountsManager: React.FC<AppliedDiscountsManagerProps> = (
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const { showSnackbar, SnackbarComponent } = useSnackbar();
+  const { formatCurrency, locale } = useCurrencyFormatter();
 
   // Load applied discounts
   const loadDiscounts = async () => {
@@ -180,12 +182,8 @@ export const AppliedDiscountsManager: React.FC<AppliedDiscountsManagerProps> = (
     }
   };
 
-  const formatCurrency = (amount: number | string) => {
-    return `$${Number(amount).toFixed(2)}`;
-  };
-
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString(locale || 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
